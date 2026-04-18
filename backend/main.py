@@ -3,6 +3,8 @@ import fitz  # PyMuPDF
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from services.pdf_parser import AcademicPDFParser
+
 app = FastAPI(
     title="P.R.I.S.M. Backend API",
     description="Academic Integrity Analyzer API",
@@ -17,6 +19,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Service instances
+pdf_parser = AcademicPDFParser()
 
 @app.get("/")
 async def health_check():
@@ -46,3 +51,43 @@ async def upload_pdf(file: UploadFile = File(...)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
+
+@app.post("/api/parse")
+async def parse_pdf(file: UploadFile = File(...)):
+    """
+    Parse a PDF using the dual-pass AcademicPDFParser.
+    Returns extracted paragraphs, bibliography entries, and extraction metadata.
+    """
+    if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    try:
+        content = await file.read()
+
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+        result = pdf_parser.parse(content)
+
+        if not result["paragraphs"]:
+            raise HTTPException(
+                status_code=422,
+                detail="No text detected — the PDF may be scanned or image-only.",
+            )
+
+        return {
+            "filename": file.filename,
+            "size_bytes": len(content),
+            "page_count": result["page_count"],
+            "total_paragraphs": len(result["paragraphs"]),
+            "total_references": len(result["references"]),
+            "extraction_method": result["extraction_method"],
+            "degraded_mode": result["degraded_mode"],
+            "paragraphs": result["paragraphs"],
+            "references": result["references"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF parsing failed: {str(e)}")
+
