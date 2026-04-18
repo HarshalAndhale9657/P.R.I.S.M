@@ -306,6 +306,9 @@ const UploadManager = (() => {
             if (typeof ChartsRenderer !== 'undefined') {
                 ChartsRenderer.render(analysisResult);
             }
+            if (typeof CitationsRenderer !== 'undefined') {
+                CitationsRenderer.render(analysisResult);
+            }
 
             // Auto-switch to heatmap after short delay
             setTimeout(() => {
