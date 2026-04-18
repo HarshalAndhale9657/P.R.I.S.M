@@ -5,9 +5,15 @@ Main application with all API endpoints.
 Comprehensive edge-case handling via PipelineContext threading.
 """
 
+import os
 import io
 import logging
 import fitz  # PyMuPDF
+
+# Load environment variables BEFORE any service imports
+# Services like GPTAnalyzer and ReportGenerator read OPENAI_API_KEY on init
+from dotenv import load_dotenv
+load_dotenv()  # Loads from backend/.env or parent .env
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
