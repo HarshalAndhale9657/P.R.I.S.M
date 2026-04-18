@@ -121,22 +121,22 @@ const PRISM = (() => {
     // ─── Utility: Dynamic HSL Colors for Clusters ───
     function getClusterColor(clusterIndex, totalClusters) {
         if (clusterIndex === -1) {
-            return { bg: 'rgba(248,113,113,0.15)', border: '#f87171', text: '#fca5a5' };
+            return { bg: 'rgba(239,68,68,0.15)', border: '#ef4444', text: '#b91c1c' };
         }
         const hue = (clusterIndex * (360 / Math.max(totalClusters, 1))) % 360;
         const sat = 65;
-        const light = 55;
+        const light = 45; // Darker border for light theme
         return {
-            bg: `hsla(${hue}, ${sat}%, ${light}%, 0.12)`,
+            bg: `hsla(${hue}, ${sat}%, ${light + 10}%, 0.12)`,
             border: `hsl(${hue}, ${sat}%, ${light}%)`,
-            text: `hsl(${hue}, ${sat - 10}%, ${light + 20}%)`,
+            text: `hsl(${hue}, ${sat + 10}%, ${light - 20}%)`, // Darker text for readability
         };
     }
 
     // ─── Utility: YIQ Contrast ───
     function getContrastColor(hexOrHsl) {
-        // Simple: if bg is dark, return light text; else dark text
-        return '#e6edf3'; // always light text on our dark theme
+        // Light theme design usually prefers dark text
+        return '#111827';
     }
 
     // ─── Init ───

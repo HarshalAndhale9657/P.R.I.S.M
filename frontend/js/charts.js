@@ -5,30 +5,30 @@
  */
 
 const ChartsRenderer = (() => {
-    // Shared chart options for dark theme
+    // Shared chart options for light theme
     const commonOptions = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
             legend: {
-                labels: { color: '#e6edf3', font: { family: 'Inter' } }
+                labels: { color: '#111827', font: { family: 'Inter' } }
             },
             tooltip: {
-                backgroundColor: 'rgba(22, 27, 34, 0.9)',
-                titleColor: '#e6edf3',
-                bodyColor: '#c9d1d9',
-                borderColor: '#30363d',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                titleColor: '#111827',
+                bodyColor: '#4b5563',
+                borderColor: '#e5e7eb',
                 borderWidth: 1,
             }
         },
         scales: {
             x: {
-                ticks: { color: '#8b949e' },
-                grid: { color: '#21262d' }
+                ticks: { color: '#6b7280' },
+                grid: { color: '#f3f4f6' }
             },
             y: {
-                ticks: { color: '#8b949e' },
-                grid: { color: '#21262d' }
+                ticks: { color: '#6b7280' },
+                grid: { color: '#f3f4f6' }
             }
         }
     };
@@ -91,7 +91,7 @@ const ChartsRenderer = (() => {
                     {
                         label: 'Lexical Richness (Yule\'s K)',
                         data: data1,
-                        borderColor: '#7c3aed',
+                        borderColor: '#6366f1',
                         backgroundColor: 'transparent',
                         borderWidth: 2,
                         tension: 0.3,
@@ -103,7 +103,7 @@ const ChartsRenderer = (() => {
                     {
                         label: 'Sentence Length',
                         data: data2,
-                        borderColor: '#06b6d4',
+                        borderColor: '#0ea5e9',
                         backgroundColor: 'transparent',
                         borderWidth: 2,
                         borderDash: [5, 5],
@@ -123,14 +123,14 @@ const ChartsRenderer = (() => {
                         type: 'linear',
                         display: true,
                         position: 'left',
-                        ticks: { color: '#8b949e' },
-                        grid: { color: '#21262d' }
+                        ticks: { color: '#6b7280' },
+                        grid: { color: '#f3f4f6' }
                     },
                     y1: {
                         type: 'linear',
                         display: true,
                         position: 'right',
-                        ticks: { color: '#8b949e' },
+                        ticks: { color: '#6b7280' },
                         grid: { drawOnChartArea: false }
                     }
                 }
@@ -164,17 +164,17 @@ const ChartsRenderer = (() => {
                     {
                         label: 'Pronouns',
                         data: dataPro,
-                        backgroundColor: 'rgba(124, 58, 237, 0.7)',
+                        backgroundColor: 'rgba(99, 102, 241, 0.7)',
                     },
                     {
                         label: 'Prepositions',
                         data: dataPrep,
-                        backgroundColor: 'rgba(6, 182, 212, 0.7)',
+                        backgroundColor: 'rgba(14, 165, 233, 0.7)',
                     },
                     {
                         label: 'Conjunctions',
                         data: dataConj,
-                        backgroundColor: 'rgba(167, 139, 250, 0.7)',
+                        backgroundColor: 'rgba(129, 140, 248, 0.7)',
                     }
                 ]
             },
@@ -241,11 +241,11 @@ const ChartsRenderer = (() => {
                 scales: {
                     x: {
                         ...commonOptions.scales.x,
-                        title: { display: true, text: 'Lexical Richness', color: '#8b949e' }
+                        title: { display: true, text: 'Lexical Richness', color: '#6b7280' }
                     },
                     y: {
                         ...commonOptions.scales.y,
-                        title: { display: true, text: 'Sentence Length', color: '#8b949e' }
+                        title: { display: true, text: 'Sentence Length', color: '#6b7280' }
                     }
                 }
             }
