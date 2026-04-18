@@ -77,7 +77,7 @@ class SourceTracer:
 
         source_matches = []
         
-        for para in anomalous_paragraphs:
+        for para in anomalous_paragraphs[:3]:
             text = para.get("text", "")
             if len(text.split()) < 10:
                 continue # Text too short to trace reliably

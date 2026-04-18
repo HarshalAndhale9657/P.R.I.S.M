@@ -180,5 +180,5 @@ else:
     print(f"\n❌ FAILED. Error: {response.text[:500]}")
 
 # Cleanup
-os.remove(pdf_path)
+# os.remove(pdf_path)
 print(f"\n🧹 Cleaned up {pdf_path}")

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # ─── Constants ───────────────────────────────────────────────────────────────
 GPT_CALL_TIMEOUT = 30          # Seconds per individual GPT call
 GPT_BATCH_TIMEOUT = 120        # Seconds for the entire batch of GPT calls
-MAX_ANOMALY_PROFILES = 10      # Cap parallel profile requests
+MAX_ANOMALY_PROFILES = 3      # Cap parallel profile requests
 MAX_RETRIES = 2                # Retries per GPT call on transient errors
 
 
@@ -84,7 +84,7 @@ class GPTAnalyzer:
 
         async def _call():
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": STYLE_PROFILE_PROMPT.format(paragraph_text=text)}],
                 temperature=0.0,
                 response_format={"type": "json_object"},
@@ -105,7 +105,7 @@ class GPTAnalyzer:
 
         async def _call():
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": COMPARE_PROMPT.format(para_A=para_a, para_B=para_b)}],
                 temperature=0.0,
                 response_format={"type": "json_object"},
@@ -171,15 +171,15 @@ class GPTAnalyzer:
         boundary_tasks = []
         boundary_info = []
 
-        for boundary in boundaries:
-            if boundary.get("is_anomaly_transition"):
-                pa_idx = boundary["after_paragraph"]
-                pb_idx = pa_idx + 1
-                if pb_idx < len(paragraphs):
-                    para_a = paragraphs[pa_idx].get("text", "")
-                    para_b = paragraphs[pb_idx].get("text", "")
-                    boundary_tasks.append(self.explain_boundary(para_a, para_b))
-                    boundary_info.append(f"{pa_idx}_to_{pb_idx}")
+        valid_boundaries = [b for b in boundaries if b.get("is_anomaly_transition")][:3]
+        for boundary in valid_boundaries:
+            pa_idx = boundary["after_paragraph"]
+            pb_idx = pa_idx + 1
+            if pb_idx < len(paragraphs):
+                para_a = paragraphs[pa_idx].get("text", "")
+                para_b = paragraphs[pb_idx].get("text", "")
+                boundary_tasks.append(self.explain_boundary(para_a, para_b))
+                boundary_info.append(f"{pa_idx}_to_{pb_idx}")
 
         # ── Anomaly profile tasks ────────────────────────────────────────────
         profile_tasks = []

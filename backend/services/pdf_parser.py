@@ -258,9 +258,8 @@ class AcademicPDFParser:
 
     def _fallback_pymupdf(self, pdf_bytes: bytes):
         """
-        Extract raw text per page via PyMuPDF, then split into paragraphs
-        using double-newline boundaries. Faster than unstructured but less
-        semantically aware.
+        Extract text per page via PyMuPDF using layout blocks.
+        Faster than unstructured but less semantically aware.
         """
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -268,15 +267,17 @@ class AcademicPDFParser:
             idx = 0
 
             for page_num, page in enumerate(doc, start=1):
-                text = page.get_text("text")
-                if not text or not text.strip():
-                    continue
+                blocks = page.get_text("blocks")
+                
+                for block in blocks:
+                    if block[-1] != 0:  # Skip non-text blocks (e.g. images)
+                        continue
+                        
+                    raw_text = block[4]
+                    if not raw_text or not raw_text.strip():
+                        continue
 
-                # Split on double-newline (paragraph boundary)
-                raw_paras = re.split(r"\n{2,}", text.strip())
-
-                for raw in raw_paras:
-                    cleaned = self._clean_text(raw)
+                    cleaned = self._clean_text(raw_text)
                     if len(cleaned) >= MIN_PARAGRAPH_LENGTH:
                         paragraphs.append({
                             "index": idx,

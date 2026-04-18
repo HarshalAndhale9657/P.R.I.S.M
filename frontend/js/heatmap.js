@@ -145,7 +145,7 @@ const HeatmapRenderer = (() => {
         gridContainer.innerHTML = '';
 
         paragraphs.forEach((para, index) => {
-            const cluster = para.cluster !== undefined ? para.cluster : 0;
+            const cluster = para.cluster_id !== undefined ? para.cluster_id : (para.cluster !== undefined ? para.cluster : 0);
             const colors = palette[cluster] || palette[0];
             const isAnomaly = cluster === -1;
 
@@ -296,7 +296,7 @@ const HeatmapRenderer = (() => {
     function computeClusterSizes(paragraphs) {
         const sizes = {};
         paragraphs.forEach(p => {
-            const c = p.cluster !== undefined ? p.cluster : 0;
+            const c = p.cluster_id !== undefined ? p.cluster_id : (p.cluster !== undefined ? p.cluster : 0);
             sizes[c] = (sizes[c] || 0) + 1;
         });
         return sizes;
@@ -315,7 +315,7 @@ const HeatmapRenderer = (() => {
         const reasoning = data.reasoning || null;
 
         // Extract cluster labels
-        const clusterLabels = paragraphs.map(p => p.cluster !== undefined ? p.cluster : 0);
+        const clusterLabels = paragraphs.map(p => p.cluster_id !== undefined ? p.cluster_id : (p.cluster !== undefined ? p.cluster : 0));
 
         // Generate palette
         const palette = generateClusterPalette(clusterLabels);

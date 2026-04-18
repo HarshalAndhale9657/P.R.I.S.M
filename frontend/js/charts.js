@@ -1,6 +1,7 @@
 /**
  * P.R.I.S.M. — Charts Renderer
  * Visualizes stylometric features using Chart.js
+ * Reads data from the /api/analyze response structure.
  */
 
 const ChartsRenderer = (() => {
@@ -37,32 +38,37 @@ const ChartsRenderer = (() => {
     let clusterChart = null;
 
     function render(analysisData) {
-        if (!analysisData || !analysisData.profiles || !analysisData.paragraphs) return;
+        if (!analysisData || !analysisData.paragraphs) return;
 
-        const profiles = analysisData.profiles;
-        const paragraphs = analysisData.paragraphs;
-        
-        // Find indices for specific features (referencing feature_names)
-        const featureNames = analysisData.feature_names || [
+        // Support both nested (from /api/analyze) and flat structures
+        const features = analysisData.features || {};
+        const profiles = features.profiles || analysisData.profiles || [];
+        const featureNames = features.feature_names || analysisData.feature_names || [
             "avg_sentence_length", "avg_word_length", "pronoun_ratio", 
             "preposition_ratio", "conjunction_ratio", "passive_voice_pct", "yules_k"
         ];
-        
+        const clustering = analysisData.clustering || {};
+        const estimatedAuthors = clustering.estimated_authors || analysisData.estimated_authors || 1;
+
+        if (!profiles || profiles.length === 0) return;
+
+        const paragraphs = analysisData.paragraphs;
+
         const yulesKIdx = featureNames.indexOf("yules_k");
         const sentLenIdx = featureNames.indexOf("avg_sentence_length");
         
         const labels = paragraphs.map((_, i) => `¶ ${i + 1}`);
-        const clusters = paragraphs.map(p => p.cluster_id);
+        const clusters = paragraphs.map(p => p.cluster_id != null ? p.cluster_id : 0);
         
         // Colors mapping
-        const pointColors = clusters.map(c => PRISM.getClusterColor(c, analysisData.estimated_authors).border);
+        const pointColors = clusters.map(c => PRISM.getClusterColor(c, estimatedAuthors).border);
 
-        renderFeatureChart(labels, profiles, yulesKIdx, sentLenIdx, pointColors);
+        renderFeatureChart(labels, profiles, featureNames, yulesKIdx, sentLenIdx, pointColors);
         renderRatioChart(labels, profiles, featureNames);
-        renderClusterChart(paragraphs, profiles, yulesKIdx, sentLenIdx, pointColors);
+        renderClusterChart(paragraphs, profiles, featureNames, yulesKIdx, sentLenIdx, pointColors);
     }
 
-    function renderFeatureChart(labels, profiles, yulesKIdx, sentLenIdx, pointColors) {
+    function renderFeatureChart(labels, profiles, featureNames, yulesKIdx, sentLenIdx, pointColors) {
         const ctx = document.getElementById('chart-features');
         if (!ctx) return;
         
@@ -71,9 +77,11 @@ const ChartsRenderer = (() => {
         // If indices invalid, fallback to 0 and 1
         const id1 = yulesKIdx >= 0 ? yulesKIdx : 0;
         const id2 = sentLenIdx >= 0 ? sentLenIdx : 1;
+        const key1 = featureNames ? featureNames[id1] : null;
+        const key2 = featureNames ? featureNames[id2] : null;
 
-        const data1 = profiles.map(p => p[id1]);
-        const data2 = profiles.map(p => p[id2]);
+        const data1 = profiles.map(p => Array.isArray(p) ? p[id1] : (key1 ? p[key1] : 0));
+        const data2 = profiles.map(p => Array.isArray(p) ? p[id2] : (key2 ? p[key2] : 0));
 
         featureChart = new Chart(ctx, {
             type: 'line',
@@ -140,9 +148,13 @@ const ChartsRenderer = (() => {
         const prepIdx = featureNames.indexOf("preposition_ratio");
         const conjIdx = featureNames.indexOf("conjunction_ratio");
         
-        const dataPro = profiles.map(p => p[proIdx >= 0 ? proIdx : 2]);
-        const dataPrep = profiles.map(p => p[prepIdx >= 0 ? prepIdx : 3]);
-        const dataConj = profiles.map(p => p[conjIdx >= 0 ? conjIdx : 4]);
+        const keyPro = featureNames[proIdx >= 0 ? proIdx : 2];
+        const keyPrep = featureNames[prepIdx >= 0 ? prepIdx : 3];
+        const keyConj = featureNames[conjIdx >= 0 ? conjIdx : 4];
+
+        const dataPro = profiles.map(p => Array.isArray(p) ? p[proIdx >= 0 ? proIdx : 2] : p[keyPro] || 0);
+        const dataPrep = profiles.map(p => Array.isArray(p) ? p[prepIdx >= 0 ? prepIdx : 3] : p[keyPrep] || 0);
+        const dataConj = profiles.map(p => Array.isArray(p) ? p[conjIdx >= 0 ? conjIdx : 4] : p[keyConj] || 0);
 
         ratioChart = new Chart(ctx, {
             type: 'bar',
@@ -176,7 +188,7 @@ const ChartsRenderer = (() => {
         });
     }
 
-    function renderClusterChart(paragraphs, profiles, yulesKIdx, sentLenIdx, pointColors) {
+    function renderClusterChart(paragraphs, profiles, featureNames, yulesKIdx, sentLenIdx, pointColors) {
         const ctx = document.getElementById('chart-clusters');
         if (!ctx) return;
         
@@ -184,13 +196,20 @@ const ChartsRenderer = (() => {
 
         const id1 = yulesKIdx >= 0 ? yulesKIdx : 0;
         const id2 = sentLenIdx >= 0 ? sentLenIdx : 1;
+        const key1 = featureNames ? featureNames[id1] : null;
+        const key2 = featureNames ? featureNames[id2] : null;
 
-        const scatterData = paragraphs.map((p, i) => ({
-            x: profiles[i][id1],
-            y: profiles[i][id2],
-            label: `¶ ${i + 1}`,
-            cluster: p.cluster_id
-        }));
+        const scatterData = paragraphs.map((p, i) => {
+            const profile = profiles[i];
+            const xVal = profile ? (Array.isArray(profile) ? profile[id1] : (key1 ? profile[key1] : 0)) : 0;
+            const yVal = profile ? (Array.isArray(profile) ? profile[id2] : (key2 ? profile[key2] : 0)) : 0;
+            return {
+                x: xVal,
+                y: yVal,
+                label: `¶ ${i + 1}`,
+                cluster: p.cluster_id != null ? p.cluster_id : 0
+            };
+        });
 
         clusterChart = new Chart(ctx, {
             type: 'scatter',
@@ -200,7 +219,7 @@ const ChartsRenderer = (() => {
                     data: scatterData,
                     backgroundColor: pointColors,
                     borderColor: pointColors,
-                    pointRadius: paragraphs.map(p => p.cluster_id === -1 ? 8 : 6),
+                    pointRadius: paragraphs.map(p => (p.cluster_id === -1) ? 8 : 6),
                     pointHoverRadius: 10,
                 }]
             },

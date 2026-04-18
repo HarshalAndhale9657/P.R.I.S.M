@@ -156,7 +156,7 @@ class AuthorshipClustering:
         noise_count = int(np.sum(labels == -1))
         noise_pct = noise_count / n_paragraphs
 
-        if noise_pct > 0.8:
+        if noise_pct > 0.90:
             logger.warning(
                 f"[P.R.I.S.M.] {noise_pct:.0%} of paragraphs are noise — "
                 f"HDBSCAN saturation detected. Overriding to single author."
