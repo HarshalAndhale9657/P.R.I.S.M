@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="P.R.I.S.M. — Plagiarism Recognition via Integrated Stylometric Mapping. AI-powered academic integrity analysis.">
+    <title>P.R.I.S.M. — Academic Integrity Analyzer</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- HEADER / NAVBAR                             -->
+    <!-- ═══════════════════════════════════════════ -->
+    <header id="app-header">
+        <div class="header-inner">
+            <div class="logo-group">
+                <div class="logo-icon" id="logo-icon">
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                        <path d="M14 2L26 8V20L14 26L2 20V8L14 2Z" stroke="url(#logoGrad)" stroke-width="2" fill="none"/>
+                        <circle cx="14" cy="14" r="4" fill="url(#logoGrad)"/>
+                        <defs>
+                            <linearGradient id="logoGrad" x1="2" y1="2" x2="26" y2="26">
+                                <stop offset="0%" stop-color="#7c3aed"/>
+                                <stop offset="100%" stop-color="#06b6d4"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1 class="logo-text">P.R.I.S.M.</h1>
+                <span class="logo-badge">v2 Hybrid</span>
+            </div>
+            <nav class="nav-tabs" id="nav-tabs">
+                <button class="nav-tab active" data-panel="upload" id="tab-upload">
+                    <span class="tab-icon">📤</span> Upload
+                </button>
+                <button class="nav-tab" data-panel="heatmap" id="tab-heatmap" disabled>
+                    <span class="tab-icon">🎨</span> Heatmap
+                </button>
+                <button class="nav-tab" data-panel="charts" id="tab-charts" disabled>
+                    <span class="tab-icon">📊</span> Charts
+                </button>
+                <button class="nav-tab" data-panel="citations" id="tab-citations" disabled>
+                    <span class="tab-icon">📚</span> Citations
+                </button>
+                <button class="nav-tab" data-panel="sources" id="tab-sources" disabled>
+                    <span class="tab-icon">🔍</span> Sources
+                </button>
+                <button class="nav-tab" data-panel="report" id="tab-report" disabled>
+                    <span class="tab-icon">📋</span> Report
+                </button>
+            </nav>
+            <div class="header-actions">
+                <button class="btn-icon" id="btn-new-analysis" title="New Analysis" style="display:none;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- MAIN CONTENT AREA                           -->
+    <!-- ═══════════════════════════════════════════ -->
+    <main id="app-main">
+
+        <!-- ─── Upload Panel ─── -->
+        <section class="panel active" id="panel-upload">
+            <div class="upload-hero">
+                <div class="hero-glow"></div>
+                <div class="hero-content">
+                    <div class="hero-icon">
+                        <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                            <path d="M32 4L58 18V46L32 60L6 46V18L32 4Z" stroke="url(#heroGrad)" stroke-width="2.5" fill="none" opacity="0.3"/>
+                            <path d="M32 12L50 22V42L32 52L14 42V22L32 12Z" stroke="url(#heroGrad)" stroke-width="2" fill="none" opacity="0.6"/>
+                            <circle cx="32" cy="32" r="8" fill="url(#heroGrad)" opacity="0.8"/>
+                            <defs>
+                                <linearGradient id="heroGrad" x1="6" y1="4" x2="58" y2="60">
+                                    <stop offset="0%" stop-color="#7c3aed"/>
+                                    <stop offset="50%" stop-color="#a78bfa"/>
+                                    <stop offset="100%" stop-color="#06b6d4"/>
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <h2 class="hero-title">Analyze Academic Integrity</h2>
+                    <p class="hero-subtitle">Upload a PDF to detect stylometric anomalies using <strong>mathematical proof</strong> and <strong>AI reasoning</strong></p>
+                </div>
+
+                <!-- Drop Zone -->
+                <div class="drop-zone" id="drop-zone">
+                    <div class="drop-zone-inner">
+                        <div class="drop-icon" id="drop-icon">
+                            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                                <path d="M24 4V32M24 4L16 12M24 4L32 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M8 28V38C8 40.2 9.8 42 12 42H36C38.2 42 40 40.2 40 38V28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <p class="drop-text">Drag & drop your PDF here</p>
+                        <p class="drop-subtext">or</p>
+                        <button class="btn-primary" id="btn-browse">
+                            <span>Browse Files</span>
+                        </button>
+                        <p class="drop-hint">Supports academic papers in PDF format</p>
+                        <input type="file" id="file-input" accept=".pdf" hidden>
+                    </div>
+                </div>
+
+                <!-- File Info (shown after selection) -->
+                <div class="file-info" id="file-info" style="display:none;">
+                    <div class="file-info-card">
+                        <div class="file-icon">📄</div>
+                        <div class="file-details">
+                            <span class="file-name" id="file-name"></span>
+                            <span class="file-meta" id="file-meta"></span>
+                        </div>
+                        <button class="btn-remove" id="btn-remove" title="Remove file">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6L6 18M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="progress-container" id="progress-container" style="display:none;">
+                    <div class="progress-header">
+                        <span class="progress-label" id="progress-label">Initializing...</span>
+                        <span class="progress-percent" id="progress-percent">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-steps" id="progress-steps">
+                        <div class="step" data-step="parse">
+                            <span class="step-dot"></span>
+                            <span class="step-label">Parsing PDF</span>
+                        </div>
+                        <div class="step" data-step="features">
+                            <span class="step-dot"></span>
+                            <span class="step-label">Extracting Features</span>
+                        </div>
+                        <div class="step" data-step="cluster">
+                            <span class="step-dot"></span>
+                            <span class="step-label">Clustering</span>
+                        </div>
+                        <div class="step" data-step="reasoning">
+                            <span class="step-dot"></span>
+                            <span class="step-label">AI Reasoning</span>
+                        </div>
+                        <div class="step" data-step="citations">
+                            <span class="step-dot"></span>
+                            <span class="step-label">Citation Analysis</span>
+                        </div>
+                        <div class="step" data-step="sources">
+                            <span class="step-dot"></span>
+                            <span class="step-label">Source Tracing</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analyze Button -->
+                <button class="btn-analyze" id="btn-analyze" style="display:none;">
+                    <span class="btn-analyze-icon">⚡</span>
+                    <span>Run Full Analysis</span>
+                </button>
+
+                <!-- Error Display -->
+                <div class="error-card" id="error-card" style="display:none;">
+                    <div class="error-icon">⚠️</div>
+                    <p class="error-message" id="error-message"></p>
+                    <button class="btn-secondary" id="btn-retry">Try Again</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── Heatmap Panel ─── -->
+        <section class="panel" id="panel-heatmap">
+            <div class="panel-header">
+                <h2>Authorship Heatmap</h2>
+                <p class="panel-desc">Color-coded paragraphs by detected authorship cluster</p>
+            </div>
+            <div class="panel-body">
+                <div class="heatmap-legend" id="heatmap-legend"></div>
+                <div class="heatmap-grid" id="heatmap-grid">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── Charts Panel ─── -->
+        <section class="panel" id="panel-charts">
+            <div class="panel-header">
+                <h2>Style Analysis Charts</h2>
+                <p class="panel-desc">Stylometric feature visualization across paragraphs</p>
+            </div>
+            <div class="panel-body">
+                <div class="charts-grid" id="charts-grid">
+                    <div class="chart-card">
+                        <h3>Feature Trends</h3>
+                        <canvas id="chart-features"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Function Word Ratios</h3>
+                        <canvas id="chart-ratios"></canvas>
+                    </div>
+                    <div class="chart-card full-width">
+                        <h3>Cluster Distribution</h3>
+                        <canvas id="chart-clusters"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── Citations Panel ─── -->
+        <section class="panel" id="panel-citations">
+            <div class="panel-header">
+                <h2>Citation Forensics</h2>
+                <p class="panel-desc">Temporal analysis of citation patterns</p>
+            </div>
+            <div class="panel-body">
+                <div class="citations-content" id="citations-content">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── Sources Panel ─── -->
+        <section class="panel" id="panel-sources">
+            <div class="panel-header">
+                <h2>Source Matches</h2>
+                <p class="panel-desc">Potential source papers from arXiv</p>
+            </div>
+            <div class="panel-body">
+                <div class="sources-content" id="sources-content">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── Report Panel ─── -->
+        <section class="panel" id="panel-report">
+            <div class="panel-header">
+                <h2>Forensic Report</h2>
+                <p class="panel-desc">AI-synthesized integrity assessment</p>
+            </div>
+            <div class="panel-body">
+                <div class="report-content" id="report-content">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- FOOTER                                      -->
+    <!-- ═══════════════════════════════════════════ -->
+    <footer id="app-footer">
+        <p>P.R.I.S.M. &mdash; Plagiarism Recognition via Integrated Stylometric Mapping</p>
+        <p class="footer-sub">Mathematical Proof (spaCy + HDBSCAN) &bull; AI Reasoning (GPT-4o)</p>
+    </footer>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- SCRIPTS                                     -->
+    <!-- ═══════════════════════════════════════════ -->
+    <script src="js/app.js"></script>
+    <script src="js/upload.js"></script>
+    <script src="js/heatmap.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/report.js"></script>
+
+</body>
+</html>
