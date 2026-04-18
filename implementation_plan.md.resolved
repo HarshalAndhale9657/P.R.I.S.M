@@ -1,0 +1,771 @@
+# 🏗️ Implementation Plan — Academic Integrity Analyzer (PS2)
+
+> **Goal**: Build a complete Academic Integrity Analyzer in 24 hours, committing feature-by-feature, with 80% correctness + 20% completeness scoring.
+
+---
+
+## 🛠️ Tech Stack — Final Decision
+
+| Layer | Technology | Why This Over Alternatives |
+|-------|-----------|---------------------------|
+| **Backend** | **Python 3.12 + FastAPI** | Team already knows FastAPI from Nova. Async support. Best PDF/NLP ecosystem. Auto-generated API docs at `/docs`. |
+| **Frontend** | **Vanilla HTML + CSS + JS** | Zero build step = zero config bugs. Instant deploy. No React/TS compilation issues eating hackathon time. Serves from any static host. |
+| **PDF Parsing** | **pdfplumber** | Superior to PyPDF2 for layout-aware text extraction. Handles columns, tables, headers. |
+| **AI — Style Analysis** | **OpenAI GPT-4o-mini** | Fast, cheap ($0.15/1M input tokens). Perfect for per-paragraph bulk analysis. |
+| **AI — Report Gen** | **OpenAI GPT-4o** | Smarter model for final synthesis and forensic reasoning. |
+| **AI — Embeddings** | **text-embedding-3-small** | Cheapest embedding model. 1536 dimensions. For semantic source matching. |
+| **NLP Helpers** | **NLTK** | Sentence tokenization, word tokenization. Lighter than spaCy (no model download). |
+| **Source Search** | **arxiv Python package** | Free API, no auth needed, returns paper metadata + abstracts. |
+| **Visualization** | **Chart.js** (CDN) | Heatmaps, line charts, bar charts. Zero npm install — just a script tag. |
+| **Deployment** | **Render (backend) + Vercel (frontend)** | Free tier, GitHub auto-deploy, SSL included. |
+| **Version Control** | **GitHub** | Required by rules. Fresh repo at hackathon start. |
+
+> [!IMPORTANT]
+> ### Why NOT React/Vite?
+> In a 24hr hackathon, every minute spent on `npm install`, TS errors, build failures, and Vite config is a minute NOT spent on features. Vanilla HTML/CSS/JS means:
+> - `index.html` opens instantly in any browser
+> - No build step = no build bugs
+> - Deploy by dragging folder to Vercel
+> - Frontend person (M3) can start immediately without any setup
+
+---
+
+## 📁 Project Structure
+
+```
+academic-integrity-analyzer/
+├── backend/
+│   ├── main.py                    # FastAPI app + all routes
+│   ├── services/
+│   │   ├── pdf_parser.py          # PDF text extraction + segmentation
+│   │   ├── style_analyzer.py      # GPT-4 stylometric analysis
+│   │   ├── citation_analyzer.py   # Citation extraction + forensics
+│   │   ├── source_tracer.py       # arxiv semantic search
+│   │   └── report_generator.py    # Aggregate forensic report
+│   ├── prompts/
+│   │   ├── style_profile.py       # Prompt templates as Python strings
+│   │   ├── style_compare.py
+│   │   ├── citation_forensics.py
+│   │   └── report_generation.py
+│   ├── models.py                  # Pydantic response models
+│   ├── requirements.txt
+│   └── .env                       # OPENAI_API_KEY (gitignored)
+├── frontend/
+│   ├── index.html                 # Single page app
+│   ├── css/
+│   │   └── styles.css             # Dark theme styling
+│   └── js/
+│       ├── app.js                 # Main app controller
+│       ├── upload.js              # File upload logic
+│       ├── heatmap.js             # Authorship heatmap renderer
+│       ├── charts.js              # Style similarity charts
+│       └── report.js              # Report display logic
+├── tests/
+│   ├── test_genuine.pdf           # Single-author (should pass clean)
+│   ├── test_stitched.pdf          # Multi-source stitched (should flag)
+│   └── test_short.pdf             # Edge case: very short paper
+├── README.md
+├── .gitignore
+└── .env.example
+```
+
+---
+
+## 🔀 Git Commit Strategy
+
+Each step below = **one atomic commit**. Team members work in parallel on different steps.
+
+---
+
+## Step-by-Step Implementation
+
+---
+
+### COMMIT 1: Project Scaffolding
+**Who**: M5 (Shield) — QA/DevOps  
+**Time**: Hour 0 (10:00–10:30 AM)  
+**Branch**: `main`
+
+**What to do**:
+1. Create GitHub repo: `academic-integrity-analyzer`
+2. Create the full folder structure above (empty files are fine)
+3. Create `.gitignore`:
+```gitignore
+__pycache__/
+*.pyc
+.env
+venv/
+node_modules/
+uploads/
+*.pdf
+!tests/*.pdf
+```
+4. Create `.env.example`:
+```
+OPENAI_API_KEY=sk-your-key-here
+```
+5. Create `backend/requirements.txt`:
+```
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+python-multipart==0.0.9
+pdfplumber==0.11.0
+openai==1.50.0
+nltk==3.9.1
+arxiv==2.1.3
+numpy==1.26.4
+python-dotenv==1.0.1
+```
+6. Create `README.md` with project title and one-line description
+7. Initial commit: `feat: project scaffolding and dependencies`
+
+**Commit message**: `feat: project scaffolding, folder structure, and dependencies`
+
+---
+
+### COMMIT 2: Backend Boilerplate + Health Check
+**Who**: M4 (Bridge) — Integration  
+**Time**: Hour 0–1 (10:00–11:00 AM)  
+**Depends on**: Commit 1
+
+**What to build — `backend/main.py`**:
+```python
+import os
+from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = FastAPI(
+    title="Academic Integrity Analyzer",
+    description="AI-powered forensic document analysis for stitched plagiarism detection",
+    version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.get("/")
+async def health():
+    return {"status": "online", "service": "Academic Integrity Analyzer"}
+
+@app.post("/api/upload")
+async def upload_pdf(file: UploadFile = File(...)):
+    """Receive PDF file and return extracted text segments."""
+    if not file.filename.endswith('.pdf'):
+        return JSONResponse(status_code=400, content={"error": "Only PDF files are accepted"})
+    
+    file_path = os.path.join(UPLOAD_DIR, "temp.pdf")
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    return {"message": "PDF uploaded successfully", "filename": file.filename, "size": len(content)}
+```
+
+**Test**: `uvicorn main:app --reload --port 8000` → hit `localhost:8000` and `localhost:8000/docs`
+
+**Commit message**: `feat: FastAPI backend boilerplate with upload endpoint`
+
+---
+
+### COMMIT 3: PDF Parser + Paragraph Segmenter
+**Who**: M2 (Engine) — Backend Lead  
+**Time**: Hour 1–2 (11:00 AM – 12:00 PM)  
+**Depends on**: Commit 2
+
+**What to build — `backend/services/pdf_parser.py`**:
+```python
+import pdfplumber
+import re
+import nltk
+nltk.download('punkt_tab', quiet=True)
+from nltk.tokenize import sent_tokenize
+
+def extract_text_from_pdf(file_path: str) -> dict:
+    """Extract text from PDF and segment into paragraphs with metadata."""
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            full_text = ""
+            page_texts = []
+            for page in pdf.pages:
+                text = page.extract_text() or ""
+                full_text += text + "\n"
+                page_texts.append(text)
+        
+        if not full_text.strip():
+            return {"error": "PDF contains no extractable text", "paragraphs": [], "references": []}
+        
+        # Segment into paragraphs
+        paragraphs = segment_paragraphs(full_text)
+        
+        # Extract references
+        references = extract_references(full_text)
+        
+        return {
+            "full_text": full_text,
+            "paragraphs": paragraphs,
+            "references": references,
+            "page_count": len(page_texts),
+            "total_words": len(full_text.split()),
+        }
+    except Exception as e:
+        return {"error": f"Failed to parse PDF: {str(e)}", "paragraphs": [], "references": []}
+
+def segment_paragraphs(text: str) -> list:
+    """Split text into meaningful paragraphs with metadata."""
+    # Split on double newlines or significant whitespace gaps
+    raw_paragraphs = re.split(r'\n\s*\n', text)
+    
+    paragraphs = []
+    for i, para in enumerate(raw_paragraphs):
+        clean = para.strip()
+        if len(clean) < 20:  # Skip very short fragments (headers, page numbers)
+            continue
+        
+        sentences = sent_tokenize(clean)
+        words = clean.split()
+        
+        paragraphs.append({
+            "index": len(paragraphs),
+            "text": clean,
+            "sentence_count": len(sentences),
+            "word_count": len(words),
+            "char_count": len(clean),
+        })
+    
+    return paragraphs
+
+def extract_references(text: str) -> list:
+    """Extract references/bibliography section from paper text."""
+    # Find the references section
+    ref_match = re.search(r'(?i)\b(references|bibliography)\b', text)
+    if not ref_match:
+        return []
+    
+    ref_text = text[ref_match.start():]
+    
+    # Try to extract individual references (numbered or bracketed)
+    ref_patterns = re.findall(r'\[(\d+)\]\s*(.+?)(?=\[\d+\]|$)', ref_text, re.DOTALL)
+    if ref_patterns:
+        return [{"id": int(num), "text": text.strip()} for num, text in ref_patterns]
+    
+    # Fallback: split by newlines
+    lines = [l.strip() for l in ref_text.split('\n') if len(l.strip()) > 10]
+    return [{"id": i+1, "text": line} for i, line in enumerate(lines[1:])]  # Skip "References" header
+```
+
+**Wire into `main.py`**: Update `/api/upload` to call `pdf_parser.extract_text_from_pdf()`
+
+**Commit message**: `feat: PDF parser with paragraph segmentation and reference extraction`
+
+---
+
+### COMMIT 4: Frontend — Upload Page + Dark Theme
+**Who**: M3 (Pixel) — Frontend Lead  
+**Time**: Hour 1–3 (11:00 AM – 1:00 PM)  
+**Depends on**: Commit 2 (backend running)
+
+**What to build**:
+- `frontend/index.html` — Single page with upload area, results container
+- `frontend/css/styles.css` — Premium dark theme
+- `frontend/js/upload.js` — Drag-and-drop PDF upload, call backend API
+- `frontend/js/app.js` — Main controller, page state management
+
+**Key features**:
+- Drag-and-drop zone with visual feedback
+- Upload progress indicator
+- Loading spinner with "Analyzing..." state
+- Error handling for invalid files
+- Responsive layout
+
+**Commit message**: `feat: frontend upload page with dark theme and drag-drop`
+
+---
+
+### COMMIT 5: Stylometric Analyzer — Per-Paragraph Profiling
+**Who**: M1 (Captain) — AI Architect  
+**Time**: Hour 1–3 (11:00 AM – 1:00 PM)  
+**Depends on**: Commit 3 (paragraphs available)
+
+**What to build — `backend/services/style_analyzer.py`**:
+
+Core function: For each paragraph, call GPT-4o-mini to extract style metrics:
+```python
+import os
+import json
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+STYLE_PROFILE_PROMPT = """Analyze this academic paragraph's writing style. Return ONLY valid JSON:
+{
+  "avg_sentence_length": <float>,
+  "vocabulary_richness": <float 0-1>,
+  "passive_voice_pct": <float 0-100>,
+  "formality_score": <float 0-10>,
+  "technical_density": <float 0-10>,
+  "hedging_frequency": <float 0-10>,
+  "dominant_tense": "past|present|mixed",
+  "style_summary": "<20-word description of writing style>"
+}
+
+Paragraph:
+\"\"\"
+{text}
+\"\"\"
+"""
+
+async def analyze_paragraph_style(paragraph: dict) -> dict:
+    """Get stylometric profile for a single paragraph."""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": STYLE_PROFILE_PROMPT.format(text=paragraph["text"])}],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+        )
+        profile = json.loads(response.choices[0].message.content)
+        profile["paragraph_index"] = paragraph["index"]
+        return profile
+    except Exception as e:
+        return {"error": str(e), "paragraph_index": paragraph["index"]}
+
+async def analyze_all_paragraphs(paragraphs: list) -> list:
+    """Analyze all paragraphs — batch for efficiency."""
+    profiles = []
+    for para in paragraphs[:50]:  # Cap at 50 paragraphs for safety
+        profile = await analyze_paragraph_style(para)
+        profiles.append(profile)
+    return profiles
+```
+
+**Wire into `main.py`**: Add `/api/analyze` endpoint that calls this after upload.
+
+**Commit message**: `feat: GPT-4o-mini stylometric analysis for each paragraph`
+
+---
+
+### COMMIT 6: Pairwise Style Comparison + Boundary Detection
+**Who**: M1 (Captain)  
+**Time**: Hour 3–4 (1:00 – 2:00 PM)  
+**Depends on**: Commit 5
+
+**What to build**: Add to `style_analyzer.py`:
+
+```python
+COMPARE_PROMPT = """Compare these two consecutive academic paragraphs. Rate their stylistic similarity from 0 (completely different authors) to 100 (clearly same author).
+
+Return ONLY valid JSON:
+{
+  "similarity_score": <int 0-100>,
+  "key_differences": ["<diff1>", "<diff2>"],
+  "likely_same_author": <bool>,
+  "reasoning": "<brief explanation>"
+}
+
+Paragraph A:
+\"\"\"{text_a}\"\"\"
+
+Paragraph B:
+\"\"\"{text_b}\"\"\"
+"""
+
+async def compare_consecutive_paragraphs(paragraphs: list) -> list:
+    """Compare each consecutive pair and return similarity scores."""
+    comparisons = []
+    for i in range(len(paragraphs) - 1):
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": COMPARE_PROMPT.format(
+                text_a=paragraphs[i]["text"][:500],
+                text_b=paragraphs[i+1]["text"][:500]
+            )}],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+        )
+        comparison = json.loads(response.choices[0].message.content)
+        comparison["pair"] = [i, i+1]
+        comparisons.append(comparison)
+    return comparisons
+```
+
+**Also**: Add author clustering logic — group paragraphs where consecutive similarity > 60 into same cluster.
+
+**Commit message**: `feat: pairwise paragraph comparison and authorship boundary detection`
+
+---
+
+### COMMIT 7: Author Clustering + Count Estimation
+**Who**: M1 (Captain)  
+**Time**: Hour 4–5 (2:00 – 3:00 PM)  
+**Depends on**: Commit 6
+
+**What to build**: Add clustering function that:
+1. Takes similarity scores between consecutive paragraphs
+2. Identifies "break points" (similarity < 40 = likely different author)
+3. Groups paragraphs into clusters
+4. Estimates minimum number of distinct authors
+5. Assigns a cluster ID (color) to each paragraph
+
+```python
+def cluster_paragraphs(comparisons: list, threshold: int = 40) -> dict:
+    """Cluster paragraphs by author based on style similarity breaks."""
+    n_paragraphs = len(comparisons) + 1
+    clusters = [0] * n_paragraphs
+    current_cluster = 0
+    boundaries = []
+    
+    for comp in comparisons:
+        if comp["similarity_score"] < threshold:
+            current_cluster += 1
+            boundaries.append({
+                "after_paragraph": comp["pair"][0],
+                "similarity_drop": comp["similarity_score"],
+                "reasoning": comp.get("reasoning", "")
+            })
+        clusters[comp["pair"][1]] = current_cluster
+    
+    return {
+        "clusters": clusters,
+        "estimated_authors": current_cluster + 1,
+        "boundaries": boundaries,
+        "cluster_sizes": {i: clusters.count(i) for i in set(clusters)}
+    }
+```
+
+**Commit message**: `feat: paragraph clustering and author count estimation`
+
+---
+
+### COMMIT 8: Frontend — Authorship Heatmap
+**Who**: M3 (Pixel)  
+**Time**: Hour 3–5 (1:00 – 3:00 PM)  
+**Depends on**: Commit 4 (frontend base) + Commit 7 (cluster data)
+
+**What to build — `frontend/js/heatmap.js`**:
+- Color-coded paragraph blocks (each cluster = different color)
+- Click a paragraph → show its style profile in a side panel
+- Highlight boundaries with red dividers
+- Show "Estimated Authors: N" prominently
+- Smooth animations when results load
+
+**Colors for clusters**: `["#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899"]`
+
+**Commit message**: `feat: interactive authorship heatmap with color-coded paragraphs`
+
+---
+
+### COMMIT 9: Citation Forensics Engine
+**Who**: M2 (Engine)  
+**Time**: Hour 3–5 (1:00 – 3:00 PM)  
+**Depends on**: Commit 3 (references extracted)
+
+**What to build — `backend/services/citation_analyzer.py`**:
+1. Map which references are cited in which sections
+2. Call GPT-4o to analyze temporal and thematic consistency
+3. Flag sections with isolated/inconsistent citation clusters
+
+```python
+CITATION_PROMPT = """Analyze these references from different sections of a research paper.
+Determine if citation patterns are consistent (same author) or suspicious (possibly stitched).
+
+Section-wise references:
+{section_refs}
+
+Return ONLY valid JSON:
+{
+  "temporal_consistency": <float 0-10>,
+  "thematic_consistency": <float 0-10>,
+  "suspicious_sections": [<section_indices>],
+  "inconsistencies": ["<detail1>", "<detail2>"],
+  "overall_citation_integrity": <float 0-10>
+}
+"""
+```
+
+**Commit message**: `feat: citation forensics with temporal and thematic analysis`
+
+---
+
+### COMMIT 10: Style Similarity Chart
+**Who**: M3 (Pixel)  
+**Time**: Hour 5–6 (3:00 – 4:00 PM)  
+**Depends on**: Commit 6 (comparison data)
+
+**What to build — `frontend/js/charts.js`**:
+- Line chart (Chart.js) showing similarity scores between consecutive paragraphs
+- X-axis = paragraph pairs, Y-axis = similarity score (0–100)
+- Red threshold line at score 40 (boundary detection cutoff)
+- Drops below threshold highlighted in red = "authorship change detected"
+
+**Commit message**: `feat: style similarity line chart with boundary markers`
+
+---
+
+### COMMIT 11: Full Analysis Pipeline Endpoint
+**Who**: M4 (Bridge)  
+**Time**: Hour 5–7 (3:00 – 5:00 PM)  
+**Depends on**: Commits 5, 6, 7, 9
+
+**What to build**: Wire everything into a single `/api/analyze` endpoint:
+```python
+@app.post("/api/analyze")
+async def analyze_document(file: UploadFile = File(...)):
+    """Full analysis pipeline: upload → parse → stylometry → citations → report."""
+    # 1. Save and parse PDF
+    # 2. Run stylometric analysis (all paragraphs)
+    # 3. Run pairwise comparisons
+    # 4. Cluster paragraphs
+    # 5. Run citation forensics
+    # 6. Return unified results
+    return {
+        "paragraphs": [...],
+        "style_profiles": [...],
+        "comparisons": [...],
+        "clusters": {...},
+        "citation_analysis": {...},
+        "metadata": {...}
+    }
+```
+
+**Commit message**: `feat: unified analysis pipeline endpoint combining all modules`
+
+---
+
+### COMMIT 12: Frontend — Full Results Dashboard
+**Who**: M3 (Pixel)  
+**Time**: Hour 7–9 (5:00 – 7:00 PM)  
+**Depends on**: Commit 11
+
+**What to build**: Connect frontend to `/api/analyze`:
+- After upload, show loading state with progress
+- When results arrive, render:
+  - Authorship heatmap (from Commit 8)
+  - Style similarity chart (from Commit 10)
+  - Citation analysis summary panel
+  - Key metrics: author count, integrity score, flagged sections count
+- Tab/section navigation between views
+
+**Commit message**: `feat: full results dashboard with heatmap, charts, and metrics`
+
+---
+
+### COMMIT 13: Forensic Report Generator
+**Who**: M1 (Captain)  
+**Time**: Hour 7–9 (5:00 – 7:00 PM)  
+**Depends on**: Commit 11
+
+**What to build — `backend/services/report_generator.py`**:
+- Take all pillar outputs → call GPT-4o → generate structured forensic report
+- Include: overall verdict, per-section analysis, evidence summary, confidence level
+- Return as structured JSON for frontend display
+
+**Commit message**: `feat: AI-powered forensic report generator with structured output`
+
+---
+
+### COMMIT 14: Frontend — Forensic Report View
+**Who**: M3 (Pixel)  
+**Time**: Hour 9–10 (7:00 – 8:00 PM)  
+**Depends on**: Commit 13
+
+**What to build — `frontend/js/report.js`**:
+- Structured report card with sections
+- Overall integrity score (big, colored number)
+- Per-section verdict table
+- Evidence trail for each flagged section
+- Export/download button (generates text report)
+
+**Commit message**: `feat: forensic report display with integrity score and evidence`
+
+---
+
+### COMMIT 15: Semantic Source Tracer (arxiv Search)
+**Who**: M4 (Bridge)  
+**Time**: Hour 8–11 (6:00 – 9:00 PM)  
+**Depends on**: Commit 7 (flagged sections identified)
+
+**What to build — `backend/services/source_tracer.py`**:
+1. Take flagged paragraphs
+2. Extract key phrases via GPT-4o-mini
+3. Search arxiv API with those phrases
+4. Embed flagged text + arxiv abstracts with `text-embedding-3-small`
+5. Compute cosine similarity
+6. Return top matches with scores
+
+**Commit message**: `feat: arxiv semantic source tracing for flagged sections`
+
+---
+
+### COMMIT 16: Frontend — Source Matches Panel
+**Who**: M3 (Pixel)  
+**Time**: Hour 10–11 (8:00 – 9:00 PM)  
+**Depends on**: Commit 15
+
+**What to build**: Source paper matches display:
+- For each flagged section: show top matching arxiv papers
+- Paper title, authors, year, similarity %, arxiv link
+- Visual: progress bar showing match percentage
+
+**Commit message**: `feat: source paper matches panel with arxiv links`
+
+---
+
+### COMMIT 17: Edge Case Handling
+**Who**: M2 (Engine) + M5 (Shield)  
+**Time**: Hour 11–13 (9:00 – 11:00 PM)  
+**Depends on**: Commits 1–16
+
+**What to handle**:
+- Empty PDF → clear error message
+- Image-only/scanned PDF → "No text detected" error
+- Very short paper (1–2 paragraphs) → "Insufficient content" warning
+- Very long paper (100+ paragraphs) → truncate to first 50 with notice
+- Paper with no references → skip citation analysis, note in report
+- Non-English text → warning message
+- API timeout/failure → retry logic + partial results
+- Invalid file type → reject with message
+- Large file (>10MB) → reject with size limit error
+
+**Commit message**: `feat: comprehensive edge case handling for all inputs`
+
+---
+
+### COMMIT 18: Loading States + Error UI
+**Who**: M3 (Pixel)  
+**Time**: Hour 11–12 (9:00 – 10:00 PM)  
+**Depends on**: Commit 17
+
+**What to build**:
+- Skeleton loading states for each panel
+- Error messages styled as alert cards
+- Retry button for failed analyses
+- "Analysis in progress" steps indicator (Step 1/5, Step 2/5...)
+
+**Commit message**: `feat: loading states, error handling UI, and progress indicator`
+
+---
+
+### COMMIT 19: Deployment
+**Who**: M5 (Shield)  
+**Time**: Hour 12–14 (10:00 PM – 12:00 AM)  
+**Depends on**: Commits 1–18
+
+**Steps**:
+1. Backend → Deploy to Render (free tier):
+   - Add `render.yaml` or use dashboard
+   - Set `OPENAI_API_KEY` as environment variable
+   - Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+2. Frontend → Deploy to Vercel:
+   - Update `app.js` API base URL to Render backend URL
+   - Deploy frontend folder
+
+**Commit message**: `feat: deployment configuration for Render + Vercel`
+
+---
+
+### COMMIT 20: README + AI Disclosure + Demo Video
+**Who**: M5 (Shield)  
+**Time**: Hour 14–16 (12:00 – 2:00 AM)  
+**Depends on**: Commits 1–19
+
+**What to write in README.md**:
+- Project title + description
+- Tech stack list
+- Setup instructions (git clone → pip install → uvicorn start)
+- AI tools disclosure (OpenAI GPT-4o-mini, GPT-4o, embeddings)
+- Screenshots of the dashboard
+- Demo video link
+
+**Commit message**: `docs: complete README with setup guide and AI tool disclosure`
+
+---
+
+### COMMIT 21: Final Polish (if time permits)
+**Who**: ALL  
+**Time**: Hour 16–22 (2:00 – 8:00 AM)
+
+- UI polish: animations, hover effects, smooth transitions
+- Performance: batch API calls, add caching
+- Additional test PDFs
+- Bug fixes from testing
+- Code comments for judge readability
+
+---
+
+## 📊 Commit Timeline — Gantt View
+
+```
+HOUR  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15-22
+      │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │
+M1    │C5─────────┤C6─────┤C7────┤   │C13─────────┤   │   │   │POLISH
+M2    │   │C3─────────┤   │C9──────────┤   │   │C17─────────┤   │POLISH
+M3    │   │C4──────────────────┤C8──┤C10─┤C12──────┤C14─┤C16─┤C18│POLISH
+M4    │C2─────┤   │   │   │C11──────────┤   │C15──────────┤   │   │POLISH
+M5    │C1─┤   │   │   │   │   │   │   │   │   │   │C19─────┤C20──┤POLISH
+      │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │
+      ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼
+     10AM     12PM     2PM      4PM  R1  6PM     8PM     10PM    12AM R2
+```
+
+---
+
+## 🎯 Judging Round Deliverables
+
+### Round 1 (Hour 7 — 5:00 PM): Commits 1–8 done
+- ✅ System design diagram ready
+- ✅ PDF upload + parsing working
+- ✅ Stylometric analysis running
+- ✅ Authorship heatmap visible
+- ✅ Demo: upload a paper → see colored paragraphs
+
+### Round 2 (Hour 14 — 12:00 AM): Commits 1–16 done
+- ✅ All three pillars working
+- ✅ Full dashboard with all views
+- ✅ Forensic report generated
+- ✅ Source papers found on arxiv
+- ✅ Edge cases handled
+
+### Round 3 (Hour 23 — 9:00 AM): Everything done
+- ✅ Deployed and accessible
+- ✅ Demo video recorded
+- ✅ README complete
+- ✅ All AI tools disclosed
+
+---
+
+## ⚡ Quick Start Commands
+
+```bash
+# Backend
+cd backend
+python -m venv venv
+venv\Scripts\activate          # Windows
+pip install -r requirements.txt
+python -m nltk.downloader punkt_tab
+uvicorn main:app --reload --port 8000
+
+# Frontend (just open in browser)
+# Open frontend/index.html in Chrome
+# OR serve with: python -m http.server 3000 --directory frontend
+```
+
+---
+
+## 🔑 Environment Variables
+
+```env
+OPENAI_API_KEY=sk-your-actual-key-here
+```
+
+Set in `.env` file in backend/ folder. **Never commit this file.**
