@@ -470,7 +470,12 @@ class AcademicPDFParser:
         """
         Normalize whitespace: collapse runs of spaces/newlines into single
         spaces, strip leading/trailing whitespace.
+        Also patches line-break hyphens.
         """
+        # Rejoin hyphenated words split across lines or columns (e.g. sys- \n tem -> system)
+        text = re.sub(r"-\s*\n\s*", "", text)
+        # Also catch hyphens separated by spaces that PyMuPDF drops
+        text = re.sub(r"-\s+", "", text)
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 

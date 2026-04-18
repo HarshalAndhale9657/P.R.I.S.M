@@ -10,6 +10,7 @@ import arxiv
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import logging
+import requests
 from typing import List, Dict, Any, Optional
 from models import PipelineContext, WarningCode, WarningSeverity
 
@@ -64,6 +65,16 @@ class SourceTracer:
         )
         return list(self.client.results(search))
 
+    @retry(wait=wait_exponential(multiplier=2, min=2, max=10), stop=stop_after_attempt(3), reraise=False)
+    def _safe_openalex_search(self, query: str, max_results: int = 3) -> list:
+        if not query.strip():
+            return []
+        logger.info(f"[P.R.I.S.M.] Searching OpenAlex for: {query}")
+        url = f"https://api.openalex.org/works?search={query}&per-page={max_results}"
+        res = requests.get(url, timeout=10)
+        res.raise_for_status()
+        return res.json().get("results", [])
+
     def trace(self, anomalous_paragraphs: List[Dict[str, Any]], ctx: Optional[PipelineContext] = None) -> List[Dict[str, Any]]:
         """
         Trace the source of anomalous paragraphs.
@@ -90,15 +101,64 @@ class SourceTracer:
             query = " AND ".join(keywords)
             
             try:
-                # 2. Query arxiv with top keywords
-                results = self._safe_arxiv_search(query)
+                # 2. Query global databases
+                arxiv_results = self._safe_arxiv_search(query, max_results=3)
+                openalex_results = self._safe_openalex_search(query, max_results=3)
                 
-                if not results:
+                abstracts = []
+                aggregated_docs = []
+
+                # Format arXiv
+                if arxiv_results:
+                    for r in arxiv_results:
+                        abstracts.append(r.summary)
+                        aggregated_docs.append({
+                            "title": r.title,
+                            "authors": [a.name for a in r.authors],
+                            "year": r.published.year,
+                            "url": r.pdf_url or r.entry_id,
+                            "abstract": r.summary,
+                            "origin": "arXiv"
+                        })
+
+                # Format OpenAlex
+                if openalex_results:
+                    for r in openalex_results:
+                        # OpenAlex uses inverted index for abstracts, or sometimes just string depending on endpoint, 
+                        # but normally we construct it or fallback to title if abstract is deep nested.
+                        # We'll use title + context as fallback if abstract processing is complex.
+                        # Wait, we can just use the title for embedding if abstract isn't readily available as plaintext.
+                        raw_idx = r.get("abstract_inverted_index")
+                        abstract_text = ""
+                        if raw_idx:
+                            # Reconstruct text from inverted index 
+                            words = max([max(pos) for pos in raw_idx.values()]) + 1
+                            text_arr = [""] * words
+                            for word, positions in raw_idx.items():
+                                for pos in positions:
+                                    text_arr[pos] = word
+                            abstract_text = " ".join(text_arr)
+                        else:
+                            abstract_text = r.get("title", "")
+                        
+                        abstracts.append(abstract_text)
+                        
+                        authors = [auth.get("author", {}).get("display_name", "Unknown") for auth in r.get("authorships", [])]
+                        
+                        aggregated_docs.append({
+                            "title": r.get("title", "Unknown Title"),
+                            "authors": authors,
+                            "year": r.get("publication_year", 0),
+                            "url": r.get("id"),
+                            "abstract": abstract_text,
+                            "origin": "OpenAlex"
+                        })
+                
+                if not aggregated_docs:
                     continue
                     
-                # 3. Embed paragraph + abstracts locally
+                # 3. Embed paragraph + combined abstracts locally
                 para_embedding = model.encode(text)
-                abstracts = [r.summary for r in results]
                 abstract_embeddings = model.encode(abstracts)
                 
                 # 4. Cosine similarity ranking
@@ -108,22 +168,24 @@ class SourceTracer:
                 # 5. Return matches above threshold or exact text matches
                 best_match_idx = np.argmax(similarities)
                 best_sim = similarities[best_match_idx]
-                best_paper = results[best_match_idx]
+                best_paper = aggregated_docs[best_match_idx]
                 
-                # Simple heuristic: if the text is very similar to the title or found in the abstract
+                # Simple heuristic
                 text_lower = text.lower().strip()
-                is_exact = text_lower in best_paper.summary.lower() or text_lower in best_paper.title.lower()
+                match_abstract = best_paper["abstract"].lower()
+                is_exact = text_lower in match_abstract or text_lower in best_paper["title"].lower()
                 
                 if best_sim >= self.similarity_threshold or is_exact:
                     source_matches.append({
                         "paragraph_id": para.get("id") or para.get("paragraph_index"),
                         "similarity_score": round(float(best_sim), 4),
                         "source": {
-                            "title": best_paper.title,
-                            "authors": [a.name for a in best_paper.authors],
-                            "year": best_paper.published.year,
-                            "url": best_paper.pdf_url or best_paper.entry_id,
-                            "abstract": best_paper.summary
+                            "title": best_paper["title"],
+                            "authors": best_paper["authors"],
+                            "year": best_paper["year"],
+                            "url": best_paper["url"],
+                            "origin": best_paper["origin"],
+                            "abstract": best_paper["abstract"]
                         }
                     })
                     

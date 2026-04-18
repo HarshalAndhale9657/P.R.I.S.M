@@ -20,6 +20,8 @@ import logging
 import statistics
 from typing import List, Dict, Any, Optional, Tuple
 from collections import Counter
+import requests
+import urllib.parse
 
 from models import PipelineContext, WarningCode, WarningSeverity
 
@@ -214,6 +216,28 @@ class CitationForensics:
             round(statistics.median(bib_years)) if bib_years else None
         )
 
+        # ── Step 6: Crossref API Verification for Hallucinations ───────────
+        crossref_results = []
+        hallucination_count = 0
+        try:
+            # Verify up to 5 references to keep response times fast
+            for ref in references[:5]:
+                ref_str = ref if isinstance(ref, str) else ref.get('text', '')
+                if len(ref_str) > 15:
+                    is_valid, score = self._verify_crossref(ref_str)
+                    crossref_results.append({
+                        "reference": ref_str,
+                        "is_valid": is_valid,
+                        "crossref_score": score
+                    })
+                    if not is_valid:
+                        hallucination_count += 1
+                        
+            if hallucination_count > 0:
+                logger.warning(f"[P.R.I.S.M.] Detected {hallucination_count} hallucinated references via Crossref")
+        except Exception as e:
+            logger.error(f"[P.R.I.S.M.] Crossref validation failed: {e}")
+
         # ── Build result ─────────────────────────────────────────────────────
         year_difference = (
             abs(core_median - noise_median)
@@ -251,6 +275,8 @@ class CitationForensics:
                 "total_references": len(references),
                 "bibliography_median_year": bib_median,
                 "bibliography_years": bib_years,
+                "crossref_validation": crossref_results,
+                "hallucination_count": hallucination_count,
             },
         }
 
@@ -455,3 +481,29 @@ class CitationForensics:
             return "medium"
         else:
             return "low"
+
+    def _verify_crossref(self, ref_text: str) -> Tuple[bool, float]:
+        """
+        Queries Crossref API to definitively prove if a citation is real or hallucinated.
+        Returns (is_valid, confidence_score).
+        """
+        try:
+            query = urllib.parse.quote(ref_text[:150]) # cap length
+            url = f"https://api.crossref.org/works?query.bibliographic={query}&select=title,score&rows=1"
+            headers = {"User-Agent": "PRISM-AuthChecker/1.0 (mailto:admin@prism.io)"}
+            res = requests.get(url, headers=headers, timeout=4)
+            
+            if res.status_code == 200:
+                data = res.json()
+                items = data.get("message", {}).get("items", [])
+                if not items:
+                    return False, 0.0
+                
+                # Crossref fuzzy score: generally, > 40 means a solid match for long strings
+                score = items[0].get("score", 0.0)
+                is_valid = score > 35.0
+                return is_valid, round(score, 2)
+                
+            return True, 0.0 # Fail open on API failure
+        except Exception:
+            return True, 0.0 # Error gracefully

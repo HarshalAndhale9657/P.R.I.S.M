@@ -19,6 +19,9 @@ import numpy as np
 import spacy
 from collections import Counter
 from typing import List, Dict, Any, Optional
+import os
+import openai
+from sklearn.decomposition import PCA
 
 from models import PipelineContext, WarningCode, WarningSeverity
 
@@ -42,6 +45,9 @@ FEATURE_NAMES = [
     "conjunction_ratio",
     "passive_voice_pct",
     "yules_k",
+    "semantic_1",
+    "semantic_2",
+    "semantic_3",
 ]
 
 
@@ -79,7 +85,7 @@ class FeatureEngine:
         words = [token.text.lower() for token in doc if token.is_alpha]
 
         if len(words) < self.min_words:
-            return np.zeros(len(FEATURE_NAMES))
+            return np.zeros(7) # We rely on 7 structural features
 
         # ── 1. Structural Features ───────────────────────────────────────────
         sentences = list(doc.sents)
@@ -158,7 +164,52 @@ class FeatureEngine:
 
             feature_vectors.append(features)
 
-            # Build a human-readable profile dict for the frontend
+        # ── 5. OpenAI Deep Semantic Embeddings ──────────────────────────────
+        try:
+            # Only run if we actually have text and valid OPENAI_API_KEY
+            if os.getenv("OPENAI_API_KEY") and valid_indices:
+                logger.info(f"[P.R.I.S.M.] Generating high-dimensional embeddings for {len(valid_indices)} paragraphs via OpenAI")
+                client = openai.Client()
+                texts_to_embed = [paragraphs[i].get("text", "") for i in valid_indices]
+                
+                # Batch request embeddings (fast)
+                response = client.embeddings.create(
+                    input=texts_to_embed,
+                    model="text-embedding-3-small"
+                )
+                embeddings = np.array([r.embedding for r in response.data])
+                
+                # Reduce 1536 dims down to 3 using PCA so HDBSCAN doesn't suffer the curse of dimensionality
+                n_components = min(3, len(valid_indices))
+                pca = PCA(n_components=n_components)
+                reduced_embeddings = pca.fit_transform(embeddings)
+                
+                # Pad with zeros if n_components < 3 (extremely short document)
+                if n_components < 3:
+                    pad = np.zeros((len(valid_indices), 3 - n_components))
+                    reduced_embeddings = np.hstack([reduced_embeddings, pad])
+                
+                # Map back to the original full feature_vectors array
+                semantic_dict = {orig_idx: red_emb for orig_idx, red_emb in zip(valid_indices, reduced_embeddings)}
+            else:
+                semantic_dict = {}
+        except Exception as e:
+            logger.error(f"[P.R.I.S.M.] Failed to extract semantic embeddings: {e}")
+            semantic_dict = {}
+
+        # Merge structural and semantic features
+        final_feature_vectors = []
+        for i, structural_feats in enumerate(feature_vectors):
+            if i in valid_indices:
+                semantic_feats = semantic_dict.get(i, np.zeros(3))
+                combined = np.concatenate([structural_feats, semantic_feats])
+            else:
+                combined = np.concatenate([structural_feats, np.zeros(3)])
+            final_feature_vectors.append(combined)
+
+        # Build profiles
+        for i, features in enumerate(final_feature_vectors):
+            is_valid = i in valid_indices
             profile = {
                 "paragraph_index": i,
                 "is_valid": bool(is_valid),
@@ -168,7 +219,7 @@ class FeatureEngine:
 
             profiles.append(profile)
 
-        feature_matrix = np.array(feature_vectors) if feature_vectors else np.zeros((0, len(FEATURE_NAMES)))
+        feature_matrix = np.array(final_feature_vectors) if final_feature_vectors else np.zeros((0, len(FEATURE_NAMES)))
 
         # ── Edge Case: Short paper (<5 paragraphs) ───────────────────────────
         SHORT_PAPER_THRESHOLD = 5
@@ -247,9 +298,9 @@ class FeatureEngine:
             },
         }
 
-        # Add the 7 core features
+        # Simulate semantic features since we don't fire an API call for a single click
         for j, name in enumerate(FEATURE_NAMES):
-            summary[name] = round(float(features[j]), 4)
+            summary[name] = round(float(features[j]) if j < 7 else 0.0, 4)
 
         return summary
 

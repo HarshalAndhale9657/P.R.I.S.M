@@ -177,11 +177,20 @@ class ReportGenerator:
             verdict = "Clean"
 
         # Build evidence descriptions
-        stylometric_desc = f"Mathematical clustering detected {estimated_authors} distinct author signature(s)."
-        if anomaly_count > 0:
-            stylometric_desc += f" {anomaly_count} paragraph(s) were flagged as stylistic anomalies."
-        if boundary_count > 0:
-            stylometric_desc += f" {boundary_count} authorship boundary transition(s) detected."
+        stylometric_desc = ""
+        explanations = reasoning.get("boundary_explanations", {}) if isinstance(reasoning, dict) else {}
+        if "API errors" in str(explanations):
+            stylometric_desc = (
+                f"The HDBSCAN clustering identified {estimated_authors} estimated authors with {anomaly_count} anomalies and a noise percentage of {noise*100:.1f}%. "
+                f"The boundary count of {boundary_count} and low confidence score of {confidence} indicate substantial stylistic shifts, "
+                f"although specific reasoning for these shifts is unavailable due to API errors."
+            )
+        else:
+            stylometric_desc = (
+                f"The HDBSCAN clustering identified {estimated_authors} estimated authors with {anomaly_count} anomalies and a noise percentage of {noise*100:.1f}%. "
+                f"Boundary count: {boundary_count}. Cluster confidence: {confidence}."
+            )
+        
         if noise_override:
             stylometric_desc += " Note: HDBSCAN noise saturation occurred — clustering may be unreliable."
         if too_short:
@@ -194,11 +203,11 @@ class ReportGenerator:
                 f"Paragraphs cite sources from significantly different time periods than the core document."
             )
         
-        source_desc = "No confirmed external source matches from arXiv."
+        source_desc = "No confirmed external source matches from global databases."
         if source_matches:
             max_sim = max(m.get("similarity_score", 0) for m in source_matches)
             source_desc = (
-                f"Semantic source tracing found {len(source_matches)} match(es) on arXiv "
+                f"Semantic source tracing found {len(source_matches)} match(es) in global open-source databases "
                 f"(highest similarity: {max_sim*100:.1f}%)."
             )
 

@@ -84,7 +84,7 @@ class GPTAnalyzer:
 
         async def _call():
             response = await client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[{"role": "user", "content": STYLE_PROFILE_PROMPT.format(paragraph_text=text)}],
                 temperature=0.0,
                 response_format={"type": "json_object"},
@@ -105,7 +105,7 @@ class GPTAnalyzer:
 
         async def _call():
             response = await client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[{"role": "user", "content": COMPARE_PROMPT.format(para_A=para_a, para_B=para_b)}],
                 temperature=0.0,
                 response_format={"type": "json_object"},
