@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.pdf_parser import AcademicPDFParser
 from services.feature_engine import FeatureEngine
 from services.clustering import AuthorshipClustering
+from services.gpt_analyzer import GPTAnalyzer
 
 app = FastAPI(
     title="P.R.I.S.M. Backend API",
@@ -26,6 +27,7 @@ app.add_middleware(
 pdf_parser = AcademicPDFParser()
 feature_engine = FeatureEngine()
 clustering_engine = AuthorshipClustering(min_cluster_size=3, min_samples=2)
+gpt_analyzer = GPTAnalyzer()
 
 @app.get("/")
 async def health_check():
@@ -199,3 +201,49 @@ async def cluster_paragraphs(file: UploadFile = File(...)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Clustering failed: {str(e)}")
+
+
+@app.post("/api/reasoning")
+async def analyze_reasoning(file: UploadFile = File(...)):
+    """
+    Stage 1-4 Pipeline: Parse → Features → Cluster → GPT Reasoning.
+    Returns clustered paragraphs with natural language GPT-4o-mini explanations for anomalous boundaries.
+    """
+    if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+        # Stage 1: Parse PDF
+        parsed = pdf_parser.parse(content)
+        if not parsed["paragraphs"]:
+            raise HTTPException(status_code=422, detail="No text detected.")
+
+        # Stage 2: Extract stylometric features
+        features = feature_engine.extract_all(parsed["paragraphs"])
+
+        # Stage 3: HDBSCAN clustering
+        cluster_result = clustering_engine.cluster(features["feature_matrix"])
+        enriched_paragraphs = clustering_engine.get_cluster_summary(parsed["paragraphs"], cluster_result)
+
+        # Stage 4: GPT Reasoning on flagged boundaries
+        reasoning = await gpt_analyzer.analyze_boundaries(parsed["paragraphs"], cluster_result)
+
+        return {
+            "filename": file.filename,
+            "clustering": {
+                "estimated_authors": cluster_result["estimated_authors"],
+                "anomaly_count": cluster_result["anomaly_count"],
+                "noise_percentage": cluster_result["noise_percentage"],
+                "confidence": cluster_result["confidence"],
+            },
+            "reasoning": reasoning,
+            "paragraphs": enriched_paragraphs,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reasoning analysis failed: {str(e)}")
