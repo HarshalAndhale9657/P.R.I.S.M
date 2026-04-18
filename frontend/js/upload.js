@@ -199,102 +199,43 @@ const UploadManager = (() => {
         showProgress();
 
         try {
-            // Stage 1: Upload & Parse
             updateProgress('parse', 5);
+            
+            // Simulate progress while waiting for the single analyze endpoint
+            let simulatedProgress = 5;
+            const progressInterval = setInterval(() => {
+                simulatedProgress += 2;
+                if (simulatedProgress < 20) updateProgress('features', simulatedProgress);
+                else if (simulatedProgress < 40) updateProgress('cluster', simulatedProgress);
+                else if (simulatedProgress < 60) updateProgress('reasoning', simulatedProgress);
+                else if (simulatedProgress < 80) updateProgress('citations', simulatedProgress);
+                else if (simulatedProgress < 95) updateProgress('sources', simulatedProgress);
+            }, 1000);
+
             const formData = new FormData();
             formData.append('file', file);
 
-            const parseResp = await fetch(`${PRISM.API_BASE}/api/parse`, {
+            const analyzeResp = await fetch(`${PRISM.API_BASE}/api/analyze`, {
                 method: 'POST',
                 body: formData,
             });
 
-            if (!parseResp.ok) {
-                const err = await parseResp.json().catch(() => ({}));
-                throw new Error(err.detail || `Upload failed (${parseResp.status})`);
+            clearInterval(progressInterval);
+
+            if (!analyzeResp.ok) {
+                const err = await analyzeResp.json().catch(() => ({}));
+                throw new Error(err.detail || `Analysis failed (${analyzeResp.status})`);
             }
 
-            const parseData = await parseResp.json();
-            updateProgress('features', 20);
-
-            // Stage 2: Full analysis (cluster endpoint includes features + HDBSCAN)
-            const formData2 = new FormData();
-            formData2.append('file', file);
-
-            updateProgress('cluster', 35);
-            const clusterResp = await fetch(`${PRISM.API_BASE}/api/cluster`, {
-                method: 'POST',
-                body: formData2,
-            });
-
-            if (!clusterResp.ok) {
-                const err = await clusterResp.json().catch(() => ({}));
-                throw new Error(err.detail || `Clustering failed (${clusterResp.status})`);
-            }
-
-            const clusterData = await clusterResp.json();
-            updateProgress('reasoning', 50);
-
-            // Stage 3: GPT Reasoning
-            const formData3 = new FormData();
-            formData3.append('file', file);
-
-            const reasonResp = await fetch(`${PRISM.API_BASE}/api/reasoning`, {
-                method: 'POST',
-                body: formData3,
-            });
-
-            let reasoningData = null;
-            if (reasonResp.ok) {
-                reasoningData = await reasonResp.json();
-            }
-            updateProgress('citations', 70);
-
-            // Stage 4: Citation Forensics
-            const formData4 = new FormData();
-            formData4.append('file', file);
-
-            const citResp = await fetch(`${PRISM.API_BASE}/api/citations`, {
-                method: 'POST',
-                body: formData4,
-            });
-
-            let citationsData = null;
-            if (citResp.ok) {
-                citationsData = await citResp.json();
-            }
-            updateProgress('sources', 90);
-
-            // Compose final data object
-            const analysisResult = {
-                filename: parseData.filename,
-                page_count: parseData.page_count,
-                extraction_method: parseData.extraction_method,
-                degraded_mode: parseData.degraded_mode,
-                total_paragraphs: clusterData.total_paragraphs,
-                paragraphs: clusterData.paragraphs,
-                references: clusterData.references || parseData.references,
-                estimated_authors: clusterData.estimated_authors,
-                anomaly_count: clusterData.anomaly_count,
-                noise_percentage: clusterData.noise_percentage,
-                boundaries: clusterData.boundaries,
-                cluster_sizes: clusterData.cluster_sizes,
-                confidence: clusterData.confidence,
-                feature_names: clusterData.feature_names,
-                profiles: clusterData.profiles,
-                reasoning: reasoningData ? reasoningData.reasoning : null,
-                citations: citationsData ? citationsData.citations : null,
-            };
-
+            const analysisResult = await analyzeResp.json();
+            
             // Store results
             PRISM.setAnalysisData(analysisResult);
 
             completeProgress();
 
-            // Enable result tabs
-            PRISM.enableTabs(['heatmap', 'charts']);
-            if (citationsData) PRISM.enableTabs(['citations']);
-            // 'sources' and 'report' will be enabled when those modules are built
+            // Enable ALL result tabs now that the full pipeline is complete
+            PRISM.enableTabs(['heatmap', 'charts', 'citations', 'sources', 'report']);
 
             // Show new analysis button
             PRISM.showNewAnalysisButton();
@@ -308,6 +249,12 @@ const UploadManager = (() => {
             }
             if (typeof CitationsRenderer !== 'undefined') {
                 CitationsRenderer.render(analysisResult);
+            }
+            if (typeof SourcesRenderer !== 'undefined') {
+                SourcesRenderer.render(analysisResult);
+            }
+            if (typeof ReportRenderer !== 'undefined') {
+                ReportRenderer.render(analysisResult);
             }
 
             // Auto-switch to heatmap after short delay
