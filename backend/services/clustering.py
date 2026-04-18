@@ -134,9 +134,9 @@ class AuthorshipClustering:
         try:
             scaled_features = self.scaler.fit_transform(filtered_matrix)
             # Prevent OpenAI semantics from over-fragmenting topics
-            # Down-weight indices 7,8,9 (semantic) relative to structural features
-            if scaled_features.shape[1] >= 10:
-                scaled_features[:, 7:10] *= 0.20
+            # Down-weight indices 8,9,10 (semantic) relative to structural features
+            if scaled_features.shape[1] >= 11:
+                scaled_features[:, 8:11] *= 0.20
         except Exception as e:
             logger.error(f"[P.R.I.S.M.] Feature scaling failed: {e}")
             return self._single_author_result(n_paragraphs)

@@ -25,8 +25,8 @@ except OSError:
     spacy.cli.download("en_core_web_sm")
     nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
 
-# Load local embeddings model
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# Load global multilingual embeddings model (Cross-lingual mapping)
+model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
 class SourceTracer:
     """
@@ -50,6 +50,22 @@ class SourceTracer:
         unique_keywords.sort(key=len, reverse=True)
         
         return unique_keywords[:top_n]
+
+    def _extract_triplets(self, text: str) -> set:
+        """
+        Extract 'Idea Triplets' (Subject -> Action -> Object).
+        This defeats AI paraphrasers (like Quillbot) that swap vocabulary 
+        but maintain the exact same underlying logical claims.
+        """
+        doc = nlp(text)
+        triplets = set()
+        for token in doc:
+            if token.pos_ == "VERB":
+                subj = [w.lemma_.lower() for w in token.lefts if "subj" in w.dep_]
+                obj = [w.lemma_.lower() for w in token.rights if "obj" in w.dep_]
+                if subj and obj:
+                    triplets.add(f"{subj[0]}_{token.lemma_.lower()}_{obj[0]}")
+        return triplets
 
     @retry(wait=wait_exponential(multiplier=2, min=2, max=10), stop=stop_after_attempt(4), reraise=True)
     def _safe_arxiv_search(self, query: str, max_results: int = 5) -> list:
@@ -88,7 +104,10 @@ class SourceTracer:
 
         source_matches = []
         
-        for para in anomalous_paragraphs[:3]:
+        # Sort anomalies by length descending to ensure we trace the most substantial text first
+        sorted_anomalies = sorted(anomalous_paragraphs, key=lambda p: len(p.get("text", "")), reverse=True)
+        
+        for para in sorted_anomalies[:3]:
             text = para.get("text", "")
             if len(text.split()) < 10:
                 continue # Text too short to trace reliably
@@ -169,6 +188,17 @@ class SourceTracer:
                 best_match_idx = np.argmax(similarities)
                 best_sim = similarities[best_match_idx]
                 best_paper = aggregated_docs[best_match_idx]
+                
+                # ── The 'Quillbot' Defeat (Triplet Overlap) ──
+                # If an AI paraphraser scrambled the words, cosine similarity might drop below 75%.
+                # We extract the underlying logical frames and boost similarity if ideas were stolen.
+                anomaly_ideas = self._extract_triplets(text)
+                source_ideas = self._extract_triplets(best_paper["abstract"])
+                
+                overlap = len(anomaly_ideas.intersection(source_ideas))
+                if overlap > 0:
+                    # Boost mathematical similarity by 6% per stolen triplet idea
+                    best_sim = min(1.0, best_sim + (0.06 * overlap))
                 
                 # Simple heuristic
                 text_lower = text.lower().strip()

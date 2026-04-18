@@ -229,6 +229,10 @@ const UploadManager = (() => {
 
             const analysisResult = await analyzeResp.json();
             
+            if (analysisResult.status === "error") {
+                throw new Error(analysisResult.error || "Server could not process this PDF intelligently.");
+            }
+            
             // Store results
             PRISM.setAnalysisData(analysisResult);
 

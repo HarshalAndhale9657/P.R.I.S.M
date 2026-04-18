@@ -45,6 +45,7 @@ FEATURE_NAMES = [
     "conjunction_ratio",
     "passive_voice_pct",
     "yules_k",
+    "burstiness_score",
     "semantic_1",
     "semantic_2",
     "semantic_3",
@@ -85,14 +86,20 @@ class FeatureEngine:
         words = [token.text.lower() for token in doc if token.is_alpha]
 
         if len(words) < self.min_words:
-            return np.zeros(7) # We rely on 7 structural features
+            return np.zeros(8) # We rely on 8 structural features
 
         # ── 1. Structural Features ───────────────────────────────────────────
         sentences = list(doc.sents)
         num_sentences = max(len(sentences), 1)
         num_tokens = max(len(doc), 1)
 
-        avg_sentence_length = len(words) / num_sentences
+        sentence_lengths = [len(s.text.split()) for s in sentences] if sentences else [0]
+        avg_sentence_length = sum(sentence_lengths) / num_sentences
+        
+        # Burstiness (Coefficient of Variation of sentence length)
+        # AI models have famously flat variance compared to humans
+        burstiness_score = float(np.std(sentence_lengths) / max(avg_sentence_length, 1.0))
+
         avg_word_length = sum(len(w) for w in words) / max(len(words), 1)
 
         # ── 2. Function Word Ratios (POS-based) ─────────────────────────────
@@ -124,6 +131,7 @@ class FeatureEngine:
             conjunction_ratio,
             passive_voice_pct,
             yules_k,
+            burstiness_score,
         ])
 
     def extract_all(
@@ -210,9 +218,11 @@ class FeatureEngine:
         # Build profiles
         for i, features in enumerate(final_feature_vectors):
             is_valid = i in valid_indices
+            text = paragraphs[i].get("text", "")
             profile = {
                 "paragraph_index": i,
                 "is_valid": bool(is_valid),
+                "num_sentences": len(list(nlp(text).sents)) if is_valid else 1
             }
             for j, name in enumerate(FEATURE_NAMES):
                 profile[name] = round(float(features[j]), 4)

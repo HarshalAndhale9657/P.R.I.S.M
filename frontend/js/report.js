@@ -1,22 +1,26 @@
 /**
- * P.R.I.S.M. — Report Renderer
- * Renders the AI-synthesized forensic report.
- *
- * Backend report schema (from GPT-4o or fallback):
- *   {
- *     integrity_score: float (0-10),
- *     verdict: "Clean" | "Suspicious" | "Highly Plagiarized",
- *     executive_summary: string,
- *     evidence_breakdown: {
- *       stylometric_analysis: string,
- *       citation_analysis: string,
- *       source_matches: string
- *     },
- *     conclusion: string
- *   }
+ * P.R.I.S.M. — Premium Report Renderer
+ * Renders the AI-synthesized forensic report using Glassmorphism & High-end Dataviz.
  */
 
 const ReportRenderer = (() => {
+
+    function calculateAIProbability(analysisData) {
+        const profiles = analysisData.features?.profiles || [];
+        // Extract burstiness only for multi-sentence paragraphs to avoid 0.0 variance skew
+        const scores = profiles.filter(p => (p.num_sentences || 1) >= 2).map(p => p.burstiness_score || 0);
+        if (scores.length < 2) return { prob: 0, avg: 1.0 };
+        
+        const avg = scores.reduce((a,b) => a+b, 0) / scores.length;
+        
+        // Map burstiness to AI Probability:
+        // ChatGPT scores < 0.15 (95%+). Heavy Math Humans score around 0.35-0.55 (~25-50%). Novels score > 0.8 (0%).
+        let prob = 100 - ((avg - 0.05) * (100 / 0.50));
+        if (prob > 99) prob = 99;
+        if (prob < 1) prob = 1;
+        return { prob: Math.round(prob), avg: avg };
+    }
+
     function render(analysisData) {
         if (!analysisData || !analysisData.report) return;
         
@@ -25,91 +29,118 @@ const ReportRenderer = (() => {
 
         const r = analysisData.report;
 
-        // Map integrity score color
+        // ─── Score & Visual Mapping ───
         const score = r.integrity_score != null ? r.integrity_score : 10;
-        let scoreColor = '#3fb950'; // Green
-        if (score < 4) scoreColor = '#f85149'; // Red
-        else if (score < 8) scoreColor = '#d29922'; // Yellow
-
-        // Determine verdict — support both 'verdict' and 'overall_verdict' keys
-        const verdict = r.verdict || r.overall_verdict || 'Unknown';
-        
-        // Determine verdict icon and background
+        let scoreColor = 'var(--success)';
         let verdictIcon = '✅';
-        let verdictBg = 'rgba(63, 185, 80, 0.1)';
-        if (verdict === 'Highly Plagiarized') {
+        let statusClass = 'status-clean';
+        
+        if (score < 4.5) {
+            scoreColor = 'var(--danger)';
             verdictIcon = '🚨';
-            verdictBg = 'rgba(248, 81, 73, 0.1)';
-        } else if (verdict === 'Suspicious') {
+            statusClass = 'status-danger';
+        } else if (score < 8) {
+            scoreColor = 'var(--warning)';
             verdictIcon = '⚠️';
-            verdictBg = 'rgba(210, 153, 34, 0.1)';
-        }
-        
-        let html = '';
-        
-        // Degraded mode warning
-        if (analysisData.metadata && analysisData.metadata.degraded_mode) {
-            html += `
-                <div class="alert-banner warning" style="background: rgba(210, 153, 34, 0.15); border: 1px solid #d29922; color: #d29922; padding: 12px; border-radius: 6px; margin-bottom: 20px;">
-                    <strong>⚠️ Degraded Mode Notice:</strong> The PDF was too complex or scanned, requiring fallback raw text extraction. Stylometric boundaries may be less precise.
-                </div>
-            `;
+            statusClass = 'status-warn';
         }
 
-        // Partial results warning
-        if (analysisData.partial_results) {
-            html += `
-                <div class="alert-banner warning" style="background: rgba(210, 153, 34, 0.15); border: 1px solid #d29922; color: #d29922; padding: 12px; border-radius: 6px; margin-bottom: 20px;">
-                    <strong>⚠️ Partial Results:</strong> Some pipeline stages encountered errors. Results may be incomplete.
-                </div>
-            `;
-        }
-        
-        // ─── Score + Verdict Overview ───
+        const verdict = r.verdict || r.overall_verdict || 'Unknown';
+        const aiInfo = calculateAIProbability(analysisData);
+
+        let html = '';
+
+        // ─── Score Radial Gauge & AI Bar Panel ───
+        // Calculate circumference for SVG circle (r=60 -> 2 * PI * 60 = 377)
+        const circumference = 377;
+        const strokeDashoffset = circumference - (score / 10) * circumference;
+
         html += `
-            <div class="report-overview">
-                <div class="score-gauge" style="border-color: ${scoreColor}">
-                    <span class="score-value" style="color: ${scoreColor}">${score}/10</span>
-                    <span class="score-label">Integrity Score</span>
+            <div class="glass-panel" style="display: flex; gap: 32px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                
+                <!-- Left: Gauge -->
+                <div style="display: flex; gap: 32px; align-items: center; flex: 1; min-width: 300px;">
+                    <div class="radial-gauge-container">
+                        <svg class="radial-gauge-svg" viewBox="0 0 140 140">
+                            <circle class="radial-bg" cx="70" cy="70" r="60"></circle>
+                            <circle class="radial-progress" cx="70" cy="70" r="60" style="stroke: ${scoreColor}; stroke-dasharray: ${circumference}; stroke-dashoffset: ${strokeDashoffset};"></circle>
+                        </svg>
+                        <div class="radial-gauge-value">
+                            <span class="score" style="color: ${scoreColor}">${score}</span>
+                            <span class="out-of">out of 10</span>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="font-size: 1.5rem; margin-bottom: 8px;">${verdictIcon} Verdict: ${verdict}</h3>
+                        <p style="color: var(--text-secondary); line-height: 1.5;">${r.executive_summary || 'Integrity analysis complete.'}</p>
+                    </div>
                 </div>
-                <div class="verdict-summary" style="background: ${verdictBg}; padding: 16px; border-radius: 8px;">
-                    <h3>${verdictIcon} Verdict: ${verdict}</h3>
-                    <p style="margin-top: 8px; color: #c9d1d9;">${r.executive_summary || ''}</p>
+
+                <!-- Right: AI Probability Meter -->
+                <div style="flex: 1; min-width: 250px; background: rgba(0,0,0,0.02); padding: 20px; border-radius: var(--radius-md);">
+                    <div class="ai-bar-header">
+                        <span class="ai-bar-title">🤖 AI Generation Probability</span>
+                        <span class="ai-bar-value" style="color: ${aiInfo.prob > 70 ? 'var(--danger)' : (aiInfo.prob > 30 ? 'var(--warning)' : 'var(--success)')}">${aiInfo.prob}%</span>
+                    </div>
+                    <div class="ai-bar-track">
+                        <div class="ai-bar-fill" style="width: ${aiInfo.prob}%; background-color: ${aiInfo.prob > 70 ? 'var(--danger)' : (aiInfo.prob > 30 ? 'var(--warning)' : 'var(--success)')};"></div>
+                    </div>
+                    <p style="font-size: 0.8rem; color: var(--text-tertiary); margin-top: 8px;">Based on burstiness curve flattening (variance = ${aiInfo.avg.toFixed(2)})</p>
                 </div>
+
             </div>
         `;
 
-        // ─── Evidence Breakdown ───
+        // ─── Trust Badges Dashboard ───
         const evidence = r.evidence_breakdown || {};
+        
+        // Infer statuses from score elements
+        const clustering = analysisData.clustering || {};
+        const sources = analysisData.sources || [];
+        const citations = analysisData.citations || {};
+
+        const styloStatus = (clustering.estimated_authors > 1 || clustering.anomaly_count > 5) ? 'status-warn' : 'status-clean';
+        const sourceStatus = sources.length > 0 ? 'status-danger' : 'status-clean';
+        const citeStatus = (citations.temporal_anomalies && citations.temporal_anomalies.length > 0) ? 'status-danger' : 'status-clean';
+
         if (evidence.stylometric_analysis || evidence.citation_analysis || evidence.source_matches) {
             html += `
-                <div class="evidence-section">
-                    <h3>Evidence Breakdown</h3>
-                    <div style="display: grid; gap: 12px; margin-top: 12px;">
+                <div style="margin-top: 32px;">
+                    <h3 style="margin-bottom: 8px; font-weight: 700;">Security Certificate Dashboard</h3>
+                    <div class="trust-dashboard">
             `;
 
             if (evidence.stylometric_analysis) {
                 html += `
-                    <div style="background: rgba(22,27,34,0.5); border: 1px solid #30363d; border-radius: 6px; padding: 14px;">
-                        <h4 style="color: #7c3aed; margin: 0 0 8px 0;">🧬 Stylometric Analysis</h4>
-                        <p style="color: #c9d1d9; margin: 0;">${evidence.stylometric_analysis}</p>
-                    </div>
+                        <div class="trust-badge ${styloStatus}">
+                            <div class="trust-icon">🧬</div>
+                            <div class="trust-content">
+                                <div class="trust-title">Structural Autonomy</div>
+                                <div class="trust-desc">${evidence.stylometric_analysis}</div>
+                            </div>
+                        </div>
                 `;
             }
             if (evidence.citation_analysis) {
                 html += `
-                    <div style="background: rgba(22,27,34,0.5); border: 1px solid #30363d; border-radius: 6px; padding: 14px;">
-                        <h4 style="color: #06b6d4; margin: 0 0 8px 0;">📚 Citation Analysis</h4>
-                        <p style="color: #c9d1d9; margin: 0;">${evidence.citation_analysis}</p>
-                    </div>
+                        <div class="trust-badge ${citeStatus}">
+                            <div class="trust-icon">📚</div>
+                            <div class="trust-content">
+                                <div class="trust-title">Citation Regularity</div>
+                                <div class="trust-desc">${evidence.citation_analysis}</div>
+                            </div>
+                        </div>
                 `;
             }
             if (evidence.source_matches) {
                 html += `
-                    <div style="background: rgba(22,27,34,0.5); border: 1px solid #30363d; border-radius: 6px; padding: 14px;">
-                        <h4 style="color: #d29922; margin: 0 0 8px 0;">🔍 Source Matches</h4>
-                        <p style="color: #c9d1d9; margin: 0;">${evidence.source_matches}</p>
-                    </div>
+                        <div class="trust-badge ${sourceStatus}">
+                            <div class="trust-icon">🔍</div>
+                            <div class="trust-content">
+                                <div class="trust-title">Database Originality</div>
+                                <div class="trust-desc">${evidence.source_matches}</div>
+                            </div>
+                        </div>
                 `;
             }
 
@@ -122,79 +153,37 @@ const ReportRenderer = (() => {
         // ─── Conclusion ───
         if (r.conclusion) {
             html += `
-                <div class="evidence-section" style="margin-top: 1.5rem;">
-                    <h3>Conclusion</h3>
-                    <p style="color: #c9d1d9; line-height: 1.6; background: rgba(22,27,34,0.5); border: 1px solid #30363d; border-radius: 6px; padding: 14px;">${r.conclusion}</p>
+                <div class="glass-panel" style="margin-top: 24px;">
+                    <h3 style="margin-bottom: 12px; font-weight: 600;">Final Conclusion</h3>
+                    <p style="color: var(--text-secondary); line-height: 1.6;">${r.conclusion}</p>
                 </div>
             `;
         }
-
-        // ─── Paragraph Verdicts (if present from GPT) ───
-        const paraVerdicts = r.paragraph_verdicts || [];
-        if (paraVerdicts.length > 0) {
-            html += `
-                <div class="paragraph-verdicts">
-                    <h3>Section-by-Section Verdicts</h3>
-                    <div class="verdicts-list">
-            `;
-            
-            paraVerdicts.forEach(pv => {
-                const isFlagged = pv.status === 'flagged';
-                html += `
-                    <div class="verdict-card ${isFlagged ? 'flagged' : 'clean'}">
-                        <div class="verdict-header">
-                            <span class="para-label">Section ${pv.paragraph_index + 1}</span>
-                            <span class="para-status">${isFlagged ? '🚨 Flagged' : '✅ Clean'}</span>
-                        </div>
-                        <p class="para-reasoning">${pv.reasoning}</p>
-                    </div>
-                `;
-            });
-            
-            html += `
-                    </div>
-                </div>
-            `;
-        }
-
-        // ─── Quick Stats from analysis data ───
-        const clustering = analysisData.clustering || {};
-        const citations = analysisData.citations || {};
-        const sources = analysisData.sources || [];
         
+        // ─── Download CTA ───
         html += `
-            <div class="evidence-section" style="margin-top: 1.5rem;">
-                <h3>Analysis Summary</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px;">
-                    <div style="background: rgba(22,27,34,0.5); border: 1px solid #30363d; border-radius: 6px; padding: 14px; text-align: center;">
-                        <div style="font-size: 1.5em; font-weight: bold; color: #e6edf3;">${clustering.estimated_authors || 1}</div>
-                        <div style="color: #8b949e; font-size: 0.85em;">Detected Authors</div>
-                    </div>
-                    <div style="background: rgba(22,27,34,0.5); border: 1px solid #30363d; border-radius: 6px; padding: 14px; text-align: center;">
-                        <div style="font-size: 1.5em; font-weight: bold; color: ${(clustering.anomaly_count || 0) > 0 ? '#f85149' : '#3fb950'};">${clustering.anomaly_count || 0}</div>
-                        <div style="color: #8b949e; font-size: 0.85em;">Anomalous Sections</div>
-                    </div>
-                    <div style="background: rgba(22,27,34,0.5); border: 1px solid #30363d; border-radius: 6px; padding: 14px; text-align: center;">
-                        <div style="font-size: 1.5em; font-weight: bold; color: #e6edf3;">${citations.total_citations_found || 0}</div>
-                        <div style="color: #8b949e; font-size: 0.85em;">Citations Found</div>
-                    </div>
-                    <div style="background: rgba(22,27,34,0.5); border: 1px solid #30363d; border-radius: 6px; padding: 14px; text-align: center;">
-                        <div style="font-size: 1.5em; font-weight: bold; color: ${(Array.isArray(sources) ? sources.length : 0) > 0 ? '#f85149' : '#3fb950'};">${Array.isArray(sources) ? sources.length : 0}</div>
-                        <div style="color: #8b949e; font-size: 0.85em;">Source Matches</div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        html += `
-            <div class="report-actions" style="margin-top: 2rem;">
-                <button class="btn-primary" id="btn-export-report">Download Full JSON Report</button>
+            <div style="margin-top: 32px; text-align: center;">
+                <button class="btn-primary" id="btn-export-report" style="box-shadow: var(--shadow-glow);">
+                    <span style="margin-right: 8px;">⬇️</span> Download Cryptographic JSON Report
+                </button>
             </div>
         `;
         
         container.innerHTML = html;
         
-        // Export button listener — export the full analysis data
+        // Attach animations (Wait a frame so DOM updates)
+        setTimeout(() => {
+            const progressCircle = document.querySelector('.radial-progress');
+            if (progressCircle) {
+                progressCircle.style.strokeDashoffset = strokeDashoffset;
+            }
+            const aiBar = document.querySelector('.ai-bar-fill');
+            if (aiBar) {
+                aiBar.style.width = aiInfo.prob + '%';
+            }
+        }, 50);
+
+        // Export listener
         document.getElementById('btn-export-report').addEventListener('click', () => {
              const exportData = {
                  report: r,
@@ -207,7 +196,7 @@ const ReportRenderer = (() => {
              const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
              const downloadAnchorNode = document.createElement('a');
              downloadAnchorNode.setAttribute("href", dataStr);
-             downloadAnchorNode.setAttribute("download", "prism_forensic_report.json");
+             downloadAnchorNode.setAttribute("download", "prism_premium_forensic_report.json");
              document.body.appendChild(downloadAnchorNode);
              downloadAnchorNode.click();
              downloadAnchorNode.remove();

@@ -1272,3 +1272,182 @@ body {
     clip: rect(0, 0, 0, 0);
     border: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PREMIUM REPORT UI OVERHAUL (Glassmorphism & Dataviz)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Glassmorphism Panels */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.04);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+.glass-panel:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 48px rgba(15, 23, 42, 0.08);
+}
+
+/* Radial Gauge Dial */
+.radial-gauge-container {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+.radial-gauge-svg {
+    transform: rotate(-90deg);
+    width: 100%;
+    height: 100%;
+}
+.radial-bg {
+    fill: none;
+    stroke: rgba(0, 0, 0, 0.05);
+    stroke-width: 8;
+}
+.radial-progress {
+    fill: none;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 0, 1000;
+    transition: stroke-dasharray 1.5s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.5s ease;
+}
+.radial-gauge-value {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+.radial-gauge-value .score {
+    font-size: 2.5rem;
+    font-weight: 900;
+    line-height: 1;
+    font-family: var(--font-mono);
+}
+.radial-gauge-value .out-of {
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+    font-weight: 500;
+    margin-top: 2px;
+}
+
+/* AI Probability Bar */
+.ai-bar-container {
+    margin-top: 24px;
+    width: 100%;
+}
+.ai-bar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.ai-bar-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.ai-bar-value {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+.ai-bar-track {
+    width: 100%;
+    height: 12px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    position: relative;
+}
+.ai-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: var(--radius-full);
+    transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.5s ease;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+/* Trust Badges Dashboard */
+.trust-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 24px;
+}
+.trust-badge {
+    display: flex;
+    align-items: flex-start;
+    padding: 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(249,250,251,0.9) 100%);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.trust-badge:hover {
+    transform: translateY(-2px);
+}
+.trust-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    margin-right: 16px;
+    background: rgba(0, 0, 0, 0.03);
+}
+.trust-content {
+    flex-grow: 1;
+}
+.trust-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    font-size: 0.95rem;
+}
+.trust-desc {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+/* Modifier Colors for Trust Badges */
+.trust-badge.status-clean {
+    border-left: 4px solid var(--success);
+}
+.trust-badge.status-clean .trust-icon {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+.trust-badge.status-warn {
+    border-left: 4px solid var(--warning);
+}
+.trust-badge.status-warn .trust-icon {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning);
+}
+.trust-badge.status-danger {
+    border-left: 4px solid var(--danger);
+    background: linear-gradient(135deg, #fff 0%, rgba(239, 68, 68, 0.03) 100%);
+}
+.trust-badge.status-danger .trust-icon {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+}
