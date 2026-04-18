@@ -17,7 +17,17 @@ const ReportRenderer = (() => {
         if (r.integrity_score < 4) scoreColor = '#f85149'; // Red
         else if (r.integrity_score < 8) scoreColor = '#d29922'; // Yellow
         
-        let html = `
+        let html = '';
+        
+        if (analysisData.metadata && analysisData.metadata.degraded_mode) {
+            html += `
+                <div class="alert-banner warning" style="background: rgba(210, 153, 34, 0.15); border: 1px solid #d29922; color: #d29922; padding: 12px; border-radius: 6px; margin-bottom: 20px;">
+                    <strong>⚠️ Degraded Mode Notice:</strong> The PDF was too complex or scanned, requiring fallback raw text extraction. Stylometric boundaries may be less precise.
+                </div>
+            `;
+        }
+        
+        html += `
             <div class="report-overview">
                 <div class="score-gauge" style="border-color: ${scoreColor}">
                     <span class="score-value" style="color: ${scoreColor}">${r.integrity_score}/10</span>
