@@ -2,9 +2,13 @@
 P.R.I.S.M. — Semantic Source Tracer
 Tracing anomalous paragraphs back to potential source papers via arxiv.
 With edge-case handling for rate limits (429) via tenacity.
+
+Uses OpenAI embeddings instead of local sentence-transformers to keep
+deployment lightweight (no PyTorch dependency).
 """
+import os
 import spacy
-from sentence_transformers import SentenceTransformer
+import openai
 from tenacity import retry, wait_exponential, stop_after_attempt
 import arxiv
 from sklearn.metrics.pairwise import cosine_similarity
@@ -25,8 +29,16 @@ except OSError:
     spacy.cli.download("en_core_web_sm")
     nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
 
-# Load global multilingual embeddings model (Cross-lingual mapping)
-model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+
+def _get_openai_embeddings(texts: List[str]) -> np.ndarray:
+    """Get embeddings via OpenAI API (text-embedding-3-small: 1536 dims)."""
+    client = openai.Client()
+    response = client.embeddings.create(
+        input=texts,
+        model="text-embedding-3-small"
+    )
+    return np.array([r.embedding for r in response.data])
+
 
 class SourceTracer:
     """
@@ -102,6 +114,11 @@ class SourceTracer:
         if ctx.skip_source_tracing:
             return []
 
+        # Check if OpenAI key is available for embeddings
+        if not os.getenv("OPENAI_API_KEY"):
+            logger.warning("[P.R.I.S.M.] No OPENAI_API_KEY — source tracing disabled")
+            return []
+
         source_matches = []
         
         # Sort anomalies by length descending to ensure we trace the most substantial text first
@@ -143,10 +160,6 @@ class SourceTracer:
                 # Format OpenAlex
                 if openalex_results:
                     for r in openalex_results:
-                        # OpenAlex uses inverted index for abstracts, or sometimes just string depending on endpoint, 
-                        # but normally we construct it or fallback to title if abstract is deep nested.
-                        # We'll use title + context as fallback if abstract processing is complex.
-                        # Wait, we can just use the title for embedding if abstract isn't readily available as plaintext.
                         raw_idx = r.get("abstract_inverted_index")
                         abstract_text = ""
                         if raw_idx:
@@ -176,12 +189,13 @@ class SourceTracer:
                 if not aggregated_docs:
                     continue
                     
-                # 3. Embed paragraph + combined abstracts locally
-                para_embedding = model.encode(text)
-                abstract_embeddings = model.encode(abstracts)
+                # 3. Embed paragraph + combined abstracts via OpenAI
+                all_texts = [text] + abstracts
+                all_embeddings = _get_openai_embeddings(all_texts)
+                para_embedding = all_embeddings[0]
+                abstract_embeddings = all_embeddings[1:]
                 
                 # 4. Cosine similarity ranking
-                # cosine_similarity expects 2D arrays: (1, 384) and (N, 384)
                 similarities = cosine_similarity([para_embedding], abstract_embeddings)[0]
                 
                 # 5. Return matches above threshold or exact text matches

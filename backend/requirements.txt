@@ -2,18 +2,15 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.0
 python-multipart==0.0.9
 
-# PDF Parsing (Dual-Pass + Fallback)
+# PDF Parsing
 PyMuPDF==1.24.0
 pdfplumber==0.11.0
 
-# NLP & Clustering (Deterministic Math Layer)
+# NLP & Clustering
 spacy==3.7.0
 hdbscan>=0.8.33
 scikit-learn==1.5.0
 numpy==1.26.4
-
-# Local Embeddings (Source Tracing)
-sentence-transformers==3.0.0
 
 # AI Reasoning Layer
 openai>=1.50.0,<2.0.0
