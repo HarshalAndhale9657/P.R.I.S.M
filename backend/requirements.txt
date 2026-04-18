@@ -1,0 +1,27 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+python-multipart==0.0.9
+
+# PDF Parsing (Dual-Pass)
+unstructured[pdf]==0.15.0
+PyMuPDF==1.24.0
+
+# NLP & Clustering (Deterministic Math Layer)
+spacy==3.7.0
+hdbscan==0.8.38
+scikit-learn==1.5.0
+numpy==1.26.4
+
+# Local Embeddings (Source Tracing)
+sentence-transformers==3.0.0
+
+# AI Reasoning Layer
+openai==1.50.0
+
+# Citation & Source
+nltk==3.9.1
+arxiv==2.1.3
+tenacity==8.5.0
+
+# Utils
+python-dotenv==1.0.1
