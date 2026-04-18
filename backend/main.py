@@ -53,7 +53,7 @@ feature_engine = FeatureEngine()
 clustering_engine = AuthorshipClustering(min_cluster_size=2, min_samples=2)
 gpt_analyzer = GPTAnalyzer()
 citation_forensics = CitationForensics(temporal_threshold=10)
-source_tracer = SourceTracer(similarity_threshold=0.75)
+source_tracer = SourceTracer(similarity_threshold=0.50)
 report_generator = ReportGenerator()
 # ─── Helper: PDF Validation ─────────────────────────────────────────────────
 

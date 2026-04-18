@@ -105,12 +105,16 @@ class SourceTracer:
                 # cosine_similarity expects 2D arrays: (1, 384) and (N, 384)
                 similarities = cosine_similarity([para_embedding], abstract_embeddings)[0]
                 
-                # 5. Return matches above threshold
+                # 5. Return matches above threshold or exact text matches
                 best_match_idx = np.argmax(similarities)
                 best_sim = similarities[best_match_idx]
+                best_paper = results[best_match_idx]
                 
-                if best_sim >= self.similarity_threshold:
-                    best_paper = results[best_match_idx]
+                # Simple heuristic: if the text is very similar to the title or found in the abstract
+                text_lower = text.lower().strip()
+                is_exact = text_lower in best_paper.summary.lower() or text_lower in best_paper.title.lower()
+                
+                if best_sim >= self.similarity_threshold or is_exact:
                     source_matches.append({
                         "paragraph_id": para.get("id") or para.get("paragraph_index"),
                         "similarity_score": round(float(best_sim), 4),

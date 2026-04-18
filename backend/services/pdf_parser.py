@@ -132,13 +132,13 @@ class AcademicPDFParser:
         if not paragraphs:
             paragraphs, method = self._fallback_raw_chunk(pdf_bytes)
 
-        degraded = method is not None and method != "unstructured"
+        degraded = method in ["pdfplumber", "raw_chunk"]
         if degraded:
             logger.warning("PDF parsed in degraded mode via: %s", method)
             ctx.degraded_mode = True
             ctx.add_warning(
                 WarningCode.PDF_DEGRADED_MODE, WarningSeverity.WARNING, "pdf_parser",
-                f"Primary PDF extraction failed. Fell back to '{method}' — "
+                f"High-fidelity PDF extraction failed. Fell back to '{method}' — "
                 f"paragraph boundaries may be less accurate.",
                 {"extraction_method": method},
             )
