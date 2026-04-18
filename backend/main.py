@@ -4,6 +4,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.pdf_parser import AcademicPDFParser
+from services.feature_engine import FeatureEngine
 
 app = FastAPI(
     title="P.R.I.S.M. Backend API",
@@ -22,6 +23,7 @@ app.add_middleware(
 
 # Service instances
 pdf_parser = AcademicPDFParser()
+feature_engine = FeatureEngine()
 
 @app.get("/")
 async def health_check():
@@ -91,3 +93,47 @@ async def parse_pdf(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF parsing failed: {str(e)}")
 
+
+@app.post("/api/features")
+async def extract_features(file: UploadFile = File(...)):
+    """
+    Full pipeline: Parse PDF → Extract spaCy stylometric features.
+    Returns paragraphs with their 7-dimensional feature profiles.
+    """
+    if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    try:
+        content = await file.read()
+
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+        # Stage 1: Parse PDF
+        parsed = pdf_parser.parse(content)
+
+        if not parsed["paragraphs"]:
+            raise HTTPException(
+                status_code=422,
+                detail="No text detected — the PDF may be scanned or image-only.",
+            )
+
+        # Stage 2: Extract stylometric features
+        features = feature_engine.extract_all(parsed["paragraphs"])
+
+        return {
+            "filename": file.filename,
+            "page_count": parsed["page_count"],
+            "extraction_method": parsed["extraction_method"],
+            "degraded_mode": parsed["degraded_mode"],
+            "total_paragraphs": features["total_paragraphs"],
+            "valid_paragraphs": features["valid_paragraphs"],
+            "feature_names": features["feature_names"],
+            "profiles": features["profiles"],
+            "paragraphs": parsed["paragraphs"],
+            "references": parsed["references"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Feature extraction failed: {str(e)}")
