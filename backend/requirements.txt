@@ -9,7 +9,7 @@ pdfplumber==0.11.0
 
 # NLP & Clustering (Deterministic Math Layer)
 spacy==3.7.0
-hdbscan==0.8.38
+hdbscan>=0.8.33
 scikit-learn==1.5.0
 numpy==1.26.4
 
@@ -17,7 +17,8 @@ numpy==1.26.4
 sentence-transformers==3.0.0
 
 # AI Reasoning Layer
-openai==1.50.0
+openai>=1.50.0
+httpx>=0.25.0,<0.28.0  # >=0.28 removed 'proxies' param, breaks openai client
 
 # Citation & Source
 nltk==3.9.1

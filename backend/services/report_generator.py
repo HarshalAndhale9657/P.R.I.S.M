@@ -56,9 +56,9 @@ class ReportGenerator:
         }
         
         # Extract source matches if present
-        source_matches = analysis_data.get("sources", {}).get("matches", [])
+        source_matches = analysis_data.get("sources", [])
         if source_matches:
-            doc_data["sources"] = [{"title": s.get("title"), "similarity": s.get("similarity")} for s in source_matches]
+            doc_data["sources"] = [{"title": s.get("source", {}).get("title"), "similarity": s.get("similarity_score")} for s in source_matches]
 
         try:
             response = await client.chat.completions.create(

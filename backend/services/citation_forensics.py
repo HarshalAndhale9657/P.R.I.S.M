@@ -437,7 +437,7 @@ class CitationForensics:
         """
         years = []
         for ref in references:
-            text = ref.get("text", "")
+            text = ref if isinstance(ref, str) else ref.get("text", "")
             for match in YEAR_REGEX.finditer(text):
                 year = int(match.group(0))
                 if 1900 <= year <= 2030:
