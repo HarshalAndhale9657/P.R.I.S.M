@@ -8,6 +8,7 @@ Comprehensive edge-case handling via PipelineContext threading.
 import os
 import io
 import logging
+import asyncio
 import fitz  # PyMuPDF
 
 # Load environment variables BEFORE any service imports
@@ -50,7 +51,7 @@ app.add_middleware(
 # Service instances
 pdf_parser = AcademicPDFParser()
 feature_engine = FeatureEngine()
-clustering_engine = AuthorshipClustering(min_cluster_size=2, min_samples=2)
+clustering_engine = AuthorshipClustering(min_cluster_size=3, min_samples=2)
 gpt_analyzer = GPTAnalyzer()
 citation_forensics = CitationForensics(temporal_threshold=10)
 source_tracer = SourceTracer(similarity_threshold=0.75)
@@ -354,8 +355,10 @@ async def full_analysis(file: UploadFile = File(...)):
         content = await _read_pdf_bytes(file)
         ctx = PipelineContext()
 
+        loop = asyncio.get_running_loop()
+
         # ── Stage 1: Parse PDF ───────────────────────────────────────────────
-        parsed = pdf_parser.parse_safe(content, ctx)
+        parsed = await loop.run_in_executor(None, pdf_parser.parse_safe, content, ctx)
 
         if not parsed["paragraphs"]:
             # Return a valid response with warnings instead of HTTP 422
@@ -379,12 +382,12 @@ async def full_analysis(file: UploadFile = File(...)):
             }
 
         # ── Stage 2: Extract features (spaCy) ───────────────────────────────
-        features = feature_engine.extract_all(parsed["paragraphs"], ctx)
+        features = await loop.run_in_executor(None, feature_engine.extract_all, parsed["paragraphs"], ctx)
 
         # ── Stage 3: Cluster (HDBSCAN) ──────────────────────────────────────
-        cluster_result = clustering_engine.cluster(features["feature_matrix"], ctx)
-        enriched_paragraphs = clustering_engine.get_cluster_summary(
-            parsed["paragraphs"], cluster_result
+        cluster_result = await loop.run_in_executor(None, clustering_engine.cluster, features["feature_matrix"], ctx)
+        enriched_paragraphs = await loop.run_in_executor(
+            None, clustering_engine.get_cluster_summary, parsed["paragraphs"], cluster_result
         )
 
         # ── Stage 4: GPT reasoning (flagged paragraphs only) ────────────────

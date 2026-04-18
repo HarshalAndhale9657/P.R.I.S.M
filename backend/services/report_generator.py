@@ -27,8 +27,8 @@ class ReportGenerator:
         """Lazy initialization of the OpenAI client."""
         if not self._client:
             api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                logger.warning("[P.R.I.S.M.] OPENAI_API_KEY not found. Falling back to rule-based report generation.")
+            if not api_key or api_key.startswith("sk-your"):
+                logger.warning("[P.R.I.S.M.] OPENAI_API_KEY not found or using dummy key. Falling back to rule-based report generation.")
                 return None
             self._client = AsyncOpenAI(api_key=api_key)
         return self._client
@@ -125,11 +125,11 @@ class ReportGenerator:
         
         # 1. Noise-based penalty (HDBSCAN noise = stylistic anomalies)
         if noise > 0:
-            score -= noise * 8.0  # e.g., 30% noise = -2.4 points
+            score -= noise * 4.0  # e.g., 30% noise = -1.2 points
         
         # 2. Multiple authors penalty
         if estimated_authors > 1:
-            score -= (estimated_authors - 1) * 1.5  # Each extra author = -1.5
+            score -= (estimated_authors - 1) * 0.5  # Each extra author = -0.5
         
         # 3. Anomaly count penalty
         if anomaly_count > 0:

@@ -65,6 +65,9 @@ NARRATIVE_REGEX = re.compile(
 # Pattern 3: Simple year extraction from any citation match
 YEAR_REGEX = re.compile(r'(?:19|20)\d{2}')
 
+# Pattern 4: IEEE-style numerical bracket citations — [1], [1, 2], [1]-[3]
+IEEE_REGEX = re.compile(r'\[\s*\d+\s*(?:(?:,|-|–|—)\s*\d+\s*)*\](?:(?:\s*,\s*|(?:\s*(?:-|–|—)\s*))\[\s*\d+\s*(?:(?:,|-|–|—)\s*\d+\s*)*\])*', re.UNICODE)
+
 # Words that look like author names but aren't — filter these out
 FALSE_POSITIVE_WORDS = {
     'although', 'also', 'however', 'therefore', 'furthermore',
@@ -125,11 +128,12 @@ class CitationForensics:
         # ── Step 1: Extract citations per paragraph ──────────────────────────
         per_paragraph = []
         all_years = []
+        bib_map = self._build_bib_map(references)
 
         for i, para in enumerate(paragraphs):
             text = para.get("text", "")
             citations = self._extract_citations(text)
-            years = self._extract_years(citations)
+            years = self._extract_years(citations, bib_map)
             all_years.extend(years)
 
             median_year = (
@@ -401,20 +405,52 @@ class CitationForensics:
                 if citation not in citations:
                     citations.append(citation)
 
+        # IEEE-style: [1], [1, 2]
+        for match in IEEE_REGEX.finditer(text):
+            citation = match.group(0)
+            if citation not in citations:
+                citations.append(citation)
+
         return citations
 
-    def _extract_years(self, citations: List[str]) -> List[int]:
+    def _extract_years(self, citations: List[str], bib_map: Optional[Dict[int, int]] = None) -> List[int]:
         """
         Extract all 4-digit years from a list of citation strings.
+        Maps IEEE numerical citations to bibliography years.
         Filters to a reasonable academic range (1900–2030).
         """
         years = []
         for citation in citations:
+            matched_year = False
             for match in YEAR_REGEX.finditer(citation):
                 year = int(match.group(0))
                 if 1900 <= year <= 2030:
                     years.append(year)
+                    matched_year = True
+            
+            # IEEE [N] citation mapping
+            if not matched_year and bib_map and IEEE_REGEX.fullmatch(citation.strip()):
+                nums = re.findall(r'\d+', citation)
+                for num_str in nums:
+                    mapped_year = bib_map.get(int(num_str))
+                    if mapped_year:
+                        years.append(mapped_year)
         return years
+
+    def _build_bib_map(self, references: List[Any]) -> Dict[int, int]:
+        """
+        Map IEEE numerical citations [N] to the year in the bibliography entry.
+        """
+        bib_map = {}
+        for ref in references:
+            text = ref if isinstance(ref, str) else ref.get("text", "")
+            m = re.search(r'^\s*\[?(\d+)\]?\.?\s', text)
+            if m:
+                num = int(m.group(1))
+                ym = re.search(r'(?:19|20)\d{2}', text)
+                if ym:
+                    bib_map[num] = int(ym.group(0))
+        return bib_map
 
     def _is_false_positive(self, citation: str) -> bool:
         """

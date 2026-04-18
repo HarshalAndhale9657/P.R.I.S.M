@@ -38,13 +38,14 @@ class GPTAnalyzer:
 
     def __init__(self):
         self._client: Optional[AsyncOpenAI] = None
+        self._semaphore = asyncio.Semaphore(4)
 
     def _get_client(self) -> Optional[AsyncOpenAI]:
         """Lazy initialization of the OpenAI client."""
         if not self._client:
             api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                logger.warning("[P.R.I.S.M.] OPENAI_API_KEY not found. GPT Reasoning will run in degraded mode.")
+            if not api_key or api_key.startswith("sk-your"):
+                logger.warning("[P.R.I.S.M.] OPENAI_API_KEY not found or using dummy key. GPT Reasoning will run in degraded mode.")
                 return None
             self._client = AsyncOpenAI(api_key=api_key)
         return self._client
@@ -52,30 +53,32 @@ class GPTAnalyzer:
     async def _safe_gpt_call(self, coro, label: str) -> tuple:
         """
         Wrap a GPT coroutine with timeout + retry logic.
+        Uses a semaphore to throttle concurrent OpenAI API calls.
         Returns (result, error_string_or_None).
         """
-        for attempt in range(MAX_RETRIES + 1):
-            try:
-                result = await asyncio.wait_for(coro(), timeout=GPT_CALL_TIMEOUT)
-                return result, None
-            except asyncio.TimeoutError:
-                if attempt < MAX_RETRIES:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                    continue
-                logger.warning(f"[P.R.I.S.M.] GPT call timed out after {GPT_CALL_TIMEOUT}s: {label}")
-                return None, f"Timed out after {GPT_CALL_TIMEOUT}s"
-            except Exception as e:
-                error_msg = str(e)
-                # Detect rate limiting
-                if "rate_limit" in error_msg.lower() or "429" in error_msg:
+        async with self._semaphore:
+            for attempt in range(MAX_RETRIES + 1):
+                try:
+                    result = await asyncio.wait_for(coro(), timeout=GPT_CALL_TIMEOUT)
+                    return result, None
+                except asyncio.TimeoutError:
                     if attempt < MAX_RETRIES:
-                        wait_time = 2 ** (attempt + 1)
-                        logger.warning(f"[P.R.I.S.M.] Rate limited, retrying in {wait_time}s: {label}")
-                        await asyncio.sleep(wait_time)
+                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
                         continue
-                    return None, f"Rate limited after {MAX_RETRIES + 1} attempts"
-                logger.error(f"[P.R.I.S.M.] GPT call failed ({label}): {e}")
-                return None, f"API error: {error_msg[:100]}"
+                    logger.warning(f"[P.R.I.S.M.] GPT call timed out after {GPT_CALL_TIMEOUT}s: {label}")
+                    return None, f"Timed out after {GPT_CALL_TIMEOUT}s"
+                except Exception as e:
+                    error_msg = str(e)
+                    # Detect rate limiting
+                    if "rate_limit" in error_msg.lower() or "429" in error_msg:
+                        if attempt < MAX_RETRIES:
+                            wait_time = 2 ** (attempt + 1)
+                            logger.warning(f"[P.R.I.S.M.] Rate limited, retrying in {wait_time}s: {label}")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        return None, f"Rate limited after {MAX_RETRIES + 1} attempts"
+                    logger.error(f"[P.R.I.S.M.] GPT call failed ({label}): {e}")
+                    return None, f"API error: {error_msg[:100]}"
 
     async def generate_style_profile(self, text: str) -> str:
         client = self._get_client()

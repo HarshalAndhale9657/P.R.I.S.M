@@ -76,7 +76,8 @@ class FeatureEngine:
         doc = nlp(text)
 
         # Get alpha-only tokens (words, no punctuation/numbers)
-        words = [token.text.lower() for token in doc if token.is_alpha]
+        # We explicitly filter out "PROPN" to prevent Domain-Specific Lexicon Skew
+        words = [token.text.lower() for token in doc if token.is_alpha and token.pos_ != "PROPN"]
 
         if len(words) < self.min_words:
             return np.zeros(len(FEATURE_NAMES))

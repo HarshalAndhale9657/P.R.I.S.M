@@ -15,6 +15,7 @@ from __future__ import annotations
 import io
 import re
 import logging
+import unicodedata
 from typing import Optional
 
 import fitz  # PyMuPDF
@@ -158,6 +159,9 @@ class AcademicPDFParser:
 
         # --- Filter bibliography text out of paragraphs ---
         paragraphs = self._remove_reference_paragraphs(paragraphs, references)
+
+        # --- Merge Short Paragraphs ---
+        paragraphs = self._merge_short_paragraphs(paragraphs)
 
         return {
             "paragraphs": paragraphs,
@@ -470,9 +474,30 @@ class AcademicPDFParser:
         """
         Normalize whitespace: collapse runs of spaces/newlines into single
         spaces, strip leading/trailing whitespace.
+        Also strips invisible zero-width chars to prevent evasion.
         """
+        text = unicodedata.normalize('NFKD', text)
+        text = re.sub(r'[\u200B-\u200D\uFEFF]', '', text)
         text = re.sub(r"\s+", " ", text)
         return text.strip()
+
+    @staticmethod
+    def _merge_short_paragraphs(paragraphs: list[dict[str, str]], min_words: int = 30) -> list[dict[str, str]]:
+        """
+        Merge paragraphs smaller than min_words into preceding paragraphs to stabilize HDBSCAN.
+        """
+        if not paragraphs:
+            return []
+        merged = []
+        for p in paragraphs:
+            text = p.get("text", "")
+            word_count = len(text.split())
+            if word_count < min_words and merged:
+                # Merge into the last valid paragraph
+                merged[-1]["text"] += " " + text
+            else:
+                merged.append(p)
+        return merged
 
     @staticmethod
     def _merge_reference_lines(lines: list[str]) -> list[str]:
