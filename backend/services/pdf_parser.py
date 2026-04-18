@@ -19,6 +19,8 @@ from typing import Optional
 
 import fitz  # PyMuPDF
 
+from models import PipelineContext, WarningCode, WarningSeverity
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -84,7 +86,7 @@ class AcademicPDFParser:
     # Public API
     # ------------------------------------------------------------------
 
-    def parse(self, pdf_bytes: bytes) -> dict:
+    def parse(self, pdf_bytes: bytes, ctx: Optional[PipelineContext] = None) -> dict:
         """
         Main entry point. Attempts extraction in order of fidelity:
         1. unstructured (best — column-aware, element-typed)
@@ -94,8 +96,30 @@ class AcademicPDFParser:
 
         Always attempts bibliography isolation via PyMuPDF (Pass B)
         regardless of which text extraction pass succeeds.
+
+        Args:
+            pdf_bytes: Raw PDF file bytes.
+            ctx: Optional PipelineContext for warning accumulation.
         """
+        if ctx is None:
+            ctx = PipelineContext()
+
+        # --- Edge case: empty file ---
+        if not pdf_bytes or len(pdf_bytes) == 0:
+            ctx.add_warning(
+                WarningCode.PDF_EMPTY_FILE, WarningSeverity.ERROR, "pdf_parser",
+                "Empty file uploaded — no data to parse.",
+            )
+            return self._empty_result(ctx)
+
+        # --- Edge case: corrupt / unreadable PDF ---
         page_count = self._get_page_count(pdf_bytes)
+        if page_count == 0:
+            ctx.add_warning(
+                WarningCode.PDF_CORRUPT, WarningSeverity.ERROR, "pdf_parser",
+                "Could not determine page count — the file may be corrupt or not a valid PDF.",
+            )
+            # Still attempt extraction — some corrupt headers still have text
 
         # --- Pass A: try unstructured first ---
         paragraphs, method = self._pass_a_unstructured(pdf_bytes)
@@ -108,9 +132,26 @@ class AcademicPDFParser:
         if not paragraphs:
             paragraphs, method = self._fallback_raw_chunk(pdf_bytes)
 
-        degraded = method != "unstructured"
+        degraded = method is not None and method != "unstructured"
         if degraded:
             logger.warning("PDF parsed in degraded mode via: %s", method)
+            ctx.degraded_mode = True
+            ctx.add_warning(
+                WarningCode.PDF_DEGRADED_MODE, WarningSeverity.WARNING, "pdf_parser",
+                f"Primary PDF extraction failed. Fell back to '{method}' — "
+                f"paragraph boundaries may be less accurate.",
+                {"extraction_method": method},
+            )
+
+        # --- Edge case: no text extracted at all (scanned/image PDF) ---
+        if not paragraphs:
+            ctx.add_warning(
+                WarningCode.PDF_NO_TEXT, WarningSeverity.ERROR, "pdf_parser",
+                "No text could be extracted from this PDF. "
+                "It may be a scanned document or image-only PDF. "
+                "OCR is not currently supported.",
+            )
+            return self._empty_result(ctx, page_count=page_count, method=method)
 
         # --- Pass B: bibliography isolation (always via PyMuPDF) ---
         references = self._extract_bibliography(pdf_bytes)
@@ -122,8 +163,44 @@ class AcademicPDFParser:
             "paragraphs": paragraphs,
             "references": references,
             "page_count": page_count,
-            "extraction_method": method,
+            "extraction_method": method or "unknown",
             "degraded_mode": degraded,
+            "warnings": [w.model_dump() for w in ctx.warnings],
+        }
+
+    def parse_safe(self, pdf_bytes: bytes, ctx: Optional[PipelineContext] = None) -> dict:
+        """
+        Crash-proof wrapper around parse(). Catches ALL exceptions and returns
+        a valid (empty) result with error context instead of propagating.
+        """
+        if ctx is None:
+            ctx = PipelineContext()
+
+        try:
+            return self.parse(pdf_bytes, ctx)
+        except Exception as exc:
+            logger.exception("PDF parsing crashed unexpectedly: %s", exc)
+            ctx.add_warning(
+                WarningCode.PDF_CORRUPT, WarningSeverity.ERROR, "pdf_parser",
+                f"PDF parsing failed with an unexpected error: {str(exc)}",
+                {"exception_type": type(exc).__name__},
+            )
+            return self._empty_result(ctx)
+
+    @staticmethod
+    def _empty_result(
+        ctx: PipelineContext,
+        page_count: int = 0,
+        method: Optional[str] = None,
+    ) -> dict:
+        """Return a valid-but-empty parsing result for error paths."""
+        return {
+            "paragraphs": [],
+            "references": [],
+            "page_count": page_count,
+            "extraction_method": method or "none",
+            "degraded_mode": True,
+            "warnings": [w.model_dump() for w in ctx.warnings],
         }
 
     # ------------------------------------------------------------------

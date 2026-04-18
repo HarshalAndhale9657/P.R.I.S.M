@@ -21,6 +21,8 @@ import statistics
 from typing import List, Dict, Any, Optional, Tuple
 from collections import Counter
 
+from models import PipelineContext, WarningCode, WarningSeverity
+
 logger = logging.getLogger(__name__)
 
 
@@ -99,6 +101,7 @@ class CitationForensics:
         paragraphs: List[Dict[str, Any]],
         references: List[Dict[str, Any]],
         cluster_result: Dict[str, Any],
+        ctx: Optional[PipelineContext] = None,
     ) -> Dict[str, Any]:
         """
         Run the full citation forensics pipeline.
@@ -107,11 +110,15 @@ class CitationForensics:
             paragraphs: List of paragraph dicts with "text" key.
             references: Bibliography entries from PDF parser.
             cluster_result: Output from AuthorshipClustering.cluster().
+            ctx: Optional PipelineContext for warning accumulation.
 
         Returns:
             Dict with per-paragraph citations, temporal anchors,
             anomaly flags, and aggregate statistics.
         """
+        if ctx is None:
+            ctx = PipelineContext()
+
         clusters = cluster_result.get("clusters", [])
         anomaly_indices = cluster_result.get("anomaly_indices", [])
 
@@ -253,6 +260,24 @@ class CitationForensics:
             f"{len(temporal_anomalies)} temporal anomalies flagged, "
             f"core median={core_median}, noise median={noise_median}"
         )
+
+        # ── Edge Case: No citations found ────────────────────────────────────
+        if result["total_citations_found"] == 0:
+            ctx.add_warning(
+                WarningCode.CITATION_NONE_FOUND, WarningSeverity.INFO, "citation_forensics",
+                "No inline citations were detected in this document. "
+                "Temporal analysis could not be performed. This is normal "
+                "for non-academic documents or documents with footnote-style citations.",
+            )
+
+        # ── Edge Case: Citations found but no parseable years ────────────────
+        elif not all_years:
+            ctx.add_warning(
+                WarningCode.CITATION_NO_YEARS, WarningSeverity.INFO, "citation_forensics",
+                "Citations were detected but no valid years could be extracted. "
+                "Temporal anomaly analysis was skipped.",
+                {"citation_count": result["total_citations_found"]},
+            )
 
         return result
 

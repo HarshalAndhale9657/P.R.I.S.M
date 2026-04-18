@@ -19,6 +19,8 @@ import hdbscan
 from sklearn.preprocessing import StandardScaler
 from typing import List, Dict, Any, Optional
 
+from models import PipelineContext, WarningCode, WarningSeverity
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,12 +43,17 @@ class AuthorshipClustering:
         self.min_samples = min_samples
         self.scaler = StandardScaler()
 
-    def cluster(self, feature_matrix: np.ndarray) -> Dict[str, Any]:
+    def cluster(
+        self,
+        feature_matrix: np.ndarray,
+        ctx: Optional[PipelineContext] = None,
+    ) -> Dict[str, Any]:
         """
         Run the full clustering pipeline on a feature matrix.
 
         Args:
             feature_matrix: np.ndarray of shape (N, 7) — one row per paragraph.
+            ctx: Optional PipelineContext for warning accumulation.
 
         Returns:
             Dict containing:
@@ -58,7 +65,20 @@ class AuthorshipClustering:
                 - cluster_sizes: dict mapping cluster_id → paragraph count
                 - confidence: float 0-1 indicating clustering reliability
         """
+        if ctx is None:
+            ctx = PipelineContext()
+
         n_paragraphs = len(feature_matrix)
+
+        # ── Edge Case: Upstream signaled skip ────────────────────────────────
+        if ctx.skip_clustering:
+            logger.info("[P.R.I.S.M.] Clustering skipped (upstream signal).")
+            ctx.add_warning(
+                WarningCode.CLUSTER_SKIPPED_SHORT, WarningSeverity.WARNING, "clustering",
+                f"Clustering skipped — document has too few paragraphs for reliable analysis.",
+                {"paragraph_count": n_paragraphs},
+            )
+            return self._single_author_result(n_paragraphs, too_short=True)
 
         # ── Edge Case: Too few paragraphs for clustering ─────────────────────
         if n_paragraphs < self.min_cluster_size * 2:
@@ -67,7 +87,13 @@ class AuthorshipClustering:
                 f"too few for reliable clustering (need >= {self.min_cluster_size * 2}). "
                 f"Assigning all to Cluster 0."
             )
-            return self._single_author_result(n_paragraphs)
+            ctx.add_warning(
+                WarningCode.CLUSTER_SKIPPED_SHORT, WarningSeverity.WARNING, "clustering",
+                f"Only {n_paragraphs} paragraphs — need at least {self.min_cluster_size * 2} "
+                f"for density-based clustering. All paragraphs assigned to a single author.",
+                {"paragraph_count": n_paragraphs, "minimum_required": self.min_cluster_size * 2},
+            )
+            return self._single_author_result(n_paragraphs, too_short=True)
 
         # ── Edge Case: Zero-variance features ────────────────────────────────
         # If all paragraphs have identical features, StandardScaler produces
@@ -77,6 +103,11 @@ class AuthorshipClustering:
             logger.warning(
                 "[P.R.I.S.M.] All paragraphs have identical stylometric features. "
                 "Bypassing clustering — single author detected."
+            )
+            ctx.add_warning(
+                WarningCode.CLUSTER_ZERO_VARIANCE, WarningSeverity.INFO, "clustering",
+                "All paragraphs have virtually identical stylometric features. "
+                "This indicates consistent writing style throughout — single author detected.",
             )
             return self._single_author_result(n_paragraphs)
 
@@ -88,6 +119,12 @@ class AuthorshipClustering:
         if filtered_matrix.shape[1] < 2:
             logger.warning(
                 "[P.R.I.S.M.] Too few variable features for meaningful clustering."
+            )
+            ctx.add_warning(
+                WarningCode.CLUSTER_ZERO_VARIANCE, WarningSeverity.WARNING, "clustering",
+                "Too few variable features for meaningful clustering — "
+                "most stylometric dimensions are constant across paragraphs.",
+                {"variable_features": int(filtered_matrix.shape[1])},
             )
             return self._single_author_result(n_paragraphs)
 
@@ -124,6 +161,13 @@ class AuthorshipClustering:
                 f"[P.R.I.S.M.] {noise_pct:.0%} of paragraphs are noise — "
                 f"HDBSCAN saturation detected. Overriding to single author."
             )
+            ctx.add_warning(
+                WarningCode.CLUSTER_NOISE_OVERRIDE, WarningSeverity.WARNING, "clustering",
+                f"{noise_pct:.0%} of paragraphs were classified as noise, indicating "
+                f"HDBSCAN could not find meaningful clusters. All paragraphs have been "
+                f"assigned to a single author group.",
+                {"noise_percentage": round(noise_pct, 4)},
+            )
             return self._single_author_result(n_paragraphs, noise_override=True)
 
         # ── Build result ─────────────────────────────────────────────────────
@@ -154,6 +198,14 @@ class AuthorshipClustering:
             clusterer, labels, noise_pct, len(author_clusters)
         )
 
+        # Single-author informational warning
+        if len(author_clusters) == 1 and noise_count == 0:
+            ctx.add_warning(
+                WarningCode.CLUSTER_SINGLE_AUTHOR, WarningSeverity.INFO, "clustering",
+                "All paragraphs belong to a single authorial cluster — "
+                "no stylistic anomalies detected.",
+            )
+
         result = {
             "clusters": cluster_labels,
             "estimated_authors": len(author_clusters),
@@ -181,7 +233,7 @@ class AuthorshipClustering:
     # ─── Helpers ─────────────────────────────────────────────────────────────
 
     def _single_author_result(
-        self, n_paragraphs: int, noise_override: bool = False
+        self, n_paragraphs: int, noise_override: bool = False, too_short: bool = False,
     ) -> Dict[str, Any]:
         """Return a clean single-author result (no anomalies)."""
         return {
@@ -195,7 +247,7 @@ class AuthorshipClustering:
             "cluster_sizes": {"0": n_paragraphs},
             "confidence": 1.0 if not noise_override else 0.3,
             "noise_override": noise_override,
-            "too_short": n_paragraphs < self.min_cluster_size * 2,
+            "too_short": too_short or n_paragraphs < self.min_cluster_size * 2,
         }
 
     def _calculate_confidence(

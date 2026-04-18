@@ -1,9 +1,19 @@
+"""
+P.R.I.S.M. — Semantic Source Tracer
+Tracing anomalous paragraphs back to potential source papers via arxiv.
+With edge-case handling for rate limits (429) via tenacity.
+"""
 import spacy
 from sentence_transformers import SentenceTransformer
 from tenacity import retry, wait_exponential, stop_after_attempt
 import arxiv
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+import logging
+from typing import List, Dict, Any, Optional
+from models import PipelineContext, WarningCode, WarningSeverity
+
+logger = logging.getLogger(__name__)
 
 # Load NLP model for keyword extraction
 try:
@@ -18,12 +28,16 @@ except OSError:
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 class SourceTracer:
+    """
+    Traces anomalous cluster paragraphs back to potential arxiv sources.
+    Handles rate-limiting API errors gracefully with exponential backoff.
+    """
     def __init__(self, similarity_threshold=0.75):
         self.similarity_threshold = similarity_threshold
         # Note: We must use a different arxiv client approach as per arxiv>=2.0.0
         self.client = arxiv.Client()
         
-    def _extract_keywords(self, text: str, top_n: int = 3) -> list[str]:
+    def _extract_keywords(self, text: str, top_n: int = 3) -> List[str]:
         """Extract main nouns/keywords from the text to form an arxiv search query."""
         doc = nlp(text)
         
@@ -36,12 +50,13 @@ class SourceTracer:
         
         return unique_keywords[:top_n]
 
-    @retry(wait=wait_exponential(multiplier=2, min=2, max=10), stop=stop_after_attempt(4))
+    @retry(wait=wait_exponential(multiplier=2, min=2, max=10), stop=stop_after_attempt(4), reraise=True)
     def _safe_arxiv_search(self, query: str, max_results: int = 5) -> list:
         """Exponential backoff for arxiv rate limits."""
         if not query.strip():
             return []
             
+        logger.info(f"[P.R.I.S.M.] Searching arxiv for: {query}")
         search = arxiv.Search(
             query=query,
             max_results=max_results,
@@ -49,11 +64,17 @@ class SourceTracer:
         )
         return list(self.client.results(search))
 
-    def trace(self, anomalous_paragraphs: list[dict]) -> list[dict]:
+    def trace(self, anomalous_paragraphs: List[Dict[str, Any]], ctx: Optional[PipelineContext] = None) -> List[Dict[str, Any]]:
         """
         Trace the source of anomalous paragraphs.
-        anomalous_paragraphs should be a list of dicts, e.g. [{"id": 0, "text": "..."}]
+        anomalous_paragraphs should be a list of dicts.
         """
+        if ctx is None:
+            ctx = PipelineContext()
+
+        if ctx.skip_source_tracing:
+            return []
+
         source_matches = []
         
         for para in anomalous_paragraphs:
@@ -91,7 +112,7 @@ class SourceTracer:
                 if best_sim >= self.similarity_threshold:
                     best_paper = results[best_match_idx]
                     source_matches.append({
-                        "paragraph_id": para.get("id"),
+                        "paragraph_id": para.get("id") or para.get("paragraph_index"),
                         "similarity_score": round(float(best_sim), 4),
                         "source": {
                             "title": best_paper.title,
@@ -103,7 +124,12 @@ class SourceTracer:
                     })
                     
             except Exception as e:
-                print(f"Error tracing source for paragraph {para.get('id')}: {e}")
+                logger.error(f"[P.R.I.S.M.] Error tracing source for paragraph: {e}")
+                ctx.add_warning(
+                    WarningCode.SOURCE_ARXIV_TIMEOUT, WarningSeverity.WARNING, "source_tracer",
+                    f"Arxiv search failed limit handling for query: '{query}'",
+                    {"error": str(e)}
+                )
                 
         return source_matches
 

@@ -20,6 +20,8 @@ import spacy
 from collections import Counter
 from typing import List, Dict, Any, Optional
 
+from models import PipelineContext, WarningCode, WarningSeverity
+
 logger = logging.getLogger(__name__)
 
 # Load spaCy model once — disable NER for speed (irrelevant for stylometry)
@@ -118,13 +120,18 @@ class FeatureEngine:
             yules_k,
         ])
 
-    def extract_all(self, paragraphs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def extract_all(
+        self,
+        paragraphs: List[Dict[str, Any]],
+        ctx: Optional[PipelineContext] = None,
+    ) -> Dict[str, Any]:
         """
         Extract features for all paragraphs and return the feature matrix
         along with per-paragraph profile dictionaries.
 
         Args:
             paragraphs: List of paragraph dicts with at least a "text" key.
+            ctx: Optional PipelineContext for warning accumulation.
 
         Returns:
             Dict with:
@@ -133,6 +140,9 @@ class FeatureEngine:
                 - profiles: list of per-paragraph feature dicts (for frontend)
                 - valid_indices: indices of paragraphs with enough text
         """
+        if ctx is None:
+            ctx = PipelineContext()
+
         feature_vectors = []
         profiles = []
         valid_indices = []
@@ -159,6 +169,29 @@ class FeatureEngine:
             profiles.append(profile)
 
         feature_matrix = np.array(feature_vectors) if feature_vectors else np.zeros((0, len(FEATURE_NAMES)))
+
+        # ── Edge Case: Short paper (<5 paragraphs) ───────────────────────────
+        SHORT_PAPER_THRESHOLD = 5
+        if len(paragraphs) < SHORT_PAPER_THRESHOLD:
+            ctx.add_warning(
+                WarningCode.FEATURES_SHORT_PAPER, WarningSeverity.WARNING, "feature_engine",
+                f"Document has only {len(paragraphs)} paragraphs (threshold: {SHORT_PAPER_THRESHOLD}). "
+                f"Stylometric clustering will be skipped — insufficient data for reliable authorship detection.",
+                {"paragraph_count": len(paragraphs), "threshold": SHORT_PAPER_THRESHOLD},
+            )
+            ctx.skip_clustering = True
+
+        # ── Edge Case: Too few valid paragraphs ──────────────────────────────
+        MIN_VALID_FOR_CLUSTERING = 3
+        if len(valid_indices) < MIN_VALID_FOR_CLUSTERING:
+            ctx.add_warning(
+                WarningCode.FEATURES_TOO_FEW_VALID, WarningSeverity.WARNING, "feature_engine",
+                f"Only {len(valid_indices)} paragraphs had enough text for feature extraction "
+                f"(minimum: {MIN_VALID_FOR_CLUSTERING}). Clustering may be unreliable.",
+                {"valid_count": len(valid_indices), "minimum": MIN_VALID_FOR_CLUSTERING},
+            )
+            if len(valid_indices) < 2:
+                ctx.skip_clustering = True
 
         logger.info(
             f"[P.R.I.S.M.] Extracted features for {len(paragraphs)} paragraphs "
