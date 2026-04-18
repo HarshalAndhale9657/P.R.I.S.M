@@ -9,7 +9,7 @@ from services.clustering import AuthorshipClustering
 from services.gpt_analyzer import GPTAnalyzer
 from services.citation_forensics import CitationForensics
 from services.source_tracer import SourceTracer
-
+from services.report_generator import ReportGenerator
 app = FastAPI(
     title="P.R.I.S.M. Backend API",
     description="Academic Integrity Analyzer API",
@@ -32,7 +32,7 @@ clustering_engine = AuthorshipClustering(min_cluster_size=3, min_samples=2)
 gpt_analyzer = GPTAnalyzer()
 citation_forensics = CitationForensics(temporal_threshold=10)
 source_tracer = SourceTracer(similarity_threshold=0.75)
-
+report_generator = ReportGenerator()
 @app.get("/")
 async def health_check():
     """Health check endpoint to verify backend is running."""
@@ -345,6 +345,16 @@ async def analyze(file: UploadFile = File(...)):
         anomalous_paragraphs = [{"id": i, "text": parsed["paragraphs"][i]["text"]} for i in anomaly_indices if i < len(parsed["paragraphs"])]
         sources = source_tracer.trace(anomalous_paragraphs)
 
+        analysis_data = {
+            "clustering": cluster_result,
+            "reasoning": reasoning,
+            "citations": citations,
+            "sources": sources
+        }
+
+        # Stage 7: Generate Final Report
+        report = await report_generator.generate_report(analysis_data)
+
         return {
             "filename": file.filename,
             "metadata": {"pages": parsed.get("page_count"), "total_paragraphs": len(parsed["paragraphs"])},
@@ -359,6 +369,7 @@ async def analyze(file: UploadFile = File(...)):
             "sources": sources,
             "paragraphs": enriched_paragraphs,
             "references": parsed["references"],
+            "report": report,
         }
     except HTTPException:
         raise
