@@ -3,7 +3,6 @@ uvicorn[standard]==0.30.0
 python-multipart==0.0.9
 
 # PDF Parsing (Dual-Pass + Fallback)
-unstructured[pdf]==0.15.0
 PyMuPDF==1.24.0
 pdfplumber==0.11.0
 
@@ -17,13 +16,14 @@ numpy==1.26.4
 sentence-transformers==3.0.0
 
 # AI Reasoning Layer
-openai>=1.50.0,<2.0.0  # openai 2.x passes 'proxies' kwarg incompatible with httpx<0.28
-httpx>=0.25.0,<0.28.0  # >=0.28 removed 'proxies' param, breaks openai client
+openai>=1.50.0,<2.0.0
+httpx>=0.25.0,<0.28.0
 
 # Citation & Source
 nltk==3.9.1
 arxiv==2.1.3
 tenacity==8.5.0
+requests
 
 # Utils
 python-dotenv==1.0.1
