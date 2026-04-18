@@ -130,6 +130,7 @@ class ReportGenerator:
         anomaly_count = clustering.get("anomaly_count", 0)
         estimated_authors = clustering.get("estimated_authors", 1)
         boundary_count = clustering.get("boundary_count", 0)
+        confidence = clustering.get("confidence", 1.0)
         noise_override = clustering.get("noise_override", False)
         too_short = clustering.get("too_short", False)
         
