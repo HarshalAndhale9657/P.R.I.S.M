@@ -23,7 +23,7 @@ const PRISM = (() => {
     // ─── Configuration ───
     const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? 'http://localhost:8000'
-        : 'https://prism-backend.onrender.com'; // Update with actual Render URL
+        : 'https://p-r-i-s-m.onrender.com';
 
     // ─── State ───
     const state = {
