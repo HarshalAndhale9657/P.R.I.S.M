@@ -7,6 +7,7 @@ from services.pdf_parser import AcademicPDFParser
 from services.feature_engine import FeatureEngine
 from services.clustering import AuthorshipClustering
 from services.gpt_analyzer import GPTAnalyzer
+from services.citation_forensics import CitationForensics
 
 app = FastAPI(
     title="P.R.I.S.M. Backend API",
@@ -28,6 +29,7 @@ pdf_parser = AcademicPDFParser()
 feature_engine = FeatureEngine()
 clustering_engine = AuthorshipClustering(min_cluster_size=3, min_samples=2)
 gpt_analyzer = GPTAnalyzer()
+citation_forensics = CitationForensics(temporal_threshold=10)
 
 @app.get("/")
 async def health_check():
@@ -247,3 +249,56 @@ async def analyze_reasoning(file: UploadFile = File(...)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Reasoning analysis failed: {str(e)}")
+
+
+@app.post("/api/citations")
+async def analyze_citations(file: UploadFile = File(...)):
+    """
+    Stage 1-5 Pipeline: Parse → Features → Cluster → GPT Reasoning → Citation Forensics.
+    Returns clustered paragraphs with citation extraction and temporal anomaly detection.
+    """
+    if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+        # Stage 1: Parse PDF
+        parsed = pdf_parser.parse(content)
+        if not parsed["paragraphs"]:
+            raise HTTPException(status_code=422, detail="No text detected.")
+
+        # Stage 2: Extract stylometric features
+        features = feature_engine.extract_all(parsed["paragraphs"])
+
+        # Stage 3: HDBSCAN clustering
+        cluster_result = clustering_engine.cluster(features["feature_matrix"])
+        enriched_paragraphs = clustering_engine.get_cluster_summary(parsed["paragraphs"], cluster_result)
+
+        # Stage 4: GPT Reasoning on flagged boundaries
+        reasoning = await gpt_analyzer.analyze_boundaries(parsed["paragraphs"], cluster_result)
+
+        # Stage 5: Citation Forensics
+        citations = citation_forensics.analyze(
+            parsed["paragraphs"], parsed["references"], cluster_result
+        )
+
+        return {
+            "filename": file.filename,
+            "clustering": {
+                "estimated_authors": cluster_result["estimated_authors"],
+                "anomaly_count": cluster_result["anomaly_count"],
+                "noise_percentage": cluster_result["noise_percentage"],
+                "confidence": cluster_result["confidence"],
+            },
+            "reasoning": reasoning,
+            "citations": citations,
+            "paragraphs": enriched_paragraphs,
+            "references": parsed["references"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Citation analysis failed: {str(e)}")
