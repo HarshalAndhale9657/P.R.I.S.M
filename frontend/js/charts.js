@@ -1,7 +1,22 @@
 /**
  * P.R.I.S.M. — Charts Renderer
- * Visualizes stylometric features using Chart.js
- * Reads data from the /api/analyze response structure.
+ * ═══════════════════════════════════════════════════════════
+ * Visualizes stylometric features using Chart.js 4.4.
+ *
+ * Charts rendered:
+ *   1. Feature Trends (dual Y-axis line) — Yule's K + avg sentence length over paragraphs
+ *   2. Function Word Ratios (stacked bar) — pronoun / preposition / conjunction ratios
+ *   3. Cluster Distribution (scatter) — 2D plot of lexical richness vs sentence length
+ *
+ * Data source:
+ *   analysisData.features.profiles[] → keyed feature dicts per paragraph
+ *   analysisData.features.feature_names[] → column name ordering
+ *   analysisData.clustering.estimated_authors → determines color palette size
+ *
+ * Performance:
+ *   - Charts destroyed before re-creation (prevents canvas memory leak)
+ *   - Shared options object reused across all three charts
+ *   - Point colors computed once from PRISM.getClusterColor()
  */
 
 const ChartsRenderer = (() => {

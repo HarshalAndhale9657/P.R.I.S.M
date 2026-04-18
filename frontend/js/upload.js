@@ -1,7 +1,20 @@
 /**
  * P.R.I.S.M. — Upload Manager
- * Handles drag-and-drop file upload, validation, progress tracking,
- * and triggers the full analysis pipeline.
+ * ═══════════════════════════════════════════════════════════
+ * Handles drag-and-drop file upload, PDF validation, progress tracking,
+ * and triggers the full 7-stage analysis pipeline.
+ *
+ * Features:
+ *   - Drag-and-drop + click-to-browse file selection
+ *   - Client-side PDF validation (type, size, empty check)
+ *   - Simulated step-by-step progress during async analysis
+ *   - Error display with retry capability
+ *   - Auto-navigates to heatmap panel on completion
+ *
+ * Performance:
+ *   - DOM elements cached once on init (zero repeated queries)
+ *   - Single fetch call to /api/analyze (no waterfall requests)
+ *   - Event delegation prevents memory leaks on re-renders
  */
 
 const UploadManager = (() => {
@@ -143,6 +156,7 @@ const UploadManager = (() => {
                 el.classList.remove('active', 'done');
             }
         });
+        dom.progressFill.classList.remove('complete'); // Remove celebration animation\r
         dom.progressFill.style.width = '0%';
         dom.progressPercent.textContent = '0%';
         dom.progressLabel.textContent = 'Initializing...';
@@ -179,6 +193,7 @@ const UploadManager = (() => {
             }
         });
         dom.progressFill.style.width = '100%';
+        dom.progressFill.classList.add('complete'); // Triggers celebration gradient animation
         dom.progressPercent.textContent = '100%';
         dom.progressLabel.textContent = 'Analysis complete!';
     }

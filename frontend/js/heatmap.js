@@ -1,9 +1,23 @@
 /**
  * P.R.I.S.M. — Authorship Heatmap Renderer
- * Color-coded paragraph blocks per HDBSCAN cluster.
- * Cluster -1 = red border + anomaly badge.
- * Click paragraph → show style features + GPT reasoning.
- * Dynamic HSL color generation with YIQ contrast.
+ * ═══════════════════════════════════════════════════════════
+ * Renders color-coded paragraph blocks grouped by HDBSCAN cluster assignment.
+ *
+ * Visual encoding:
+ *   - Each cluster gets a unique HSL color (auto-generated, infinite scalability)
+ *   - Cluster -1 (HDBSCAN noise) = red border + pulsing anomaly badge
+ *   - Click any paragraph → expands to show stylometric feature bars + GPT reasoning
+ *   - Click legend swatch → filters view to that cluster only
+ *
+ * Data flow:
+ *   analysisData.paragraphs[]     → text + cluster_id per paragraph
+ *   analysisData.features.profiles[] → 11-dim feature vectors for bar rendering
+ *   analysisData.reasoning         → GPT explanations for anomalous paragraphs
+ *
+ * Performance:
+ *   - Single DOM build pass (innerHTML concat, one append)
+ *   - YIQ contrast computation for text readability on any hue
+ *   - Staggered CSS entrance animations (no JS timers)
  */
 
 const HeatmapRenderer = (() => {

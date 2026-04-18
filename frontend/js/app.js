@@ -1,6 +1,22 @@
 /**
  * P.R.I.S.M. — App State Controller & Panel Navigation
+ * ═══════════════════════════════════════════════════════════
+ * Central orchestrator for the single-page application.
  * Manages global app state, panel switching, and cross-module communication.
+ *
+ * Modules (loaded separately, communicate via PRISM namespace):
+ *   - upload.js    → File selection, validation, pipeline trigger
+ *   - heatmap.js   → Color-coded authorship cluster visualization
+ *   - charts.js    → Chart.js stylometric feature graphs
+ *   - citations.js → Temporal citation anomaly timeline
+ *   - sources.js   → arXiv/OpenAlex source match cards
+ *   - report.js    → Forensic report with radial gauge + AI probability
+ *
+ * Design decisions:
+ *   - IIFE module pattern (no build step, zero bundler required)
+ *   - Lazy DOM caching on DOMContentLoaded (avoids null refs)
+ *   - HSL color generation for unlimited cluster palette scaling
+ *   - API_BASE auto-detects localhost vs production Render URL
  */
 
 const PRISM = (() => {

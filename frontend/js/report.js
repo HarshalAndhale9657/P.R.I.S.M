@@ -1,6 +1,19 @@
 /**
  * P.R.I.S.M. — Premium Report Renderer
- * Renders the AI-synthesized forensic report using Glassmorphism & High-end Dataviz.
+ * ═══════════════════════════════════════════════════════════
+ * Renders the AI-synthesized forensic report using glassmorphism design.
+ *
+ * Components:
+ *   1. Radial SVG Gauge — integrity score 0.0–10.0 with animated arc
+ *   2. AI Probability Meter — burstiness-based generation probability bar
+ *   3. Trust Badge Dashboard — per-category evidence cards (stylo/citation/source)
+ *   4. Conclusion Panel — GPT-4o final prosecutable statement
+ *   5. Export Button — downloads full JSON forensic report
+ *
+ * AI Probability Calculation:
+ *   - Extracts burstiness_score from multi-sentence paragraphs (≥2 sentences)
+ *   - Maps avg burstiness to 0–100% probability using linear interpolation
+ *   - Threshold: 0.05 → 99% AI, 0.55 → 0% AI (calibrated against ChatGPT output)
  */
 
 const ReportRenderer = (() => {

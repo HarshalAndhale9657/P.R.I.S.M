@@ -1451,3 +1451,450 @@ body {
     background: rgba(239, 68, 68, 0.15);
     color: var(--danger);
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   FINAL POLISH — Micro-Animations, Hover Effects, Focus States
+   Commit 21: UI animations, performance, and final bug fixes
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Staggered Card Entrance Animation ─── */
+@keyframes cardSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.heatmap-block,
+.citation-card,
+.source-card,
+.timeline-item,
+.trust-badge,
+.chart-card {
+    animation: cardSlideIn 0.4s ease-out backwards;
+}
+
+/* Stagger children with nth-child delay */
+.heatmap-block:nth-child(1), .timeline-item:nth-child(1) { animation-delay: 0ms; }
+.heatmap-block:nth-child(2), .timeline-item:nth-child(2) { animation-delay: 40ms; }
+.heatmap-block:nth-child(3), .timeline-item:nth-child(3) { animation-delay: 80ms; }
+.heatmap-block:nth-child(4), .timeline-item:nth-child(4) { animation-delay: 120ms; }
+.heatmap-block:nth-child(5), .timeline-item:nth-child(5) { animation-delay: 160ms; }
+.heatmap-block:nth-child(6) { animation-delay: 200ms; }
+.heatmap-block:nth-child(7) { animation-delay: 240ms; }
+.heatmap-block:nth-child(8) { animation-delay: 280ms; }
+.heatmap-block:nth-child(9) { animation-delay: 320ms; }
+.heatmap-block:nth-child(10) { animation-delay: 360ms; }
+.heatmap-block:nth-child(n+11) { animation-delay: 400ms; }
+
+
+/* ─── Enhanced Card Hover ─── */
+.heatmap-block {
+    transition: all var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.heatmap-block:hover {
+    background: var(--bg-hover);
+    transform: translateX(4px);
+    box-shadow: var(--shadow-md);
+}
+
+.heatmap-block.anomaly:hover {
+    box-shadow: 0 4px 20px rgba(248, 113, 113, 0.12);
+}
+
+.chart-card {
+    transition: all var(--transition-normal);
+}
+
+.chart-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--border-hover);
+}
+
+
+/* ─── Button Ripple Effect ─── */
+.btn-primary,
+.btn-secondary,
+.btn-analyze {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-primary::after,
+.btn-analyze::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.25) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+}
+
+.btn-primary:active::after,
+.btn-analyze:active::after {
+    opacity: 1;
+}
+
+
+/* ─── Focus-Visible Accessibility ─── */
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-analyze:focus-visible,
+.nav-tab:focus-visible,
+.btn-icon:focus-visible {
+    outline: 2px solid var(--accent-violet);
+    outline-offset: 2px;
+}
+
+.drop-zone-inner:focus-within {
+    border-color: var(--accent-violet);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+
+/* ─── Score Counter Animation ─── */
+@keyframes scoreCountUp {
+    from { opacity: 0; transform: scale(0.5); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.radial-gauge-value .score {
+    animation: scoreCountUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s backwards;
+}
+
+
+/* ─── Anomaly Badge Pulse ─── */
+@keyframes badgePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.3); }
+    50%      { box-shadow: 0 0 0 6px rgba(248, 113, 113, 0); }
+}
+
+.anomaly-badge {
+    animation: badgePulse 2s ease-in-out infinite;
+}
+
+
+/* ─── Tab Active Indicator Glow ─── */
+.nav-tab.active {
+    position: relative;
+}
+
+.nav-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 2px;
+    background: var(--gradient-primary);
+    border-radius: var(--radius-full);
+    animation: tabGlow 2s ease-in-out infinite;
+}
+
+@keyframes tabGlow {
+    0%, 100% { opacity: 0.6; width: 24px; }
+    50%      { opacity: 1;   width: 32px; }
+}
+
+
+/* ─── Progress Complete Celebration ─── */
+@keyframes progressComplete {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.progress-fill.complete {
+    background: linear-gradient(270deg, var(--success), var(--accent-teal), var(--accent-cyan), var(--success));
+    background-size: 300% 300%;
+    animation: progressComplete 3s ease infinite;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT-THEME FIX: Citations, Sources, and Report Panels
+   (Previously had dark-theme hardcoded colors)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Citation Overview Stats ─── */
+.citation-overview {
+    display: flex;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+    flex-wrap: wrap;
+}
+
+.overview-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: var(--space-md) var(--space-lg);
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    min-width: 120px;
+    flex: 1;
+    transition: all var(--transition-normal);
+}
+
+.overview-stat:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.overview-stat .stat-value {
+    font-size: var(--font-size-2xl);
+    font-weight: 800;
+    font-family: var(--font-mono);
+    color: var(--accent-violet);
+}
+
+.overview-stat .stat-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ─── Baseline Info Cards ─── */
+.baseline-info {
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    transition: all var(--transition-normal);
+}
+
+.baseline-info:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-sm);
+}
+
+.baseline-info h3 {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+}
+
+.baseline-info p {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-top: 4px;
+}
+
+.baseline-info p strong {
+    color: var(--text-primary);
+}
+
+/* ─── Timeline ─── */
+.timeline-title {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-md);
+    margin-top: var(--space-lg);
+}
+
+.timeline {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    position: relative;
+    padding-left: var(--space-xl);
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border-primary);
+    border-radius: 1px;
+}
+
+.timeline-item {
+    display: flex;
+    gap: var(--space-md);
+    position: relative;
+}
+
+.timeline-badge {
+    position: absolute;
+    left: calc(-1 * var(--space-xl) + 4px);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    background: var(--bg-primary);
+    border-radius: 50%;
+    z-index: 1;
+}
+
+.timeline-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    flex: 1;
+    transition: all var(--transition-normal);
+}
+
+.timeline-content:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-sm);
+}
+
+.timeline-content h4 {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-xs);
+}
+
+.timeline-content p {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.anomaly-item .timeline-content {
+    border-left: 3px solid var(--danger);
+}
+
+/* ─── Sources - No Sources Found ─── */
+.no-anomalies,
+.no-sources {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-3xl);
+    text-align: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-xl);
+}
+
+.no-anomalies p,
+.no-sources p {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    line-height: 1.7;
+    max-width: 400px;
+}
+
+.success-icon {
+    font-size: 48px;
+}
+
+/* ─── Sources List Cards (light theme fix) ─── */
+.sources-list .source-card {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border-primary) !important;
+    border-radius: var(--radius-lg) !important;
+    padding: var(--space-lg) !important;
+    transition: all var(--transition-normal);
+}
+
+.sources-list .source-card:hover {
+    border-color: var(--border-hover) !important;
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.sources-list .source-card h4 a {
+    color: var(--accent-purple) !important;
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.sources-list .source-card h4 a:hover {
+    color: var(--accent-violet) !important;
+    text-decoration: underline;
+}
+
+.sources-list .source-meta {
+    color: var(--text-secondary) !important;
+}
+
+.sources-list .similarity-bar-bg {
+    background: var(--bg-tertiary) !important;
+}
+
+.sources-list .source-abstract-snippet {
+    color: var(--text-secondary) !important;
+}
+
+.sources-list a[target="_blank"] {
+    color: var(--accent-purple) !important;
+}
+
+/* ─── Per-Paragraph Citation Summary (light theme fix) ─── */
+.citations-content [style*="rgba(22,27,34"] {
+    background: var(--bg-card) !important;
+}
+
+.citations-content [style*="#30363d"] {
+    border-color: var(--border-primary) !important;
+}
+
+.citations-content [style*="#8b949e"] {
+    color: var(--text-secondary) !important;
+}
+
+.citations-content [style*="color:#3fb950"] {
+    color: var(--success) !important;
+}
+
+.citations-content [style*="color:#f85149"] {
+    color: var(--danger) !important;
+}
+
+
+/* ─── Reduced Motion Preference ─── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+
+/* ─── Print Styles ─── */
+@media print {
+    #app-header, #app-footer, .btn-primary, .btn-analyze, .btn-icon, .header-actions {
+        display: none !important;
+    }
+    body {
+        background: white;
+        color: black;
+    }
+    .panel {
+        display: block !important;
+    }
+    .glass-panel {
+        border: 1px solid #ccc;
+        backdrop-filter: none;
+        box-shadow: none;
+        break-inside: avoid;
+    }
+}
