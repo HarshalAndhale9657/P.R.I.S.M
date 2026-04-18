@@ -135,7 +135,7 @@ PDF Upload
 │  • HDBSCAN cluster analysis         │
 │  • GPT style reasoning              │
 │  • Citation temporal anomalies      │
-│  • Source paper matches              │
+│  • Source paper matches             │
 │  → Structured JSON forensic report  │
 │  → Overall integrity score (0-10)   │
 │  → Per-paragraph verdicts           │
