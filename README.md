@@ -15,6 +15,7 @@
 </p>
 
 <p align="center">
+  <strong><a href="https://p-r-i-s-m-psi.vercel.app/">🌐 Live Demo</a></strong> •
   <a href="#the-core-problem">Problem</a> •
   <a href="#our-approach">Approach</a> •
   <a href="#system-architecture">Architecture</a> •
@@ -531,6 +532,16 @@ The following AI tools and models are used in this project:
 8. **Source tracer** searches arXiv + OpenAlex, embeds results with MiniLM, ranks by cosine similarity
 9. **Idea Triplets** defeat AI paraphrasers by comparing logical structure, not vocabulary
 10. **GPT-4o** synthesizes all evidence into a scored, prosecutable forensic report
+
+---
+
+## Contributors
+
+- **Harshal Andhale** ([@HarshalAndhale9657](https://github.com/HarshalAndhale9657))
+- **Vedant Mohanrao Sable** ([@vedantsable56](https://github.com/vedantsable56))
+- **Arya Achalkar** ([@aryaachalkar](https://github.com/aryaachalkar))
+- **Aniket Krishna Ingale** ([@DevOpsDreamer](https://github.com/DevOpsDreamer))
+- **Chetana Phalke** ([@chetna196](https://github.com/chetna196))
 
 ---
 
