@@ -108,13 +108,13 @@ class SourceTracer:
             logger.error(f"Arxiv search failed: {e}")
             raise
 
-    @retry(wait=wait_exponential(multiplier=2, min=2, max=10), stop=stop_after_attempt(3), reraise=False)
+    @retry(wait=wait_exponential(multiplier=1, min=1, max=2), stop=stop_after_attempt(1), reraise=False)
     def _safe_openalex_search(self, query: str, max_results: int = 3) -> list:
         if not query.strip():
             return []
         logger.info(f"[P.R.I.S.M.] Searching OpenAlex for: {query}")
         url = f"https://api.openalex.org/works?search={query}&per-page={max_results}"
-        res = requests.get(url, timeout=10)
+        res = requests.get(url, timeout=5.0)
         res.raise_for_status()
         return res.json().get("results", [])
 
