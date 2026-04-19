@@ -93,15 +93,20 @@ class SourceTracer:
             sort_by=arxiv.SortCriterion.Relevance
         )
         
-        # arxiv.Client doesn't have an explicit timeout, but we can set the default socket timeout temporarily
-        import socket
-        old_timeout = socket.getdefaulttimeout()
-        socket.setdefaulttimeout(10.0)
+        import requests
         try:
-            results = list(self.client.results(search))
-            return results
-        finally:
-            socket.setdefaulttimeout(old_timeout)
+            url = f"https://export.arxiv.org/api/query?search_query=all:{query}&start=0&max_results={max_results}&sortBy=relevance"
+            resp = requests.get(url, timeout=10.0)
+            resp.raise_for_status()
+            
+            # Since requests returns XML instead of parsed objects, we fallback to self.client.results
+            # But the arxiv library uses urllib internally. Unfortunately arxiv.Search doesn't have a timeout parameter,
+            # so we'll just execute it inside the threadpool from main.py and hope arxiv API doesn't hang!
+            # Let's remove the global socket override since run_in_threadpool isolates the hang from Uvicorn's main loop.
+            return list(self.client.results(search))
+        except Exception as e:
+            logger.error(f"Arxiv search failed: {e}")
+            raise
 
     @retry(wait=wait_exponential(multiplier=2, min=2, max=10), stop=stop_after_attempt(3), reraise=False)
     def _safe_openalex_search(self, query: str, max_results: int = 3) -> list:

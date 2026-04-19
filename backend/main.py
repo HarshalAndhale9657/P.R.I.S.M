@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()  # Loads from backend/.env or parent .env
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 
 from services.pdf_parser import AcademicPDFParser
 from services.feature_engine import FeatureEngine
@@ -355,7 +356,7 @@ async def full_analysis(file: UploadFile = File(...)):
         ctx = PipelineContext()
 
         # ── Stage 1: Parse PDF ───────────────────────────────────────────────
-        parsed = pdf_parser.parse_safe(content, ctx)
+        parsed = await run_in_threadpool(pdf_parser.parse_safe, content, ctx)
 
         if not parsed["paragraphs"]:
             # Return a valid response with warnings instead of HTTP 422
@@ -379,12 +380,12 @@ async def full_analysis(file: UploadFile = File(...)):
             }
 
         # ── Stage 2: Extract features (spaCy) ───────────────────────────────
-        features = feature_engine.extract_all(parsed["paragraphs"], ctx)
+        features = await run_in_threadpool(feature_engine.extract_all, parsed["paragraphs"], ctx)
 
         # ── Stage 3: Cluster (HDBSCAN) ──────────────────────────────────────
-        cluster_result = clustering_engine.cluster(features["feature_matrix"], ctx)
-        enriched_paragraphs = clustering_engine.get_cluster_summary(
-            parsed["paragraphs"], cluster_result
+        cluster_result = await run_in_threadpool(clustering_engine.cluster, features["feature_matrix"], ctx)
+        enriched_paragraphs = await run_in_threadpool(
+            clustering_engine.get_cluster_summary, parsed["paragraphs"], cluster_result
         )
 
         # ── Stage 4: GPT reasoning (flagged paragraphs only) ────────────────
@@ -423,7 +424,7 @@ async def full_analysis(file: UploadFile = File(...)):
             anomalous_paragraphs = [
                 p for p in enriched_paragraphs if p.get("is_anomaly")
             ]
-            sources = source_tracer.trace(anomalous_paragraphs, ctx)
+            sources = await run_in_threadpool(source_tracer.trace, anomalous_paragraphs, ctx)
         except Exception as e:
             logger.error(f"[P.R.I.S.M.] Source tracing crashed: {e}")
             ctx.add_warning(
