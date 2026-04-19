@@ -32,7 +32,8 @@ except OSError:
 
 def _get_openai_embeddings(texts: List[str]) -> np.ndarray:
     """Get embeddings via OpenAI API (text-embedding-3-small: 1536 dims)."""
-    client = openai.Client()
+    # Use explicit timeout to prevent indefinite hanging
+    client = openai.Client(timeout=15.0)
     response = client.embeddings.create(
         input=texts,
         model="text-embedding-3-small"
@@ -91,7 +92,16 @@ class SourceTracer:
             max_results=max_results,
             sort_by=arxiv.SortCriterion.Relevance
         )
-        return list(self.client.results(search))
+        
+        # arxiv.Client doesn't have an explicit timeout, but we can set the default socket timeout temporarily
+        import socket
+        old_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(10.0)
+        try:
+            results = list(self.client.results(search))
+            return results
+        finally:
+            socket.setdefaulttimeout(old_timeout)
 
     @retry(wait=wait_exponential(multiplier=2, min=2, max=10), stop=stop_after_attempt(3), reraise=False)
     def _safe_openalex_search(self, query: str, max_results: int = 3) -> list:

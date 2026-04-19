@@ -30,7 +30,7 @@ class ReportGenerator:
             if not api_key:
                 logger.warning("[P.R.I.S.M.] OPENAI_API_KEY not found. Falling back to rule-based report generation.")
                 return None
-            self._client = AsyncOpenAI(api_key=api_key)
+            self._client = AsyncOpenAI(api_key=api_key, timeout=30.0)
         return self._client
 
     async def generate_report(self, analysis_data: Dict[str, Any]) -> Dict[str, Any]:
