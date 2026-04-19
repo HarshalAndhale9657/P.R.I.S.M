@@ -14,6 +14,7 @@
  */
 
 const CitationsRenderer = (() => {
+    /** Render the temporal citation anomaly timeline. */
     function render(analysisData) {
         if (!analysisData || !analysisData.citations) return;
         

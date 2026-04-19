@@ -18,6 +18,7 @@
 
 const ReportRenderer = (() => {
 
+    /** Calculate the probability of AI generation based on paragraph burstiness variance. */
     function calculateAIProbability(analysisData) {
         const profiles = analysisData.features?.profiles || [];
         // Extract burstiness only for multi-sentence paragraphs to avoid 0.0 variance skew
@@ -34,6 +35,7 @@ const ReportRenderer = (() => {
         return { prob: Math.round(prob), avg: avg };
     }
 
+    /** Render the forensic integrity report dashboard. */
     function render(analysisData) {
         if (!analysisData || !analysisData.report) return;
         

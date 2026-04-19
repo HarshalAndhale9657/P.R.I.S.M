@@ -27,6 +27,7 @@ const HeatmapRenderer = (() => {
     let expandedBlock = null; // currently expanded paragraph
 
     // ─── Dynamic HSL Color Palette ───
+    /** Generate an HSL color palette mapping for each authorship cluster. */
     function generateClusterPalette(clusterLabels) {
         const unique = [...new Set(clusterLabels)].filter(c => c !== -1).sort((a, b) => a - b);
         const total = unique.length;
@@ -58,6 +59,7 @@ const HeatmapRenderer = (() => {
     }
 
     // ─── YIQ Contrast ───
+    /** Compute ideal text color (dark/light) based on background YIQ contrast. */
     function getTextColor(hue, saturation, lightness) {
         // Convert HSL to RGB to determine contrast
         const h = hue / 360;
@@ -89,6 +91,7 @@ const HeatmapRenderer = (() => {
     }
 
     // ─── Build Legend ───
+    /** Render the clickable cluster legend and statistics. */
     function renderLegend(palette, clusterSizes) {
         legendContainer.innerHTML = '';
 
@@ -137,6 +140,7 @@ const HeatmapRenderer = (() => {
     // ─── Filter by Cluster ───
     let activeFilter = null;
 
+    /** Filter the heatmap to highlight a specific cluster ID. */
     function toggleClusterFilter(clusterId) {
         const blocks = gridContainer.querySelectorAll('.heatmap-block');
 
@@ -155,6 +159,7 @@ const HeatmapRenderer = (() => {
     }
 
     // ─── Build Heatmap Grid ───
+    /** Render the color-coded paragraph blocks for the heatmap grid. */
     function renderGrid(paragraphs, palette, profiles, featureNames, reasoning) {
         gridContainer.innerHTML = '';
 
@@ -268,6 +273,7 @@ const HeatmapRenderer = (() => {
     }
 
     // ─── Find GPT Reasoning ───
+    /** Extract the AI generated explanation for a flagged paragraph boundary. */
     function findReasoningForParagraph(reasoning, paraIndex) {
         if (!reasoning) return null;
 
@@ -298,6 +304,7 @@ const HeatmapRenderer = (() => {
     }
 
     // ─── Format Feature Names ───
+    /** Format a raw feature snake_case name into a display-friendly label. */
     function formatFeatureName(name) {
         return name
             .replace(/_/g, ' ')
@@ -307,6 +314,7 @@ const HeatmapRenderer = (() => {
     }
 
     // ─── Compute Cluster Sizes ───
+    /** Tally the number of paragraphs assigned to each cluster. */
     function computeClusterSizes(paragraphs) {
         const sizes = {};
         paragraphs.forEach(p => {
@@ -317,6 +325,7 @@ const HeatmapRenderer = (() => {
     }
 
     // ─── Main Render ───
+    /** Main render entry point for the heatmap visualization. */
     function render(data) {
         legendContainer = document.getElementById('heatmap-legend');
         gridContainer = document.getElementById('heatmap-grid');

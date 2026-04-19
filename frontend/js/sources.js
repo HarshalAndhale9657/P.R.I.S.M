@@ -21,6 +21,7 @@
  */
 
 const SourcesRenderer = (() => {
+    /** Render sources content based on analysis data. */
     function render(analysisData) {
         if (!analysisData) return;
         
