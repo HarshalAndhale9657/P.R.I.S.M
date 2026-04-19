@@ -36,6 +36,7 @@ const PRISM = (() => {
     // ─── DOM Cache ───
     const dom = {};
 
+    /** Cache all necessary DOM elements. */
     function cacheDom() {
         dom.navTabs = document.querySelectorAll('.nav-tab');
         dom.panels = document.querySelectorAll('.panel');
@@ -43,6 +44,7 @@ const PRISM = (() => {
     }
 
     // ─── Panel Navigation ───
+    /** Switch active view panel by ID. */
     function switchPanel(panelId) {
         if (state.isAnalyzing && panelId !== 'upload') return;
 
@@ -66,6 +68,7 @@ const PRISM = (() => {
         state.currentPanel = panelId;
     }
 
+    /** Enable given tabs by array of IDs. */
     function enableTabs(tabIds) {
         tabIds.forEach(id => {
             const tab = document.querySelector(`.nav-tab[data-panel="${id}"]`);
@@ -73,6 +76,7 @@ const PRISM = (() => {
         });
     }
 
+    /** Disable all results-related UI tabs. */
     function disableAllResultTabs() {
         ['heatmap', 'charts', 'citations', 'sources', 'report'].forEach(id => {
             const tab = document.querySelector(`.nav-tab[data-panel="${id}"]`);
@@ -84,28 +88,34 @@ const PRISM = (() => {
     }
 
     // ─── Analysis State ───
+    /** Set the global analysis data state. */
     function setAnalysisData(data) {
         state.analysisData = data;
     }
 
+    /** Retrieve the global analysis data state. */
     function getAnalysisData() {
         return state.analysisData;
     }
 
+    /** Update the analyzing status flag. */
     function setAnalyzing(val) {
         state.isAnalyzing = val;
     }
 
     // ─── File State ───
+    /** Update the currently selected file. */
     function setSelectedFile(file) {
         state.selectedFile = file;
     }
 
+    /** Retrieve the currently selected file. */
     function getSelectedFile() {
         return state.selectedFile;
     }
 
     // ─── Reset ───
+    /** Reset application state and UI to original defaults. */
     function resetApp() {
         state.selectedFile = null;
         state.analysisData = null;
@@ -122,11 +132,13 @@ const PRISM = (() => {
         dom.btnNewAnalysis.style.display = 'none';
     }
 
+    /** Display the New Analysis floating button. */
     function showNewAnalysisButton() {
         dom.btnNewAnalysis.style.display = 'flex';
     }
 
     // ─── Utility: Format File Size ───
+    /** Format bytes into a human readable file size. */
     function formatFileSize(bytes) {
         if (bytes === 0) return '0 B';
         const units = ['B', 'KB', 'MB', 'GB'];
@@ -135,6 +147,7 @@ const PRISM = (() => {
     }
 
     // ─── Utility: Dynamic HSL Colors for Clusters ───
+    /** Generate an HSL color object for a distinct cluster. */
     function getClusterColor(clusterIndex, totalClusters) {
         if (clusterIndex === -1) {
             return { bg: 'rgba(239,68,68,0.15)', border: '#ef4444', text: '#b91c1c' };
@@ -150,12 +163,14 @@ const PRISM = (() => {
     }
 
     // ─── Utility: YIQ Contrast ───
+    /** Retrieve a high-contrast text color based on background. */
     function getContrastColor(hexOrHsl) {
         // Light theme design usually prefers dark text
         return '#111827';
     }
 
     // ─── Init ───
+    /** Initialize the PRISM application context and attach handlers. */
     function init() {
         cacheDom();
 

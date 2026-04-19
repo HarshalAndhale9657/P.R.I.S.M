@@ -52,6 +52,7 @@ const ChartsRenderer = (() => {
     let ratioChart = null;
     let clusterChart = null;
 
+    /** Main render entry point for Chart.js stylometric graphs. */
     function render(analysisData) {
         if (!analysisData || !analysisData.paragraphs) return;
 
@@ -83,6 +84,7 @@ const ChartsRenderer = (() => {
         renderClusterChart(paragraphs, profiles, featureNames, yulesKIdx, sentLenIdx, pointColors);
     }
 
+    /** Render the dual-axis feature trend line chart. */
     function renderFeatureChart(labels, profiles, featureNames, yulesKIdx, sentLenIdx, pointColors) {
         const ctx = document.getElementById('chart-features');
         if (!ctx) return;
@@ -153,6 +155,7 @@ const ChartsRenderer = (() => {
         });
     }
 
+    /** Render the stacked bar chart for function word ratios. */
     function renderRatioChart(labels, profiles, featureNames) {
         const ctx = document.getElementById('chart-ratios');
         if (!ctx) return;
@@ -203,6 +206,7 @@ const ChartsRenderer = (() => {
         });
     }
 
+    /** Render the 2D cluster distribution scatter plot. */
     function renderClusterChart(paragraphs, profiles, featureNames, yulesKIdx, sentLenIdx, pointColors) {
         const ctx = document.getElementById('chart-clusters');
         if (!ctx) return;

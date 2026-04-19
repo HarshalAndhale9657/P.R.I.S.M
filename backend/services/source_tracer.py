@@ -31,7 +31,7 @@ except OSError:
 
 
 def _get_openai_embeddings(texts: List[str]) -> np.ndarray:
-    """Get embeddings via OpenAI API (text-embedding-3-small: 1536 dims)."""
+    """Fetch high-dimensional text embeddings using OpenAI API. (text-embedding-3-small: 1536 dims)"""
     # Use explicit timeout to prevent indefinite hanging
     client = openai.Client(timeout=15.0)
     response = client.embeddings.create(
@@ -52,6 +52,7 @@ class SourceTracer:
         self.client = arxiv.Client()
         
     def _extract_keywords(self, text: str, top_n: int = 3) -> List[str]:
+        """Extract dominant keywords from a text using TF-IDF."""
         """Extract main nouns/keywords from the text to form an arxiv search query."""
         doc = nlp(text)
         
@@ -65,6 +66,7 @@ class SourceTracer:
         return unique_keywords[:top_n]
 
     def _extract_triplets(self, text: str) -> set:
+        """Extract NLP subject-verb-object triplets using spaCy."""
         """
         Extract 'Idea Triplets' (Subject -> Action -> Object).
         This defeats AI paraphrasers (like Quillbot) that swap vocabulary 
@@ -82,6 +84,7 @@ class SourceTracer:
 
     @retry(wait=wait_exponential(multiplier=2, min=2, max=10), stop=stop_after_attempt(4), reraise=True)
     def _safe_arxiv_search(self, query: str, max_results: int = 5) -> list:
+        """Execute a resilient arXiv query, handling rate-limits."""
         """Exponential backoff for arxiv rate limits."""
         if not query.strip():
             return []
@@ -110,6 +113,7 @@ class SourceTracer:
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=2), stop=stop_after_attempt(1), reraise=False)
     def _safe_openalex_search(self, query: str, max_results: int = 3) -> list:
+        """Execute an OpenAlex query to locate paper metadata and DOIs."""
         if not query.strip():
             return []
         logger.info(f"[P.R.I.S.M.] Searching OpenAlex for: {query}")

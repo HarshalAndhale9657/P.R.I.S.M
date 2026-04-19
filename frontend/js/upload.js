@@ -21,6 +21,7 @@ const UploadManager = (() => {
     // ─── DOM Cache ───
     const dom = {};
 
+    /** Cache all necessary DOM elements. */
     function cacheDom() {
         dom.dropZone = document.getElementById('drop-zone');
         dom.fileInput = document.getElementById('file-input');
@@ -41,6 +42,7 @@ const UploadManager = (() => {
     }
 
     // ─── Drag & Drop ───
+    /** Setup drag-and-drop file upload event listeners. */
     function setupDragDrop() {
         const zone = dom.dropZone;
 
@@ -87,6 +89,7 @@ const UploadManager = (() => {
     }
 
     // ─── File Handling ───
+    /** Handle selected file logic and validation. */
     function handleFile(file) {
         // Validate
         if (!file.name.toLowerCase().endsWith('.pdf')) {
@@ -121,6 +124,7 @@ const UploadManager = (() => {
     }
 
     // ─── Remove File ───
+    /** Clear selected file and reset UI state. */
     function removeFile() {
         PRISM.setSelectedFile(null);
         dom.fileInput.value = '';
@@ -141,6 +145,7 @@ const UploadManager = (() => {
         sources: 'Tracing potential sources...',
     };
 
+    /** Display progress container UI. */
     function showProgress() {
         dom.progressContainer.style.display = 'block';
         dom.btnAnalyze.style.display = 'none';
@@ -149,6 +154,7 @@ const UploadManager = (() => {
         resetProgressSteps();
     }
 
+    /** Reset progress steps before a new analysis. */
     function resetProgressSteps() {
         STEPS.forEach(step => {
             const el = dom.progressSteps.querySelector(`[data-step="${step}"]`);
@@ -162,6 +168,7 @@ const UploadManager = (() => {
         dom.progressLabel.textContent = 'Initializing...';
     }
 
+    /** Update progress UI based on pipeline steps. */
     function updateProgress(stepName, percent) {
         const stepEl = dom.progressSteps.querySelector(`[data-step="${stepName}"]`);
 
@@ -184,6 +191,7 @@ const UploadManager = (() => {
         dom.progressLabel.textContent = STEP_LABELS[stepName] || 'Processing...';
     }
 
+    /** Complete the progress UI. */
     function completeProgress() {
         STEPS.forEach(step => {
             const el = dom.progressSteps.querySelector(`[data-step="${step}"]`);
@@ -199,6 +207,7 @@ const UploadManager = (() => {
     }
 
     // ─── Error Handling ───
+    /** Display an error message UI. */
     function showError(message) {
         dom.errorCard.style.display = 'flex';
         dom.errorMessage.textContent = message;
@@ -206,6 +215,7 @@ const UploadManager = (() => {
     }
 
     // ─── Analysis Pipeline ───
+    /** Execute analysis pipeline via backend API endpoint. */
     async function runAnalysis() {
         const file = PRISM.getSelectedFile();
         if (!file) return;
@@ -290,6 +300,7 @@ const UploadManager = (() => {
     }
 
     // ─── Reset ───
+    /** Reset upload and progress state. */
     function reset() {
         removeFile();
         dom.progressContainer.style.display = 'none';
@@ -298,6 +309,7 @@ const UploadManager = (() => {
     }
 
     // ─── Init ───
+    /** Initialize the upload manager logic. */
     function init() {
         cacheDom();
         setupDragDrop();

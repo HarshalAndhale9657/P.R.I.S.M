@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _try_import_unstructured():
+    """Attempt unstructured library import safely."""
     """Lazy import for unstructured — allows graceful fallback if unavailable."""
     try:
         from unstructured.partition.pdf import partition_pdf
@@ -39,6 +40,7 @@ def _try_import_unstructured():
 
 
 def _try_import_pdfplumber():
+    """Attempt pdfplumber library import safely."""
     """Lazy import for pdfplumber — third-tier fallback."""
     try:
         import pdfplumber
@@ -193,7 +195,7 @@ class AcademicPDFParser:
         page_count: int = 0,
         method: Optional[str] = None,
     ) -> dict:
-        """Return a valid-but-empty parsing result for error paths."""
+        """Return a standardized empty result format."""
         return {
             "paragraphs": [],
             "references": [],
@@ -208,6 +210,7 @@ class AcademicPDFParser:
     # ------------------------------------------------------------------
 
     def _pass_a_unstructured(self, pdf_bytes: bytes):
+        """Pass A: Extract structured document elements via unstructured."""
         """
         Use `unstructured` library to partition the PDF into typed elements.
         Keeps only NarrativeText blocks ≥ MIN_PARAGRAPH_LENGTH characters.
@@ -257,6 +260,7 @@ class AcademicPDFParser:
     # ------------------------------------------------------------------
 
     def _fallback_pymupdf(self, pdf_bytes: bytes):
+        """Fallback B: Extract raw text blocks via PyMuPDF (fitz)."""
         """
         Extract text per page via PyMuPDF using layout blocks.
         Faster than unstructured but less semantically aware.
@@ -303,6 +307,7 @@ class AcademicPDFParser:
     # ------------------------------------------------------------------
 
     def _fallback_pdfplumber(self, pdf_bytes: bytes):
+        """Fallback C: Scan lines and bounded boxes using pdfplumber."""
         """
         Third tier: pdfplumber. Table-aware text extraction but slower.
         """
@@ -348,6 +353,7 @@ class AcademicPDFParser:
     # ------------------------------------------------------------------
 
     def _fallback_raw_chunk(self, pdf_bytes: bytes):
+        """Terminal Fallback: Force text extraction and arbitrary chunking."""
         """
         Absolute last resort: extract all text via PyMuPDF and split into
         fixed-size chunks of FALLBACK_CHUNK_SIZE characters. Guaranteed to
@@ -392,6 +398,7 @@ class AcademicPDFParser:
     # ------------------------------------------------------------------
 
     def _extract_bibliography(self, pdf_bytes: bytes) -> list[str]:
+        """Locate and isolate the references/bibliography section."""
         """
         Scan the PDF from the last page backwards to find a
         'References' / 'Bibliography' section, then extract individual
@@ -456,6 +463,7 @@ class AcademicPDFParser:
 
     @staticmethod
     def _get_page_count(pdf_bytes: bytes) -> int:
+        """Helper to get page count fast with PyMuPDF."""
         """Return the total page count using PyMuPDF."""
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -467,6 +475,7 @@ class AcademicPDFParser:
 
     @staticmethod
     def _clean_text(text: str) -> str:
+        """Helper for basic NLP text sanitization."""
         """
         Normalize whitespace: collapse runs of spaces/newlines into single
         spaces, strip leading/trailing whitespace.
@@ -481,6 +490,7 @@ class AcademicPDFParser:
 
     @staticmethod
     def _merge_reference_lines(lines: list[str]) -> list[str]:
+        """Group broken citation lines into single entries based on brackets or hanging indents."""
         """
         Merge consecutive short lines that are likely continuations of
         the same reference entry. A new entry starts with a numbered
@@ -508,6 +518,7 @@ class AcademicPDFParser:
         paragraphs: list[dict],
         references: list[str],
     ) -> list[dict]:
+        """Strip bibliography entries from the main paragraphs."""
         """
         Remove paragraphs whose text overlaps significantly with extracted
         bibliography entries — avoids double-counting references as body text.
