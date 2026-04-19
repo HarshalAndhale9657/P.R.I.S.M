@@ -538,10 +538,10 @@ The following AI tools and models are used in this project:
 ## Contributors
 
 - **Harshal Andhale** ([@HarshalAndhale9657](https://github.com/HarshalAndhale9657))
+- **Chetana Phalke** ([@chetna196](https://github.com/chetna196))
 - **Vedant Mohanrao Sable** ([@vedantsable56](https://github.com/vedantsable56))
 - **Arya Achalkar** ([@aryaachalkar](https://github.com/aryaachalkar))
 - **Aniket Krishna Ingale** ([@DevOpsDreamer](https://github.com/DevOpsDreamer))
-- **Chetana Phalke** ([@chetna196](https://github.com/chetna196))
 
 ---
 
