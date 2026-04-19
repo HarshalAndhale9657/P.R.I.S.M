@@ -51,7 +51,6 @@ FEATURE_NAMES = [
     "semantic_3",
 ]
 
-
 class FeatureEngine:
     """
     Extracts content-independent stylometric features from text paragraphs
