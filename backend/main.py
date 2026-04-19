@@ -423,7 +423,7 @@ async def full_analysis(file: UploadFile = File(...)):
         try:
             anomalous_paragraphs = [
                 p for p in enriched_paragraphs if p.get("is_anomaly")
-            ]
+            ][:1] # Limit to 1 for speed to prevent Render 502 Timeout
             sources = await run_in_threadpool(source_tracer.trace, anomalous_paragraphs, ctx)
         except Exception as e:
             logger.error(f"[P.R.I.S.M.] Source tracing crashed: {e}")
