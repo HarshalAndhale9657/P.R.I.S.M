@@ -1,0 +1,32 @@
+{
+  "id": "synthetic_block_000",
+  "source": "synthetic_block",
+  "strategy": "block_splice",
+  "paragraphs": [
+    "So here's the thing about detecting plagiarism - it's way harder than most people think. You can't just look for copied sentences anymore because students have gotten really good at paraphrasing. What you need is something that looks at HOW someone writes, not just WHAT they write. That's where stylometry comes in, and honestly, it's pretty cool stuff.",
+    "I've been working with clustering algorithms for a while now, and let me tell you, HDBSCAN is a game changer. Unlike k-means where you have to guess how many clusters you want, HDBSCAN figures it out on its own. Plus it handles noise really well - those weird data points that don't fit anywhere just get labeled as outliers instead of getting forced into a cluster where they don't belong.",
+    "The theoretical underpinnings of authorship attribution derive from the hypothesis that each writer possesses a unique linguistic fingerprint. This fingerprint manifests through consistent patterns in syntactic construction, lexical selection, and punctuation deployment. Quantitative analysis of these patterns enables the construction of multidimensional feature vectors suitable for computational comparison.",
+    "Contemporary research has expanded the scope of stylometric analysis to encompass paragraph-level granularity. This fine-grained approach introduces challenges related to statistical reliability, as shorter text segments yield less stable feature measurements. The development of features robust to length variation remains an active area of investigation.",
+    "Cross-domain evaluation protocols are essential for establishing the generalizability of authorship attribution systems. Training on one text genre and evaluating on another provides a rigorous test of whether the system captures genuine stylistic markers rather than superficial topical correlations. The PAN competition series has established standardized benchmarks for such evaluations."
+  ],
+  "ground_truth": {
+    "is_multi_author": true,
+    "num_authors": 2,
+    "author_labels": [
+      0,
+      0,
+      1,
+      1,
+      1
+    ],
+    "boundaries": [
+      2
+    ],
+    "changes": [
+      0,
+      1,
+      0,
+      0
+    ]
+  }
+}

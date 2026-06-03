@@ -22,12 +22,12 @@ logger = logging.getLogger(__name__)
 
 # Load NLP model for keyword extraction
 try:
-    nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
+    nlp = spacy.load("en_core_web_sm", disable=["ner"])  # Keep parser enabled for Idea Triplet extraction
 except OSError:
     # Handle case where model might not be downloaded yet, though install script covers it
     import spacy.cli
     spacy.cli.download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
+    nlp = spacy.load("en_core_web_sm", disable=["ner"])  # Keep parser enabled for Idea Triplet extraction
 
 
 def _get_openai_embeddings(texts: List[str]) -> np.ndarray:

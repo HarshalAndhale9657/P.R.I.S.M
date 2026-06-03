@@ -27,7 +27,7 @@ load_dotenv()
 
 from services.pdf_parser import AcademicPDFParser
 from services.feature_engine import FeatureEngine
-from services.clustering import AuthorshipClustering
+from services.hdbscan_detector import AuthorshipClustering
 from models import PipelineContext
 
 # ─── Test Documents ──────────────────────────────────────────────────

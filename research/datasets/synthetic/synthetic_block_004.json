@@ -1,0 +1,42 @@
+{
+  "id": "synthetic_block_004",
+  "source": "synthetic_block",
+  "strategy": "block_splice",
+  "paragraphs": [
+    "The biggest challenge we face is short text. Like, how do you analyze someone's writing style from just one paragraph? Some features work great on long documents but fall apart when you only have 50-100 words to work with. Character n-grams seem to hold up better than most other features at short lengths, which is why they're so popular in the research community.",
+    "One thing that really bugs me about current plagiarism detection tools is how many false positives they generate. Every time a student uses common phrases or standard academic vocabulary, the tool flags it as suspicious. We need smarter systems that understand the difference between genuine coincidence and actual copying. That's basically what our project is trying to solve.",
+    "The investigation of computational methods for textual analysis has yielded significant advances in recent decades. Methodologies rooted in statistical inference provide robust frameworks for characterizing authorial style. Furthermore, the application of machine learning algorithms to linguistic feature extraction has demonstrated considerable promise in forensic contexts. The systematic evaluation of these approaches remains paramount to establishing their validity in academic settings.",
+    "Empirical evidence suggests that stylometric features, when properly calibrated, can achieve discriminative accuracy exceeding traditional approaches. The deployment of density-based clustering algorithms, particularly HDBSCAN, offers advantages in scenarios where the number of authorial voices is unknown a priori. Such unsupervised methodologies circumvent the requirement for labeled training corpora.",
+    "Algorithm 1 implements the PELT change-point detection procedure with O(n) expected complexity. Given an input signal x of length n and a penalty parameter beta, PELT recursively partitions the signal by minimizing the penalized cost function C(x[a:b]) + beta over all possible partition points. The rbf kernel cost function computes inter-point distances in a reproducing kernel Hilbert space.",
+    "The feature extraction pipeline processes each paragraph independently through the spaCy NLP engine. Token-level attributes including part-of-speech tags, dependency labels, and morphological features are aggregated into 8 scalar statistics per paragraph. The resulting N x 8 feature matrix serves as input to both the HDBSCAN density estimator and the PELT sequential detector.",
+    "StandardScaler normalization is applied prior to clustering to prevent features with large magnitudes from dominating the Euclidean distance metric. Without normalization, Yule's K (typical range 50-300) would overwhelm pronoun_ratio (typical range 0.01-0.10) by a factor of approximately 3000x, rendering the latter effectively invisible to the distance computation.",
+    "HDBSCAN's min_cluster_size parameter controls the minimum number of paragraphs required to form a distinct authorial cluster. Setting this value too low increases sensitivity but also increases false positive rate, as natural stylistic variation within a single author's text may be misinterpreted as evidence of multiple authors. Cross-validation on the training set determines the optimal value."
+  ],
+  "ground_truth": {
+    "is_multi_author": true,
+    "num_authors": 3,
+    "author_labels": [
+      0,
+      0,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2
+    ],
+    "boundaries": [
+      2,
+      4
+    ],
+    "changes": [
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0
+    ]
+  }
+}
