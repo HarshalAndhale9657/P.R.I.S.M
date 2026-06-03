@@ -1,0 +1,35 @@
+{
+  "id": "synthetic_random_007",
+  "source": "synthetic_random",
+  "strategy": "random_interleave",
+  "paragraphs": [
+    "The biggest challenge we face is short text. Like, how do you analyze someone's writing style from just one paragraph? Some features work great on long documents but fall apart when you only have 50-100 words to work with. Character n-grams seem to hold up better than most other features at short lengths, which is why they're so popular in the research community.",
+    "The boundary fusion module implements a majority-voting scheme between two independent detectors. HDBSCAN identifies boundaries as positions where cluster labels change between adjacent paragraphs. PELT identifies boundaries as statistically significant change points in the feature time series. Boundaries detected by both engines receive HIGH confidence; those detected by only one receive MEDIUM confidence.",
+    "Testing is super important but also super annoying. You need hundreds of documents with known ground truth to get any meaningful results. The PAN datasets are great for this - they give you real text with labels showing exactly where the author changes. Without that kind of data, you're basically just guessing whether your system actually works.",
+    "HDBSCAN's min_cluster_size parameter controls the minimum number of paragraphs required to form a distinct authorial cluster. Setting this value too low increases sensitivity but also increases false positive rate, as natural stylistic variation within a single author's text may be misinterpreted as evidence of multiple authors. Cross-validation on the training set determines the optimal value.",
+    "One thing that really bugs me about current plagiarism detection tools is how many false positives they generate. Every time a student uses common phrases or standard academic vocabulary, the tool flags it as suspicious. We need smarter systems that understand the difference between genuine coincidence and actual copying. That's basically what our project is trying to solve."
+  ],
+  "ground_truth": {
+    "is_multi_author": true,
+    "num_authors": 2,
+    "author_labels": [
+      1,
+      0,
+      1,
+      0,
+      1
+    ],
+    "boundaries": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "changes": [
+      1,
+      1,
+      1,
+      1
+    ]
+  }
+}

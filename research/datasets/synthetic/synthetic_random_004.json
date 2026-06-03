@@ -1,0 +1,32 @@
+{
+  "id": "synthetic_random_004",
+  "source": "synthetic_random",
+  "strategy": "random_interleave",
+  "paragraphs": [
+    "I've been working with clustering algorithms for a while now, and let me tell you, HDBSCAN is a game changer. Unlike k-means where you have to guess how many clusters you want, HDBSCAN figures it out on its own. Plus it handles noise really well - those weird data points that don't fit anywhere just get labeled as outliers instead of getting forced into a cluster where they don't belong.",
+    "One thing that really bugs me about current plagiarism detection tools is how many false positives they generate. Every time a student uses common phrases or standard academic vocabulary, the tool flags it as suspicious. We need smarter systems that understand the difference between genuine coincidence and actual copying. That's basically what our project is trying to solve.",
+    "The biggest challenge we face is short text. Like, how do you analyze someone's writing style from just one paragraph? Some features work great on long documents but fall apart when you only have 50-100 words to work with. Character n-grams seem to hold up better than most other features at short lengths, which is why they're so popular in the research community.",
+    "HDBSCAN's min_cluster_size parameter controls the minimum number of paragraphs required to form a distinct authorial cluster. Setting this value too low increases sensitivity but also increases false positive rate, as natural stylistic variation within a single author's text may be misinterpreted as evidence of multiple authors. Cross-validation on the training set determines the optimal value.",
+    "StandardScaler normalization is applied prior to clustering to prevent features with large magnitudes from dominating the Euclidean distance metric. Without normalization, Yule's K (typical range 50-300) would overwhelm pronoun_ratio (typical range 0.01-0.10) by a factor of approximately 3000x, rendering the latter effectively invisible to the distance computation."
+  ],
+  "ground_truth": {
+    "is_multi_author": true,
+    "num_authors": 2,
+    "author_labels": [
+      0,
+      0,
+      0,
+      1,
+      1
+    ],
+    "boundaries": [
+      3
+    ],
+    "changes": [
+      0,
+      0,
+      1,
+      0
+    ]
+  }
+}

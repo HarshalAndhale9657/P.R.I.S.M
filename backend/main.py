@@ -20,7 +20,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from services.pdf_parser import AcademicPDFParser
 from services.feature_engine import FeatureEngine
-from services.clustering import AuthorshipClustering
+from services.hdbscan_detector import AuthorshipClustering
 from services.gpt_analyzer import GPTAnalyzer
 from services.citation_forensics import CitationForensics
 from services.report_generator import ReportGenerator

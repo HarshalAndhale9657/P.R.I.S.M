@@ -1,0 +1,27 @@
+{
+  "id": "synthetic_genuine_001",
+  "source": "synthetic_genuine",
+  "strategy": "single_author",
+  "paragraphs": [
+    "StandardScaler normalization is applied prior to clustering to prevent features with large magnitudes from dominating the Euclidean distance metric. Without normalization, Yule's K (typical range 50-300) would overwhelm pronoun_ratio (typical range 0.01-0.10) by a factor of approximately 3000x, rendering the latter effectively invisible to the distance computation.",
+    "HDBSCAN's min_cluster_size parameter controls the minimum number of paragraphs required to form a distinct authorial cluster. Setting this value too low increases sensitivity but also increases false positive rate, as natural stylistic variation within a single author's text may be misinterpreted as evidence of multiple authors. Cross-validation on the training set determines the optimal value.",
+    "Algorithm 1 implements the PELT change-point detection procedure with O(n) expected complexity. Given an input signal x of length n and a penalty parameter beta, PELT recursively partitions the signal by minimizing the penalized cost function C(x[a:b]) + beta over all possible partition points. The rbf kernel cost function computes inter-point distances in a reproducing kernel Hilbert space.",
+    "The feature extraction pipeline processes each paragraph independently through the spaCy NLP engine. Token-level attributes including part-of-speech tags, dependency labels, and morphological features are aggregated into 8 scalar statistics per paragraph. The resulting N x 8 feature matrix serves as input to both the HDBSCAN density estimator and the PELT sequential detector."
+  ],
+  "ground_truth": {
+    "is_multi_author": false,
+    "num_authors": 1,
+    "author_labels": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "boundaries": [],
+    "changes": [
+      0,
+      0,
+      0
+    ]
+  }
+}

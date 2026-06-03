@@ -1,0 +1,35 @@
+{
+  "id": "synthetic_block_007",
+  "source": "synthetic_block",
+  "strategy": "block_splice",
+  "paragraphs": [
+    "The investigation of computational methods for textual analysis has yielded significant advances in recent decades. Methodologies rooted in statistical inference provide robust frameworks for characterizing authorial style. Furthermore, the application of machine learning algorithms to linguistic feature extraction has demonstrated considerable promise in forensic contexts. The systematic evaluation of these approaches remains paramount to establishing their validity in academic settings.",
+    "Empirical evidence suggests that stylometric features, when properly calibrated, can achieve discriminative accuracy exceeding traditional approaches. The deployment of density-based clustering algorithms, particularly HDBSCAN, offers advantages in scenarios where the number of authorial voices is unknown a priori. Such unsupervised methodologies circumvent the requirement for labeled training corpora.",
+    "The theoretical underpinnings of authorship attribution derive from the hypothesis that each writer possesses a unique linguistic fingerprint. This fingerprint manifests through consistent patterns in syntactic construction, lexical selection, and punctuation deployment. Quantitative analysis of these patterns enables the construction of multidimensional feature vectors suitable for computational comparison.",
+    "Algorithm 1 implements the PELT change-point detection procedure with O(n) expected complexity. Given an input signal x of length n and a penalty parameter beta, PELT recursively partitions the signal by minimizing the penalized cost function C(x[a:b]) + beta over all possible partition points. The rbf kernel cost function computes inter-point distances in a reproducing kernel Hilbert space.",
+    "The feature extraction pipeline processes each paragraph independently through the spaCy NLP engine. Token-level attributes including part-of-speech tags, dependency labels, and morphological features are aggregated into 8 scalar statistics per paragraph. The resulting N x 8 feature matrix serves as input to both the HDBSCAN density estimator and the PELT sequential detector.",
+    "StandardScaler normalization is applied prior to clustering to prevent features with large magnitudes from dominating the Euclidean distance metric. Without normalization, Yule's K (typical range 50-300) would overwhelm pronoun_ratio (typical range 0.01-0.10) by a factor of approximately 3000x, rendering the latter effectively invisible to the distance computation."
+  ],
+  "ground_truth": {
+    "is_multi_author": true,
+    "num_authors": 2,
+    "author_labels": [
+      0,
+      0,
+      0,
+      1,
+      1,
+      1
+    ],
+    "boundaries": [
+      3
+    ],
+    "changes": [
+      0,
+      0,
+      1,
+      0,
+      0
+    ]
+  }
+}

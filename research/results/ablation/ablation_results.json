@@ -1,0 +1,352 @@
+{
+  "baseline": {
+    "mean_boundary_f1": 0.22,
+    "mean_doc_accuracy": 0.3,
+    "n_evaluated": 20
+  },
+  "group_ablation": {
+    "structural": {
+      "features_removed": [
+        "avg_sentence_length",
+        "avg_word_length",
+        "pronoun_ratio",
+        "preposition_ratio",
+        "conjunction_ratio",
+        "passive_voice_pct",
+        "yules_k",
+        "burstiness_coefficient"
+      ],
+      "features_removed_count": 8,
+      "remaining_features": 19,
+      "mean_boundary_f1": 0.2533,
+      "f1_drop": -0.0333,
+      "mean_doc_accuracy": 0.35
+    },
+    "char_trigrams": {
+      "features_removed": [
+        "char3_th",
+        "char3_the",
+        "char3_he",
+        "char3_ing",
+        "char3_an",
+        "char3_nd",
+        "char3_in",
+        "char3_ion",
+        "char3_ed",
+        "char3_of"
+      ],
+      "features_removed_count": 10,
+      "remaining_features": 17,
+      "mean_boundary_f1": 0.1843,
+      "f1_drop": 0.0357,
+      "mean_doc_accuracy": 0.3
+    },
+    "function_words": {
+      "features_removed": [
+        "fw_the",
+        "fw_of",
+        "fw_and",
+        "fw_to",
+        "fw_in"
+      ],
+      "features_removed_count": 5,
+      "remaining_features": 22,
+      "mean_boundary_f1": 0.27,
+      "f1_drop": -0.05,
+      "mean_doc_accuracy": 0.35
+    },
+    "punctuation": {
+      "features_removed": [
+        "comma_rate",
+        "semicolon_rate",
+        "dash_rate"
+      ],
+      "features_removed_count": 3,
+      "remaining_features": 24,
+      "mean_boundary_f1": 0.22,
+      "f1_drop": 0.0,
+      "mean_doc_accuracy": 0.3
+    },
+    "hapax": {
+      "features_removed": [
+        "hapax_legomena_ratio"
+      ],
+      "features_removed_count": 1,
+      "remaining_features": 26,
+      "mean_boundary_f1": 0.22,
+      "f1_drop": 0.0,
+      "mean_doc_accuracy": 0.3
+    }
+  },
+  "individual_importance": {
+    "avg_sentence_length": {
+      "f1_without": 0.2533,
+      "f1_drop": -0.0333
+    },
+    "avg_word_length": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "pronoun_ratio": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "preposition_ratio": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "conjunction_ratio": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "passive_voice_pct": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "yules_k": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "burstiness_coefficient": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "char3_th": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "char3_the": {
+      "f1_without": 0.2533,
+      "f1_drop": -0.0333
+    },
+    "char3_he": {
+      "f1_without": 0.2533,
+      "f1_drop": -0.0333
+    },
+    "char3_ing": {
+      "f1_without": 0.1843,
+      "f1_drop": 0.0357
+    },
+    "char3_an": {
+      "f1_without": 0.27,
+      "f1_drop": -0.05
+    },
+    "char3_nd": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "char3_in": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "char3_ion": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "char3_ed": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "char3_of": {
+      "f1_without": 0.2343,
+      "f1_drop": -0.0143
+    },
+    "fw_the": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "fw_of": {
+      "f1_without": 0.2343,
+      "f1_drop": -0.0143
+    },
+    "fw_and": {
+      "f1_without": 0.27,
+      "f1_drop": -0.05
+    },
+    "fw_to": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "fw_in": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "comma_rate": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "semicolon_rate": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "dash_rate": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    },
+    "hapax_legomena_ratio": {
+      "f1_without": 0.22,
+      "f1_drop": 0.0
+    }
+  },
+  "feature_ranking": [
+    {
+      "rank": 1,
+      "feature": "char3_ing",
+      "f1_drop": 0.0357
+    },
+    {
+      "rank": 2,
+      "feature": "avg_word_length",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 3,
+      "feature": "pronoun_ratio",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 4,
+      "feature": "preposition_ratio",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 5,
+      "feature": "conjunction_ratio",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 6,
+      "feature": "passive_voice_pct",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 7,
+      "feature": "yules_k",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 8,
+      "feature": "burstiness_coefficient",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 9,
+      "feature": "char3_th",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 10,
+      "feature": "char3_nd",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 11,
+      "feature": "char3_in",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 12,
+      "feature": "char3_ion",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 13,
+      "feature": "char3_ed",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 14,
+      "feature": "fw_the",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 15,
+      "feature": "fw_to",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 16,
+      "feature": "fw_in",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 17,
+      "feature": "comma_rate",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 18,
+      "feature": "semicolon_rate",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 19,
+      "feature": "dash_rate",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 20,
+      "feature": "hapax_legomena_ratio",
+      "f1_drop": 0.0
+    },
+    {
+      "rank": 21,
+      "feature": "char3_of",
+      "f1_drop": -0.0143
+    },
+    {
+      "rank": 22,
+      "feature": "fw_of",
+      "f1_drop": -0.0143
+    },
+    {
+      "rank": 23,
+      "feature": "avg_sentence_length",
+      "f1_drop": -0.0333
+    },
+    {
+      "rank": 24,
+      "feature": "char3_the",
+      "f1_drop": -0.0333
+    },
+    {
+      "rank": 25,
+      "feature": "char3_he",
+      "f1_drop": -0.0333
+    },
+    {
+      "rank": 26,
+      "feature": "char3_an",
+      "f1_drop": -0.05
+    },
+    {
+      "rank": 27,
+      "feature": "fw_and",
+      "f1_drop": -0.05
+    }
+  ],
+  "selected_features": [
+    "char3_ing",
+    "avg_word_length",
+    "pronoun_ratio",
+    "preposition_ratio",
+    "conjunction_ratio",
+    "passive_voice_pct",
+    "yules_k",
+    "burstiness_coefficient",
+    "char3_th",
+    "char3_nd",
+    "char3_in",
+    "char3_ion",
+    "char3_ed",
+    "fw_the",
+    "fw_to",
+    "fw_in",
+    "comma_rate",
+    "semicolon_rate",
+    "dash_rate",
+    "hapax_legomena_ratio"
+  ],
+  "total_features": 27,
+  "selected_count": 20
+}

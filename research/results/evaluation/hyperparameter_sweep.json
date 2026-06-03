@@ -1,0 +1,85 @@
+{
+  "sweep_results": [
+    {
+      "penalty": 0.5,
+      "tolerance": 0,
+      "mean_f1": 0.2867
+    },
+    {
+      "penalty": 0.5,
+      "tolerance": 1,
+      "mean_f1": 0.2867
+    },
+    {
+      "penalty": 0.5,
+      "tolerance": 2,
+      "mean_f1": 0.2867
+    },
+    {
+      "penalty": 1.0,
+      "tolerance": 0,
+      "mean_f1": 0.2533
+    },
+    {
+      "penalty": 1.0,
+      "tolerance": 1,
+      "mean_f1": 0.2533
+    },
+    {
+      "penalty": 1.0,
+      "tolerance": 2,
+      "mean_f1": 0.2533
+    },
+    {
+      "penalty": 2.0,
+      "tolerance": 0,
+      "mean_f1": 0.22
+    },
+    {
+      "penalty": 2.0,
+      "tolerance": 1,
+      "mean_f1": 0.22
+    },
+    {
+      "penalty": 2.0,
+      "tolerance": 2,
+      "mean_f1": 0.22
+    },
+    {
+      "penalty": 5.0,
+      "tolerance": 0,
+      "mean_f1": 0.22
+    },
+    {
+      "penalty": 5.0,
+      "tolerance": 1,
+      "mean_f1": 0.22
+    },
+    {
+      "penalty": 5.0,
+      "tolerance": 2,
+      "mean_f1": 0.22
+    },
+    {
+      "penalty": 10.0,
+      "tolerance": 0,
+      "mean_f1": 0.22
+    },
+    {
+      "penalty": 10.0,
+      "tolerance": 1,
+      "mean_f1": 0.22
+    },
+    {
+      "penalty": 10.0,
+      "tolerance": 2,
+      "mean_f1": 0.22
+    }
+  ],
+  "best_config": {
+    "penalty": 0.5,
+    "tolerance": 0,
+    "mean_f1": 0.2867
+  },
+  "n_configs_tested": 15
+}

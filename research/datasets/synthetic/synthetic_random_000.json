@@ -1,0 +1,33 @@
+{
+  "id": "synthetic_random_000",
+  "source": "synthetic_random",
+  "strategy": "random_interleave",
+  "paragraphs": [
+    "One thing that really bugs me about current plagiarism detection tools is how many false positives they generate. Every time a student uses common phrases or standard academic vocabulary, the tool flags it as suspicious. We need smarter systems that understand the difference between genuine coincidence and actual copying. That's basically what our project is trying to solve.",
+    "So here's the thing about detecting plagiarism - it's way harder than most people think. You can't just look for copied sentences anymore because students have gotten really good at paraphrasing. What you need is something that looks at HOW someone writes, not just WHAT they write. That's where stylometry comes in, and honestly, it's pretty cool stuff.",
+    "The investigation of computational methods for textual analysis has yielded significant advances in recent decades. Methodologies rooted in statistical inference provide robust frameworks for characterizing authorial style. Furthermore, the application of machine learning algorithms to linguistic feature extraction has demonstrated considerable promise in forensic contexts. The systematic evaluation of these approaches remains paramount to establishing their validity in academic settings.",
+    "I've been working with clustering algorithms for a while now, and let me tell you, HDBSCAN is a game changer. Unlike k-means where you have to guess how many clusters you want, HDBSCAN figures it out on its own. Plus it handles noise really well - those weird data points that don't fit anywhere just get labeled as outliers instead of getting forced into a cluster where they don't belong.",
+    "I've been working with clustering algorithms for a while now, and let me tell you, HDBSCAN is a game changer. Unlike k-means where you have to guess how many clusters you want, HDBSCAN figures it out on its own. Plus it handles noise really well - those weird data points that don't fit anywhere just get labeled as outliers instead of getting forced into a cluster where they don't belong."
+  ],
+  "ground_truth": {
+    "is_multi_author": true,
+    "num_authors": 2,
+    "author_labels": [
+      1,
+      1,
+      0,
+      1,
+      1
+    ],
+    "boundaries": [
+      2,
+      3
+    ],
+    "changes": [
+      0,
+      1,
+      1,
+      0
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "id": "synthetic_random_001",
+  "source": "synthetic_random",
+  "strategy": "random_interleave",
+  "paragraphs": [
+    "Cross-domain evaluation protocols are essential for establishing the generalizability of authorship attribution systems. Training on one text genre and evaluating on another provides a rigorous test of whether the system captures genuine stylistic markers rather than superficial topical correlations. The PAN competition series has established standardized benchmarks for such evaluations.",
+    "The investigation of computational methods for textual analysis has yielded significant advances in recent decades. Methodologies rooted in statistical inference provide robust frameworks for characterizing authorial style. Furthermore, the application of machine learning algorithms to linguistic feature extraction has demonstrated considerable promise in forensic contexts. The systematic evaluation of these approaches remains paramount to establishing their validity in academic settings.",
+    "The boundary fusion module implements a majority-voting scheme between two independent detectors. HDBSCAN identifies boundaries as positions where cluster labels change between adjacent paragraphs. PELT identifies boundaries as statistically significant change points in the feature time series. Boundaries detected by both engines receive HIGH confidence; those detected by only one receive MEDIUM confidence.",
+    "Contemporary research has expanded the scope of stylometric analysis to encompass paragraph-level granularity. This fine-grained approach introduces challenges related to statistical reliability, as shorter text segments yield less stable feature measurements. The development of features robust to length variation remains an active area of investigation.",
+    "HDBSCAN's min_cluster_size parameter controls the minimum number of paragraphs required to form a distinct authorial cluster. Setting this value too low increases sensitivity but also increases false positive rate, as natural stylistic variation within a single author's text may be misinterpreted as evidence of multiple authors. Cross-validation on the training set determines the optimal value.",
+    "The investigation of computational methods for textual analysis has yielded significant advances in recent decades. Methodologies rooted in statistical inference provide robust frameworks for characterizing authorial style. Furthermore, the application of machine learning algorithms to linguistic feature extraction has demonstrated considerable promise in forensic contexts. The systematic evaluation of these approaches remains paramount to establishing their validity in academic settings.",
+    "Algorithm 1 implements the PELT change-point detection procedure with O(n) expected complexity. Given an input signal x of length n and a penalty parameter beta, PELT recursively partitions the signal by minimizing the penalized cost function C(x[a:b]) + beta over all possible partition points. The rbf kernel cost function computes inter-point distances in a reproducing kernel Hilbert space.",
+    "The theoretical underpinnings of authorship attribution derive from the hypothesis that each writer possesses a unique linguistic fingerprint. This fingerprint manifests through consistent patterns in syntactic construction, lexical selection, and punctuation deployment. Quantitative analysis of these patterns enables the construction of multidimensional feature vectors suitable for computational comparison."
+  ],
+  "ground_truth": {
+    "is_multi_author": true,
+    "num_authors": 2,
+    "author_labels": [
+      1,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1
+    ],
+    "boundaries": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "changes": [
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ]
+  }
+}

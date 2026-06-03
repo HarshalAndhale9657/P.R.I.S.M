@@ -108,18 +108,16 @@ class ReportGenerator:
         if not isinstance(source_matches, list):
             source_matches = []
         
-        # Extract Burstiness for AI detection (Excluding 1-sentence paragraphs)
+        # Extract Burstiness as a soft signal (no hard threshold — V3 change)
         features_data = data.get("features", {})
         profiles = features_data.get("profiles", []) if isinstance(features_data, dict) else []
-        burstiness_scores = [p.get("burstiness_score", 0.0) for p in profiles if isinstance(p, dict) and p.get("num_sentences", 1) >= 2]
+        burstiness_values = [p.get("burstiness_coefficient", p.get("burstiness_score", 0.0)) for p in profiles if isinstance(p, dict) and p.get("num_sentences", 1) >= 2]
         
-        # If there are almost no multi-sentence paragraphs, don't falsely accuse of AI
-        if len(burstiness_scores) < 3:
+        # Burstiness is now informational only — no hard threshold, no AI penalty
+        if len(burstiness_values) < 3:
             avg_burstiness = 1.0 
-            is_ai_generated = False
         else:
-            avg_burstiness = sum(burstiness_scores) / len(burstiness_scores)
-            is_ai_generated = avg_burstiness < 0.30 # Lower threshold to protect dense human math papers!
+            avg_burstiness = sum(burstiness_values) / len(burstiness_values)
         
         # Citation anomalies — handle both nested and flat
         citation_anomalies = []
@@ -145,10 +143,6 @@ class ReportGenerator:
         if estimated_authors > 1:
             score -= (estimated_authors - 1) * 1.5  # Each extra author = -1.5
             
-        # 3. AI Generation penalty (Massive deduction)
-        if is_ai_generated:
-            score -= 6.0
-        
         # 3. Anomaly count penalty
         if anomaly_count > 0:
             score -= min(anomaly_count * 0.5, 3.0)  # Cap at -3
@@ -196,19 +190,20 @@ class ReportGenerator:
 
         # Build evidence descriptions
         stylometric_desc = ""
-        ai_warning = f" 🚨 CRITICAL AI ALERT: The document's 'Burstiness' curve (sentence-length variance) is artificially flat ({avg_burstiness:.2f}). This is statistically a guaranteed signature of an AI/ChatGPT Generative Language Model!" if is_ai_generated else ""
+        # Burstiness info (soft signal only — no hard AI accusation, V3 change)
+        burstiness_note = f" Burstiness coefficient: {avg_burstiness:.2f}." if avg_burstiness < 0.35 else ""
 
         explanations = reasoning.get("boundary_explanations", {}) if isinstance(reasoning, dict) else {}
         if "API errors" in str(explanations):
             stylometric_desc = (
                 f"The HDBSCAN clustering identified {estimated_authors} estimated authors with {anomaly_count} anomalies and a noise percentage of {noise*100:.1f}%. "
                 f"The boundary count of {boundary_count} and low confidence score of {confidence} indicate substantial stylistic shifts, "
-                f"although specific reasoning for these shifts is unavailable due to API errors.{ai_warning}"
+                f"although specific reasoning for these shifts is unavailable due to API errors.{burstiness_note}"
             )
         else:
             stylometric_desc = (
                 f"The HDBSCAN clustering identified {estimated_authors} estimated authors with {anomaly_count} anomalies and a noise percentage of {noise*100:.1f}%. "
-                f"Boundary count: {boundary_count}. Cluster confidence: {confidence}.{ai_warning}"
+                f"Boundary count: {boundary_count}. Cluster confidence: {confidence}.{burstiness_note}"
             )
         
         if noise_override:

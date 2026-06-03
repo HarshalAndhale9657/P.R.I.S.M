@@ -1,0 +1,44 @@
+{
+  "id": "synthetic_random_006",
+  "source": "synthetic_random",
+  "strategy": "random_interleave",
+  "paragraphs": [
+    "One thing that really bugs me about current plagiarism detection tools is how many false positives they generate. Every time a student uses common phrases or standard academic vocabulary, the tool flags it as suspicious. We need smarter systems that understand the difference between genuine coincidence and actual copying. That's basically what our project is trying to solve.",
+    "I've been working with clustering algorithms for a while now, and let me tell you, HDBSCAN is a game changer. Unlike k-means where you have to guess how many clusters you want, HDBSCAN figures it out on its own. Plus it handles noise really well - those weird data points that don't fit anywhere just get labeled as outliers instead of getting forced into a cluster where they don't belong.",
+    "Testing is super important but also super annoying. You need hundreds of documents with known ground truth to get any meaningful results. The PAN datasets are great for this - they give you real text with labels showing exactly where the author changes. Without that kind of data, you're basically just guessing whether your system actually works.",
+    "So here's the thing about detecting plagiarism - it's way harder than most people think. You can't just look for copied sentences anymore because students have gotten really good at paraphrasing. What you need is something that looks at HOW someone writes, not just WHAT they write. That's where stylometry comes in, and honestly, it's pretty cool stuff.",
+    "I've been working with clustering algorithms for a while now, and let me tell you, HDBSCAN is a game changer. Unlike k-means where you have to guess how many clusters you want, HDBSCAN figures it out on its own. Plus it handles noise really well - those weird data points that don't fit anywhere just get labeled as outliers instead of getting forced into a cluster where they don't belong.",
+    "One thing that really bugs me about current plagiarism detection tools is how many false positives they generate. Every time a student uses common phrases or standard academic vocabulary, the tool flags it as suspicious. We need smarter systems that understand the difference between genuine coincidence and actual copying. That's basically what our project is trying to solve.",
+    "The investigation of computational methods for textual analysis has yielded significant advances in recent decades. Methodologies rooted in statistical inference provide robust frameworks for characterizing authorial style. Furthermore, the application of machine learning algorithms to linguistic feature extraction has demonstrated considerable promise in forensic contexts. The systematic evaluation of these approaches remains paramount to establishing their validity in academic settings.",
+    "Empirical evidence suggests that stylometric features, when properly calibrated, can achieve discriminative accuracy exceeding traditional approaches. The deployment of density-based clustering algorithms, particularly HDBSCAN, offers advantages in scenarios where the number of authorial voices is unknown a priori. Such unsupervised methodologies circumvent the requirement for labeled training corpora.",
+    "Cross-domain evaluation protocols are essential for establishing the generalizability of authorship attribution systems. Training on one text genre and evaluating on another provides a rigorous test of whether the system captures genuine stylistic markers rather than superficial topical correlations. The PAN competition series has established standardized benchmarks for such evaluations."
+  ],
+  "ground_truth": {
+    "is_multi_author": true,
+    "num_authors": 2,
+    "author_labels": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1
+    ],
+    "boundaries": [
+      6
+    ],
+    "changes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0
+    ]
+  }
+}

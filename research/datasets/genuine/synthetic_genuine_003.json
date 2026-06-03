@@ -1,0 +1,30 @@
+{
+  "id": "synthetic_genuine_003",
+  "source": "synthetic_genuine",
+  "strategy": "single_author",
+  "paragraphs": [
+    "Empirical evidence suggests that stylometric features, when properly calibrated, can achieve discriminative accuracy exceeding traditional approaches. The deployment of density-based clustering algorithms, particularly HDBSCAN, offers advantages in scenarios where the number of authorial voices is unknown a priori. Such unsupervised methodologies circumvent the requirement for labeled training corpora.",
+    "The theoretical underpinnings of authorship attribution derive from the hypothesis that each writer possesses a unique linguistic fingerprint. This fingerprint manifests through consistent patterns in syntactic construction, lexical selection, and punctuation deployment. Quantitative analysis of these patterns enables the construction of multidimensional feature vectors suitable for computational comparison.",
+    "Contemporary research has expanded the scope of stylometric analysis to encompass paragraph-level granularity. This fine-grained approach introduces challenges related to statistical reliability, as shorter text segments yield less stable feature measurements. The development of features robust to length variation remains an active area of investigation.",
+    "Cross-domain evaluation protocols are essential for establishing the generalizability of authorship attribution systems. Training on one text genre and evaluating on another provides a rigorous test of whether the system captures genuine stylistic markers rather than superficial topical correlations. The PAN competition series has established standardized benchmarks for such evaluations.",
+    "The investigation of computational methods for textual analysis has yielded significant advances in recent decades. Methodologies rooted in statistical inference provide robust frameworks for characterizing authorial style. Furthermore, the application of machine learning algorithms to linguistic feature extraction has demonstrated considerable promise in forensic contexts. The systematic evaluation of these approaches remains paramount to establishing their validity in academic settings."
+  ],
+  "ground_truth": {
+    "is_multi_author": false,
+    "num_authors": 1,
+    "author_labels": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "boundaries": [],
+    "changes": [
+      0,
+      0,
+      0,
+      0
+    ]
+  }
+}
