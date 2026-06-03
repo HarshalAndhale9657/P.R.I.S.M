@@ -1,7 +1,7 @@
 """
 P.R.I.S.M. — Forensic Report Generator
 Takes all evidence from the pipeline (clustering, reasoning, citations, sources)
-and uses GPT-4o to synthesize a structured, prosecutable JSON report.
+and use GPT-4o to synthesize a structured, prosecutable JSON report.
 """
 
 import os
