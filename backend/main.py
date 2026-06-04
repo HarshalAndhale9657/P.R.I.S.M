@@ -10,13 +10,14 @@ import io
 import logging
 import fitz  # PyMuPDF
 
-# Load environment variables BEFORE any service imports
-# Services like GPTAnalyzer and ReportGenerator read OPENAI_API_KEY on init
 from dotenv import load_dotenv
-load_dotenv()  # Loads from backend/.env or parent .env
+load_dotenv()
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 from services.pdf_parser import AcademicPDFParser
 from services.feature_engine import FeatureEngine
@@ -25,7 +26,9 @@ from services.gpt_analyzer import GPTAnalyzer
 from services.citation_forensics import CitationForensics
 from services.report_generator import ReportGenerator
 from services.source_tracer import SourceTracer
-from models import PipelineContext, WarningCode, WarningSeverity# ─── Logging Setup ───────────────────────────────────────────────────────────
+from models import PipelineContext, WarningCode, WarningSeverity
+
+# ─── Logging Setup ───────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
@@ -39,7 +42,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Allow CORS for frontend interaction
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -56,16 +58,35 @@ gpt_analyzer = GPTAnalyzer()
 citation_forensics = CitationForensics(temporal_threshold=10)
 source_tracer = SourceTracer(similarity_threshold=0.50)
 report_generator = ReportGenerator()
+
+
+# ─── Benchmark Request Models ─────────────────────────────────────────────────
+
+class EvaluationRecord(BaseModel):
+    paragraph_id: str
+    ground_truth_anomaly: bool = Field(..., description="Human-labelled ground truth")
+    predicted_anomaly: bool = Field(..., description="Model prediction")
+    tracer_fired: bool = Field(False, description="Whether source tracer returned a match")
+    tracer_match_confirmed: Optional[bool] = Field(
+        None,
+        description="Human confirmation that the tracer match was a genuine source. "
+                    "None = unreviewed, True = confirmed, False = hallucination."
+    )
+
+
+class BenchmarkRequest(BaseModel):
+    records: List[EvaluationRecord] = Field(..., min_items=1)
+    label: Optional[str] = Field(None, description="Optional run label / experiment name")
+
+
 # ─── Helper: PDF Validation ─────────────────────────────────────────────────
 
 def _validate_pdf(file: UploadFile):
-    """Validate that an uploaded file is a PDF."""
     if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
 
 async def _read_pdf_bytes(file: UploadFile) -> bytes:
-    """Read and validate PDF bytes from upload."""
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty file uploaded")
@@ -73,22 +94,20 @@ async def _read_pdf_bytes(file: UploadFile) -> bytes:
 
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
+
 @app.get("/")
 async def health_check():
-    """Health check endpoint to verify backend is running."""
     return {"status": "ok", "message": "P.R.I.S.M. Backend is running"}
 
 
 @app.post("/api/upload")
 async def upload_pdf(file: UploadFile = File(...)):
-    """Receives a PDF, validates it, and returns basic metadata."""
     _validate_pdf(file)
 
     try:
         content = await file.read()
         file_size = len(content)
 
-        # Read the PDF from memory using PyMuPDF to get page count
         doc = fitz.open(stream=content, filetype="pdf")
         page_count = len(doc)
         doc.close()
@@ -153,7 +172,6 @@ async def extract_features(file: UploadFile = File(...)):
         content = await _read_pdf_bytes(file)
         ctx = PipelineContext()
 
-        # Stage 1: Parse PDF
         parsed = pdf_parser.parse(content, ctx)
 
         if not parsed["paragraphs"]:
@@ -162,7 +180,6 @@ async def extract_features(file: UploadFile = File(...)):
                 detail="No text detected — the PDF may be scanned or image-only.",
             )
 
-        # Stage 2: Extract stylometric features
         features = feature_engine.extract_all(parsed["paragraphs"], ctx)
 
         return {
@@ -196,7 +213,6 @@ async def cluster_paragraphs(file: UploadFile = File(...)):
         content = await _read_pdf_bytes(file)
         ctx = PipelineContext()
 
-        # Stage 1: Parse PDF
         parsed = pdf_parser.parse(content, ctx)
 
         if not parsed["paragraphs"]:
@@ -205,13 +221,9 @@ async def cluster_paragraphs(file: UploadFile = File(...)):
                 detail="No text detected — the PDF may be scanned or image-only.",
             )
 
-        # Stage 2: Extract stylometric features
         features = feature_engine.extract_all(parsed["paragraphs"], ctx)
-
-        # Stage 3: HDBSCAN clustering
         cluster_result = clustering_engine.cluster(features["feature_matrix"], ctx)
 
-        # Enrich paragraphs with cluster info
         enriched_paragraphs = clustering_engine.get_cluster_summary(
             parsed["paragraphs"], cluster_result
         )
@@ -256,19 +268,13 @@ async def analyze_reasoning(file: UploadFile = File(...)):
         content = await _read_pdf_bytes(file)
         ctx = PipelineContext()
 
-        # Stage 1: Parse PDF
         parsed = pdf_parser.parse(content, ctx)
         if not parsed["paragraphs"]:
             raise HTTPException(status_code=422, detail="No text detected.")
 
-        # Stage 2: Extract stylometric features
         features = feature_engine.extract_all(parsed["paragraphs"], ctx)
-
-        # Stage 3: HDBSCAN clustering
         cluster_result = clustering_engine.cluster(features["feature_matrix"], ctx)
         enriched_paragraphs = clustering_engine.get_cluster_summary(parsed["paragraphs"], cluster_result)
-
-        # Stage 4: GPT Reasoning on flagged boundaries
         reasoning = await gpt_analyzer.analyze_boundaries(parsed["paragraphs"], cluster_result, ctx)
 
         return {
@@ -303,22 +309,14 @@ async def analyze_citations(file: UploadFile = File(...)):
         content = await _read_pdf_bytes(file)
         ctx = PipelineContext()
 
-        # Stage 1: Parse PDF
         parsed = pdf_parser.parse(content, ctx)
         if not parsed["paragraphs"]:
             raise HTTPException(status_code=422, detail="No text detected.")
 
-        # Stage 2: Extract stylometric features
         features = feature_engine.extract_all(parsed["paragraphs"], ctx)
-
-        # Stage 3: HDBSCAN clustering
         cluster_result = clustering_engine.cluster(features["feature_matrix"], ctx)
         enriched_paragraphs = clustering_engine.get_cluster_summary(parsed["paragraphs"], cluster_result)
-
-        # Stage 4: GPT Reasoning on flagged boundaries
         reasoning = await gpt_analyzer.analyze_boundaries(parsed["paragraphs"], cluster_result, ctx)
-
-        # Stage 5: Citation Forensics
         citations = citation_forensics.analyze(
             parsed["paragraphs"], parsed["references"], cluster_result, ctx
         )
@@ -344,6 +342,7 @@ async def analyze_citations(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Citation analysis failed: {str(e)}")
 
+
 @app.post("/api/analyze")
 async def full_analysis(file: UploadFile = File(...)):
     """
@@ -359,7 +358,6 @@ async def full_analysis(file: UploadFile = File(...)):
         parsed = await run_in_threadpool(pdf_parser.parse_safe, content, ctx)
 
         if not parsed["paragraphs"]:
-            # Return a valid response with warnings instead of HTTP 422
             return {
                 "filename": file.filename,
                 "status": "error",
@@ -423,7 +421,7 @@ async def full_analysis(file: UploadFile = File(...)):
         try:
             anomalous_paragraphs = [
                 p for p in enriched_paragraphs if p.get("is_anomaly")
-            ][:1] # Limit to 1 for speed to prevent Render 502 Timeout
+            ][:1]
             sources = await run_in_threadpool(source_tracer.trace, anomalous_paragraphs, ctx)
         except Exception as e:
             logger.error(f"[P.R.I.S.M.] Source tracing crashed: {e}")
@@ -433,7 +431,7 @@ async def full_analysis(file: UploadFile = File(...)):
             )
             sources = []
 
-        # ── Stage 7: Generate Final Report ───────────────────────────────
+        # ── Stage 7: Generate Final Report ───────────────────────────────────
         analysis_data = {
             "clustering": cluster_result,
             "reasoning": reasoning,
@@ -486,3 +484,94 @@ async def full_analysis(file: UploadFile = File(...)):
             status_code=500,
             detail=f"Analysis pipeline failed: {str(e)}",
         )
+
+
+@app.post("/api/v1/benchmark")
+async def benchmark(request: BenchmarkRequest):
+    """
+    Offline evaluation endpoint.
+
+    Accepts a list of labelled evaluation records and returns a classification
+    report for the anomaly detector plus a hallucination rate for the source
+    tracer component.
+
+    Each record must supply:
+      - ground_truth_anomaly  : human label
+      - predicted_anomaly     : model output
+      - tracer_fired          : whether SourceTracer returned a match
+      - tracer_match_confirmed: True / False / None (unreviewed)
+
+    Returns accuracy, precision, recall, F1, a full confusion matrix, and the
+    tracer hallucination rate computed over all reviewed tracer activations.
+    """
+    records = request.records
+    n = len(records)
+
+    tp = sum(1 for r in records if r.ground_truth_anomaly and r.predicted_anomaly)
+    tn = sum(1 for r in records if not r.ground_truth_anomaly and not r.predicted_anomaly)
+    fp = sum(1 for r in records if not r.ground_truth_anomaly and r.predicted_anomaly)
+    fn = sum(1 for r in records if r.ground_truth_anomaly and not r.predicted_anomaly)
+
+    accuracy = (tp + tn) / n if n else 0.0
+
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall)
+        else 0.0
+    )
+
+    # Tracer hallucination rate — only over records where the tracer fired
+    # and a human reviewer has provided a confirmed/rejected verdict.
+    reviewed_activations = [
+        r for r in records
+        if r.tracer_fired and r.tracer_match_confirmed is not None
+    ]
+    hallucination_count = sum(
+        1 for r in reviewed_activations if r.tracer_match_confirmed is False
+    )
+    tracer_total_fired = sum(1 for r in records if r.tracer_fired)
+    tracer_hallucination_rate = (
+        hallucination_count / len(reviewed_activations)
+        if reviewed_activations
+        else None
+    )
+
+    logger.info(
+        f"[P.R.I.S.M.] Benchmark '{request.label or 'unlabelled'}' — "
+        f"n={n} | acc={accuracy:.3f} | P={precision:.3f} | R={recall:.3f} | F1={f1:.3f} | "
+        f"tracer_hallucination_rate={tracer_hallucination_rate}"
+    )
+
+    return {
+        "label": request.label,
+        "n_records": n,
+        "classification": {
+            "accuracy": round(accuracy, 4),
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1": round(f1, 4),
+            "confusion_matrix": {
+                "true_positive": tp,
+                "true_negative": tn,
+                "false_positive": fp,
+                "false_negative": fn,
+            },
+        },
+        "source_tracer": {
+            "total_fired": tracer_total_fired,
+            "reviewed_activations": len(reviewed_activations),
+            "hallucination_count": hallucination_count,
+            "hallucination_rate": (
+                round(tracer_hallucination_rate, 4)
+                if tracer_hallucination_rate is not None
+                else None
+            ),
+            "note": (
+                "hallucination_rate is null — no reviewed tracer activations in this batch"
+                if tracer_hallucination_rate is None
+                else None
+            ),
+        },
+    }

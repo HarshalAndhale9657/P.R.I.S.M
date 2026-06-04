@@ -31,7 +31,6 @@ from models import PipelineContext, WarningCode, WarningSeverity
 
 logger = logging.getLogger(__name__)
 
-# Load spaCy model once — disable NER for speed (irrelevant for stylometry)
 try:
     nlp = spacy.load("en_core_web_sm", disable=["ner"])
     logger.info("[P.R.I.S.M.] spaCy model loaded successfully")
@@ -40,22 +39,12 @@ except OSError:
     raise RuntimeError("spaCy model 'en_core_web_sm' not installed. Run: python -m spacy download en_core_web_sm")
 
 
-# ─── Top 10 Character Trigrams (English academic text) ───────────────────────
-# Selected by document frequency from academic corpora. These capture:
-# - Word boundaries (' th', 'he ', 'the') → captures function word usage
-# - Morphological patterns ('ing', 'tion', 'ent') → captures suffix preferences
-# - Punctuation habits (', t', '. T') → captures punctuation style
 TOP_CHAR_TRIGRAMS = [
     " th", "the", "he ", "ing", " an", "nd ", " in", "ion", "ed ", " of",
 ]
 
-# ─── Top 5 Function Words ───────────────────────────────────────────────────
-# Most discriminative for authorship (Stamatatos 2009, Koppel 2009).
-# Frequency of these words is highly author-specific and topic-independent.
 TOP_FUNCTION_WORDS = ["the", "of", "and", "to", "in"]
 
-
-# ─── Feature Names (order matters — matches matrix columns) ──────────────────
 STRUCTURAL_FEATURES = [
     "avg_sentence_length",
     "avg_word_length",
@@ -80,11 +69,8 @@ FEATURE_NAMES = (
     + HAPAX_FEATURES
 )
 
-# Tier thresholds
-# Lowered from 50/100 after PAN 2023 analysis: median paragraph is 41 words.
-# Old thresholds caused 61% of paragraphs to produce all-zero feature vectors.
-TIER_SKIP = 20        # <20 words → skip (only 5% of PAN paragraphs)
-TIER_REDUCED = 50     # 20-49 words → reduced features only
+TIER_SKIP = 20
+TIER_REDUCED = 50
 
 
 class FeatureEngine:
@@ -101,27 +87,11 @@ class FeatureEngine:
     """
 
     def __init__(self, min_words: int = 10):
-        """
-        Args:
-            min_words: Absolute minimum word count. Paragraphs below this
-                       return zeros (not even reduced features).
-        """
         self.min_words = min_words
 
     # ─── Public API ──────────────────────────────────────────────────────────
 
     def extract_features(self, text: str) -> np.ndarray:
-        """
-        Extract a feature vector from a single paragraph.
-        Applies tiered extraction based on word count.
-
-        Args:
-            text: Raw paragraph text string.
-
-        Returns:
-            np.ndarray of shape (N_FEATURES,) with stylometric features.
-            Returns zeros if text is too short.
-        """
         doc = nlp(text)
         words = [token.text.lower() for token in doc if token.is_alpha]
         word_count = len(words)
@@ -129,17 +99,13 @@ class FeatureEngine:
         if word_count < self.min_words:
             return np.zeros(len(FEATURE_NAMES))
 
-        # Always compute: char trigrams, function words (work on short text)
         trigram_feats = self._extract_char_trigrams(text, word_count)
         funcword_feats = self._extract_function_words(words)
 
         if word_count < TIER_SKIP:
-            # Below 50 words: insufficient for reliable extraction
             return np.zeros(len(FEATURE_NAMES))
 
         elif word_count < TIER_REDUCED:
-            # 50-99 words: reduced feature set
-            # Only avg_sentence_length from structural (most stable at short lengths)
             sentences = list(doc.sents)
             avg_sl = sum(len(s.text.split()) for s in sentences) / max(len(sentences), 1)
             structural = np.array([avg_sl, 0, 0, 0, 0, 0, 0, 0])
@@ -147,7 +113,6 @@ class FeatureEngine:
             hapax_feats = np.zeros(1)
 
         else:
-            # ≥100 words: full extraction
             structural = self._extract_structural(doc, words)
             punct_feats = self._extract_punctuation(text, doc)
             hapax_feats = self._extract_hapax(words)
@@ -165,16 +130,6 @@ class FeatureEngine:
         paragraphs: List[Dict[str, Any]],
         ctx: Optional[PipelineContext] = None,
     ) -> Dict[str, Any]:
-        """
-        Extract features for all paragraphs and return the feature matrix.
-
-        Args:
-            paragraphs: List of paragraph dicts with at least a "text" key.
-            ctx: Optional PipelineContext for warning accumulation.
-
-        Returns:
-            Dict with feature_matrix, feature_names, profiles, valid_indices.
-        """
         if ctx is None:
             ctx = PipelineContext()
 
@@ -192,13 +147,11 @@ class FeatureEngine:
 
             feature_vectors.append(features)
 
-        # Build profiles for frontend
         for i, features in enumerate(feature_vectors):
             is_valid = i in valid_indices
             text = paragraphs[i].get("text", "")
             word_count = len(text.split())
 
-            # Determine tier
             if word_count < TIER_SKIP:
                 tier = "insufficient"
             elif word_count < TIER_REDUCED:
@@ -224,7 +177,6 @@ class FeatureEngine:
             else np.zeros((0, len(FEATURE_NAMES)))
         )
 
-        # ── Edge Case: Short paper (<5 paragraphs) ───────────────────────────
         SHORT_PAPER_THRESHOLD = 5
         if len(paragraphs) < SHORT_PAPER_THRESHOLD:
             ctx.add_warning(
@@ -235,7 +187,6 @@ class FeatureEngine:
             )
             ctx.skip_clustering = True
 
-        # ── Edge Case: Too few valid paragraphs ──────────────────────────────
         MIN_VALID_FOR_CLUSTERING = 3
         if len(valid_indices) < MIN_VALID_FOR_CLUSTERING:
             ctx.add_warning(
@@ -262,17 +213,12 @@ class FeatureEngine:
         }
 
     def get_paragraph_summary(self, text: str) -> Dict[str, Any]:
-        """
-        Get a detailed style summary for a single paragraph.
-        Used for the frontend side panel when clicking a paragraph.
-        """
         doc = nlp(text)
         words = [token.text.lower() for token in doc if token.is_alpha]
         features = self.extract_features(text)
         sentences = list(doc.sents)
         pos_counts = Counter(token.pos_ for token in doc)
 
-        # Top function words used
         func_tokens = [
             token.text.lower() for token in doc
             if token.pos_ in ("ADP", "CCONJ", "SCONJ", "PRON", "DET", "AUX")
@@ -309,21 +255,15 @@ class FeatureEngine:
     # ─── Private: Structural Features ────────────────────────────────────────
 
     def _extract_structural(self, doc, words: List[str]) -> np.ndarray:
-        """Extract the 8 structural features (full tier)."""
         sentences = list(doc.sents)
         num_sentences = max(len(sentences), 1)
         num_tokens = max(len(doc), 1)
 
-        # Sentence lengths
         sentence_lengths = [len(s.text.split()) for s in sentences] if sentences else [0]
         avg_sentence_length = sum(sentence_lengths) / num_sentences
-
-        # Burstiness (CV of sentence length) — soft feature, no threshold
         burstiness = float(np.std(sentence_lengths) / max(avg_sentence_length, 1.0))
-
         avg_word_length = sum(len(w) for w in words) / max(len(words), 1)
 
-        # POS ratios
         pos_counts = Counter(token.pos_ for token in doc)
         pronoun_ratio = pos_counts.get("PRON", 0) / num_tokens
         preposition_ratio = pos_counts.get("ADP", 0) / num_tokens
@@ -331,11 +271,16 @@ class FeatureEngine:
             pos_counts.get("CCONJ", 0) + pos_counts.get("SCONJ", 0)
         ) / num_tokens
 
-        # Passive voice
-        passive_count = sum(1 for t in doc if t.dep_ in ("nsubjpass", "auxpass"))
+        # Detect passive constructions via dependency label (nsubjpass / auxpass)
+        # and via spaCy v3 morphological feature Voice=Pass, which covers
+        # cases where the Universal Dependencies tag set omits nsubjpass.
+        passive_count = sum(
+            1 for t in doc
+            if t.dep_ in ("nsubjpass", "auxpass")
+            or t.morph.get("Voice") == ["Pass"]
+        )
         passive_voice_pct = (passive_count / num_sentences) * 100
 
-        # Yule's K
         yules_k = self._calculate_yules_k(words)
 
         return np.array([
@@ -353,10 +298,6 @@ class FeatureEngine:
 
     @staticmethod
     def _extract_char_trigrams(text: str, word_count: int) -> np.ndarray:
-        """
-        Extract frequency of top 10 character trigrams.
-        Normalized by total trigram count for length independence.
-        """
         text_lower = text.lower()
         total_trigrams = max(len(text_lower) - 2, 1)
 
@@ -374,10 +315,6 @@ class FeatureEngine:
 
     @staticmethod
     def _extract_function_words(words: List[str]) -> np.ndarray:
-        """
-        Extract frequency of top 5 function words.
-        Normalized by total word count.
-        """
         total = max(len(words), 1)
         word_counts = Counter(words)
         return np.array([word_counts.get(fw, 0) / total for fw in TOP_FUNCTION_WORDS])
@@ -386,10 +323,6 @@ class FeatureEngine:
 
     @staticmethod
     def _extract_punctuation(text: str, doc) -> np.ndarray:
-        """
-        Extract punctuation rates per sentence.
-        Captures author-specific punctuation habits.
-        """
         num_sentences = max(len(list(doc.sents)), 1)
         comma_count = text.count(",")
         semicolon_count = text.count(";")
@@ -405,10 +338,6 @@ class FeatureEngine:
 
     @staticmethod
     def _extract_hapax(words: List[str]) -> np.ndarray:
-        """
-        Hapax legomena ratio: words appearing exactly once / total words.
-        High ratio = diverse vocabulary = potentially different author.
-        """
         total = max(len(words), 1)
         word_counts = Counter(words)
         hapax = sum(1 for count in word_counts.values() if count == 1)
