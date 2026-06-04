@@ -189,6 +189,9 @@ def math_only(paragraphs):
 # ═══════════════════════════════════════════════════════════════════════
 # METHOD 3: Hybrid PRISM (HDBSCAN + Reasoning Engine Core)
 # ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
+# METHOD 3: Hybrid PRISM (HDBSCAN + Reasoning Engine Core)
+# ═══════════════════════════════════════════════════════════════════════
 def hybrid_prism(paragraphs):
     ctx = PipelineContext()
     features = feature_engine.extract_all(paragraphs, ctx)
@@ -215,8 +218,9 @@ Respond strictly in a valid JSON object format containing the following exact ke
 "detected_multi_author": boolean,
 "explanation": string
 """
+            # Optimized to gpt-4o-mini to preserve Harshal's $3 testing API budget
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are an AI assistant specialized in forensic stylometry that only responds with clean, valid JSON structures."},
                     {"role": "user", "content": prompt_msg}
@@ -229,7 +233,7 @@ Respond strictly in a valid JSON object format containing the following exact ke
             detected = res_json.get("detected_multi_author", detected)
             
         except Exception:
-            # Code-safe mathematical fallback execution block if live API encounters connection/quota issues
+            # Code-safe mathematical fallback execution block if live API encounters issues
             if not detected and len(paragraphs) <= 20:
                 mid = len(paragraphs) // 2
                 h1  = _half_style_vector(paragraphs[:mid])
@@ -279,7 +283,6 @@ Respond strictly in a valid JSON object format containing the following exact ke
         "silhouette_score": round(sil_score, 4),
         "feature_dims": features["feature_matrix"].shape[1] if len(features["feature_matrix"]) > 0 else 0,
     }
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # RUNNER
