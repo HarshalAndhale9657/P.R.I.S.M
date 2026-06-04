@@ -18,6 +18,12 @@ from sklearn.metrics import silhouette_score
 from dotenv import load_dotenv
 load_dotenv()
 
+# Pre-execution environment key check notice
+if not os.getenv("OPENAI_API_KEY"):
+    print("\n⚠️  [PRISM Notice] OPENAI_API_KEY environment variable not found.")
+    print("   Hybrid PRISM will execute using its deterministic math fallback layer.")
+    print("   Have Harshal add the key to the local .env file to enable full LLM reasoning.\n")
+
 from services.pdf_parser import AcademicPDFParser
 from services.feature_engine import FeatureEngine
 from services.hdbscan_detector import AuthorshipClustering
@@ -190,20 +196,68 @@ def hybrid_prism(paragraphs):
 
     detected = cluster_result["estimated_authors"] > 1
 
-    # Mirror exact structural fallback constraints for consistency
-    if not detected and len(paragraphs) <= 20:
-        mid = len(paragraphs) // 2
-        h1  = _half_style_vector(paragraphs[:mid])
-        h2  = _half_style_vector(paragraphs[mid:])
-        doc = _half_style_vector(paragraphs)
-        
-        scale   = np.maximum(doc, 1e-6)
-        h1_norm = (h1 / scale).reshape(1, -1)
-        h2_norm = (h2 / scale).reshape(1, -1)
-        
-        sim = sklearn_cosine(h1_norm, h2_norm)[0][0]
-        if sim < 0.85:
-            detected = True
+    # Check for active OpenAI API key environment variables
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key and len(paragraphs) > 0:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key)
+            
+            # Bundle paragraphs cleanly with index numbers for contextual cross-checking
+            text_blocks = "\n\n".join([f"[Paragraph {i+1}]: {p.get('text', '')}" for i, p in enumerate(paragraphs)])
+            
+            prompt_msg = f"""You are a precise forensic stylometrist examining text blocks for multi-authorship transitions.
+Analyze the following paragraphs to determine if they show clear evidence of being composed by multiple distinct authors (e.g., shifts in tone, vocabulary density changes, or syntactic structure profile anomalies).
+
+{text_blocks}
+
+Respond strictly in a valid JSON object format containing the following exact keys:
+"detected_multi_author": boolean,
+"explanation": string
+"""
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an AI assistant specialized in forensic stylometry that only responds with clean, valid JSON structures."},
+                    {"role": "user", "content": prompt_msg}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.0
+            )
+            
+            res_json = json.loads(response.choices[0].message.content)
+            detected = res_json.get("detected_multi_author", detected)
+            
+        except Exception:
+            # Code-safe mathematical fallback execution block if live API encounters connection/quota issues
+            if not detected and len(paragraphs) <= 20:
+                mid = len(paragraphs) // 2
+                h1  = _half_style_vector(paragraphs[:mid])
+                h2  = _half_style_vector(paragraphs[mid:])
+                doc = _half_style_vector(paragraphs)
+                
+                scale   = np.maximum(doc, 1e-6)
+                h1_norm = (h1 / scale).reshape(1, -1)
+                h2_norm = (h2 / scale).reshape(1, -1)
+                
+                sim = sklearn_cosine(h1_norm, h2_norm)[0][0]
+                if sim < 0.85:
+                    detected = True
+    else:
+        # Structural fallback metrics execution if no API key is supplied initially
+        if not detected and len(paragraphs) <= 20:
+            mid = len(paragraphs) // 2
+            h1  = _half_style_vector(paragraphs[:mid])
+            h2  = _half_style_vector(paragraphs[mid:])
+            doc = _half_style_vector(paragraphs)
+            
+            scale   = np.maximum(doc, 1e-6)
+            h1_norm = (h1 / scale).reshape(1, -1)
+            h2_norm = (h2 / scale).reshape(1, -1)
+            
+            sim = sklearn_cosine(h1_norm, h2_norm)[0][0]
+            if sim < 0.85:
+                detected = True
 
     sil_score = -1.0
     labels = np.array(cluster_result["clusters"])
