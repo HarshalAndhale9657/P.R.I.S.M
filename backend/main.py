@@ -222,7 +222,31 @@ async def cluster_paragraphs(file: UploadFile = File(...)):
             )
 
         features = feature_engine.extract_all(parsed["paragraphs"], ctx)
-        cluster_result = clustering_engine.cluster(features["feature_matrix"], ctx)
+
+        valid_count = features["valid_paragraphs"]
+        
+       
+        ctx.total_samples = valid_count 
+
+        if valid_count < 3:
+            ctx.degraded_mode = True
+            cluster_result = {
+                "estimated_authors": 1,
+                "anomaly_count": 0,
+                "noise_percentage": 0.0,
+                "boundaries": [],
+                "cluster_sizes": {0: valid_count},
+                "confidence": 1.0,
+                "noise_override": True,
+                "too_short": True
+            }
+            
+            for p in parsed["paragraphs"]:
+                p["cluster_id"] = 0
+        else:
+            
+            cluster_result = clustering_engine.cluster(features["feature_matrix"], ctx)
+    
 
         enriched_paragraphs = clustering_engine.get_cluster_summary(
             parsed["paragraphs"], cluster_result
