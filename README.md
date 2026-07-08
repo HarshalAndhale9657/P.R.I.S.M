@@ -643,7 +643,8 @@ P.R.I.S.M.'s hybrid forensic approach is grounded in peer-reviewed research acro
 └──────────────────┴──────────────────────────────────────────────────┘
 ```
 
-> **To Judges:** Every algorithm in P.R.I.S.M. is traceable to published, peer-reviewed research. We did not invent new ML — we **engineered a novel combination** of proven techniques into a unified forensic pipeline that delivers measurably superior results (see [Performance Validation](#performance-validation--empirical-benchmark) above).
+
+> **To Judges:** Every algorithm in P.R.I.S.M. is traceable to published, peer-reviewed research. We did not invent new ML — we **engineered a novel combination** of proven techniques into a unified forensic pipeline that delivers measurably superior results (see [Performance Validation](#performance-validation--empirical-benchmark) above)..
 
 ---
 
