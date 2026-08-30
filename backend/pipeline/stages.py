@@ -105,9 +105,91 @@ class _SkeletonStage:
         return ctx
 
 
-class RerankStage(_SkeletonStage):
-    """W4: cross-encoder rerank of top-k candidate matches (hard paraphrases)."""
+class RerankStage:
+    """W4 — cross-encoder rerank of *borderline* semantic matches.
+
+    A bi-encoder embeds each sentence independently, so it cannot see how the two
+    sentences relate; a cross-encoder reads the pair jointly. Measured on public
+    data, this cut MRPC false positives **0.643 -> 0.403** at t=0.66 and lifted
+    recall@FPR<=0.15 from 0.44 to 0.61 (docs/PROGRESS.md).
+
+    Cost control — a cross-encoder is one forward pass per pair, on CPU in
+    production, so we rerank only where it can change the answer:
+      * verbatim matches are exact overlap -> never reranked;
+      * scores below `lo` or above `hi` are not borderline -> left alone;
+      * at most `max_pairs`, highest-similarity first.
+
+    The bi-encoder `similarity` is preserved (it is what the UI shows and what the
+    percentages are built from); the cross-encoder result is recorded as
+    `rerank_score` and used to re-decide `confidence` (ADR-0017's band). Confidence
+    aggregates are then recomputed so they never go stale.
+
+    Fails soft: if the model is unavailable the stage warns and leaves matches as-is.
+    """
     name = "rerank"
+
+    def __init__(
+        self,
+        *,
+        enabled: bool = False,
+        model_key: str = "cross-encoder-stsb",
+        lo: float = 0.60,
+        hi: float = 0.92,
+        max_pairs: int = 200,
+        confident_threshold: float = 0.78,
+    ) -> None:
+        self.enabled = enabled
+        self.model_key = model_key
+        self.lo = lo
+        self.hi = hi
+        self.max_pairs = max_pairs
+        self.confident_threshold = confident_threshold
+
+    def _candidates(self, matches):
+        cand = [
+            m for m in matches
+            if m.get("match_type") in ("paraphrase", "translated")
+            and self.lo <= float(m.get("similarity", 0.0)) <= self.hi
+            and (m.get("doc_excerpt") or "").strip()
+            and (m.get("source_excerpt") or "").strip()
+        ]
+        cand.sort(key=lambda m: float(m.get("similarity", 0.0)), reverse=True)
+        return cand[: self.max_pairs]
+
+    def run(self, ctx: CheckContext) -> CheckContext:
+        if not self.enabled:
+            return ctx
+        matches = ctx.artifacts.get("matches") or []
+        cand = self._candidates(matches)
+        if not cand:
+            return ctx
+
+        try:
+            from modelhub import get_cross_encoder
+            ce = get_cross_encoder(self.model_key)
+            pairs = [(m["doc_excerpt"], m["source_excerpt"]) for m in cand]
+            raw = ce.predict(pairs, show_progress_bar=False)
+        except Exception as exc:
+            logger.exception("[pipeline.rerank] cross-encoder unavailable")
+            ctx.warn(f"Cross-encoder reranking was skipped ({str(exc)[:120]}); "
+                     "similarity scores are from the sentence embedder only.")
+            return ctx
+
+        for m, s in zip(cand, raw):
+            score = max(0.0, min(1.0, float(s)))
+            m["rerank_score"] = round(score, 4)
+            m["reranked"] = True
+            # The cross-encoder decides the band; the displayed similarity stays
+            # the bi-encoder cosine so the number the user sees keeps its meaning.
+            m["confidence"] = "confident" if score >= self.confident_threshold else "review"
+
+        # Recompute confidence coverage — the band changed for some matches.
+        from services.plagiarism_matcher import confidence_breakdown, tokenize
+        overall = ctx.artifacts.get("overall")
+        if isinstance(overall, dict):
+            overall.update(confidence_breakdown(tokenize(ctx.document.text), matches))
+        ctx.artifacts["reranked_count"] = len(cand)
+        return ctx
 
 
 class AiRiskStage(_SkeletonStage):

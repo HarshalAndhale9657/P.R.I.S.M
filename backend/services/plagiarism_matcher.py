@@ -74,6 +74,37 @@ def tokenize(text: str) -> List[Token]:
     return [Token(_norm(m.group()), m.start(), m.end()) for m in _WORD_RE.finditer(text)]
 
 
+def confidence_breakdown(doc_tokens: List[Token], matches: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Confident/review document coverage for a set of matches.
+
+    Split out so a later stage that *re-scores* matches (e.g. the cross-encoder
+    reranker) can recompute these aggregates instead of leaving stale ones behind.
+    Token-set based, so overlapping spans are counted once.
+    """
+    total = len(doc_tokens)
+    starts = [t.start for t in doc_tokens]
+    confident: set[int] = set()
+    review: set[int] = set()
+    for m in matches:
+        lo = bisect_left(starts, m["doc_start"])
+        hi = bisect_left(starts, m["doc_end"])
+        idx = range(lo, hi)
+        if m.get("confidence") == "review":
+            review.update(idx)
+        else:
+            confident.update(idx)
+    review_only = review - confident
+
+    def pct(x: int) -> float:
+        return round(100.0 * x / total, 2) if total else 0.0
+
+    return {
+        "confident_pct": pct(len(confident)),
+        "review_pct": pct(len(review_only)),
+        "review_count": sum(1 for m in matches if m.get("confidence") == "review"),
+    }
+
+
 class PlagiarismMatcher:
     """
     Configurable, deterministic matcher.
@@ -340,8 +371,6 @@ class PlagiarismMatcher:
         verbatim_tokens: set[int] = set()
         paraphrase_tokens: set[int] = set()
         translated_tokens: set[int] = set()
-        confident_tokens: set[int] = set()
-        review_tokens: set[int] = set()
         per_source_tokens: Dict[str, set[int]] = {s.id: set() for s in sources}
 
         for m in matches:
@@ -354,10 +383,6 @@ class PlagiarismMatcher:
                 translated_tokens.update(idx)
             else:
                 paraphrase_tokens.update(idx)
-            if m.get("confidence") == "review":
-                review_tokens.update(idx)
-            else:
-                confident_tokens.update(idx)
             per_source_tokens.setdefault(m["source_id"], set()).update(idx)
 
         # Verbatim takes precedence; paraphrase and translated are disjoint by match type.
@@ -368,21 +393,16 @@ class PlagiarismMatcher:
         def pct(x: int) -> float:
             return round(100.0 * x / total, 2) if total else 0.0
 
-        # Confidence split: tokens covered only by "review"-band matches are reported
-        # separately so a borderline semantic hit is never presented as a confirmed copy.
-        review_only = review_tokens - confident_tokens
-
         overall = {
             "similarity_pct": pct(len(matched)),
             "verbatim_pct": pct(len(verbatim_tokens)),
             "paraphrase_pct": pct(len(paraphrase_only)),
             "translated_pct": pct(len(translated_only)),
-            "confident_pct": pct(len(confident_tokens)),
-            "review_pct": pct(len(review_only)),
+            # Confidence split (shared helper — the reranker recomputes these later).
+            **confidence_breakdown(doc_tokens, matches),
             "matched_words": len(matched),
             "total_words": total,
             "match_count": len(matches),
-            "review_count": sum(1 for m in matches if m.get("confidence") == "review"),
             "source_count": len({m["source_id"] for m in matches}),
         }
 

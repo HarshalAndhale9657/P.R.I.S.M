@@ -128,8 +128,20 @@ unchanged result never ships. **Deviation from ADR-0016, stated plainly:** it do
 the cross-encoder is roberta-base (~125M), which trains fine on a free T4; LoRA exists for much larger models and
 would add a `peft` dependency for no benefit here.
 
-**Still open:** run the W5 notebook (needs a GPU session — cannot be driven from this environment); re-derive the
-cutoff after any rerank lands, accounting for the **max-over-sources** upward bias (pairwise 0.78 is a lower bound).
+**W4 rerank stage wired (opt-in).** `RerankStage` is now a real stage, not a skeleton: it runs the measured
+cross-encoder over **borderline** semantic matches only (cosine in [0.60, 0.92]; verbatim is exact overlap and is
+never reranked; capped at 200 pairs, highest-similarity first) — because a cross-encoder costs one forward pass per
+pair on CPU. It **preserves the displayed bi-encoder `similarity`** (which the percentages and UI are built on) and
+records `rerank_score`, using it only to re-decide the ADR-0017 `confidence` band; confidence aggregates are then
+recomputed via a shared `confidence_breakdown()` helper so they can't go stale. Fails soft (warns, leaves matches
+untouched) if the model can't load. **Opt-in via `PRISM_RERANK=1`** — deliberately off by default until the <60s
+latency budget is measured on a real 20-page PDF, since flipping it silently would change response time for users.
+6 unit tests with a fake cross-encoder cover promote/demote, the skip rules, the cap, fail-soft, and aggregate
+recomputation.
+
+**Still open:** measure rerank latency on a real 20-page PDF, then decide whether to default it on; run the W5
+notebook (needs a GPU session — cannot be driven from this environment); re-derive the cutoff after rerank is
+default-on, accounting for the **max-over-sources** upward bias (pairwise 0.78 is a lower bound).
 
 ## 2026-08-21 (cont.) — Expanded eval set + threshold recalibration (ADR-0013)
 

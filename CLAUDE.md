@@ -75,6 +75,11 @@ Use this to confirm a push is green instead of waiting for an email — GitHub o
   reported with `confidence="review"` (explicit inconclusive band); at/above 0.78 they are `"confident"`.
   Verbatim is always confident. `overall` carries `confident_pct` / `review_pct` / `review_count`.
   **Never present a `review` match as confirmed plagiarism.**
+- **Cross-encoder rerank (W4) is OPT-IN**: `PRISM_RERANK=1` (model via `PRISM_RERANK_MODEL`, default
+  `cross-encoder-stsb`). It measurably cuts false positives (MRPC FPR 0.643→0.403) but adds a CPU forward pass
+  per *borderline* pair, so it is off by default until the <60s latency budget is measured. It reranks only
+  semantic matches with cosine in [0.60, 0.92] (verbatim is exact — never reranked), caps at 200 pairs, keeps
+  the displayed bi-encoder `similarity`, and writes `rerank_score` + a re-decided `confidence`.
 - ⚠️ **`scripts/eval_matcher.py` is a SMOKE TEST, not a quality gate** (ADR-0017): its synthetic negatives never
   reach the boundary (FPR 0.000 at every threshold 0.66-0.82), so its precision/FPR must never be quoted as
   accuracy. **The quality gate is `python -m eval.run_pairs`** on public data (STS-B/MRPC/QQP/PAWS). Real

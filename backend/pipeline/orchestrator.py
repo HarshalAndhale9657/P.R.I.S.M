@@ -9,7 +9,8 @@ maps it to a generic error (no internal-detail leakage) — matching the existin
 from __future__ import annotations
 
 import logging
-from typing import List, Sequence
+import os
+from typing import List, Optional, Sequence
 
 from .base import CheckContext, PipelineError, Stage
 
@@ -30,16 +31,36 @@ def run_pipeline(ctx: CheckContext, stages: Sequence[Stage]) -> CheckContext:
     return ctx
 
 
-def default_check_stages(matcher, search_fn, *, use_academic: bool) -> List[Stage]:
-    """The live originality-check pipeline (W1).
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
 
-    Skeleton stages (rerank/ai_risk/triage/coach/report) are intentionally NOT
-    wired in yet — they are pass-throughs and add nothing until implemented in
-    W3-W9. Import and append them here when each lands.
+
+def default_check_stages(matcher, search_fn, *, use_academic: bool,
+                         rerank: Optional[bool] = None) -> List[Stage]:
+    """The live originality-check pipeline.
+
+    Live: retrieve -> match -> rerank (opt-in) -> localize.
+    Still skeletons (added as they land, W8+): ai_risk, triage, coach, report.
+
+    `rerank` runs a cross-encoder over borderline semantic matches. It measurably
+    cuts false positives (MRPC FPR 0.643 -> 0.403) but costs one extra model
+    forward pass per borderline pair on CPU, so it is **opt-in**: pass
+    `rerank=True` or set `PRISM_RERANK=1`. See docs/PROGRESS.md before flipping
+    the default — the latency budget is <60s per check.
     """
-    from .stages import RetrieveStage, MatchStage, LocalizeStage
+    from .stages import RetrieveStage, MatchStage, LocalizeStage, RerankStage
+
+    enabled = _env_flag("PRISM_RERANK", False) if rerank is None else rerank
     return [
         RetrieveStage(search_fn, use_academic=use_academic),
         MatchStage(matcher),
+        RerankStage(
+            enabled=enabled,
+            model_key=os.getenv("PRISM_RERANK_MODEL", "cross-encoder-stsb"),
+            confident_threshold=getattr(matcher, "confident_threshold", 0.78),
+        ),
         LocalizeStage(),
     ]
