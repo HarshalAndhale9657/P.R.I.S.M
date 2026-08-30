@@ -141,6 +141,14 @@
             ? `<span class="lang-pair">${esc(m.source_lang.toUpperCase())}→${esc(m.doc_lang.toUpperCase())}</span>`
             : '';
     }
+    // A match in the inconclusive band (similarity between the reporting floor and
+    // the confidence cutoff) must never be shown as a confirmed copy — ADR-0017.
+    function isReview(m) { return m && m.confidence === 'review'; }
+    function reviewBadge(m) {
+        return isReview(m)
+            ? `<span class="mtag mtag-review" title="Below the confidence cutoff — this passage is similar, but similar wording can also arise independently. Check it yourself; it is not a confirmed match.">Needs review</span>`
+            : '';
+    }
 
     // ─── Drag & drop wiring ───
     function wireDropzone(zone, input, onFiles, opts = {}) {
@@ -233,8 +241,20 @@
         const pct = ov.similarity_pct || 0;
         const hasTranslated = matches.some(m => m.match_type === 'translated');
 
+        const reviewCount = ov.review_count || matches.filter(isReview).length;
+        const reviewPct = ov.review_pct || 0;
+
         const disclaimer =
             `<p class="results-disclaimer">Self-check aid — not a determination of misconduct. Review each highlighted passage in context; legitimate quotation and common phrasing can also match.</p>`;
+
+        // The inconclusive band, stated plainly rather than folded into the headline number.
+        const reviewNote = reviewCount > 0
+            ? `<p class="results-review-note"><b>${reviewCount}</b> of these ${reviewCount === 1 ? 'is a' : 'are'}
+               <span class="mtag mtag-review">Needs review</span> match${reviewCount === 1 ? '' : 'es'}
+               (${reviewPct.toFixed(1)}% of the document): similar wording, but below our confidence cutoff —
+               such overlap can also happen by coincidence in shared terminology or standard phrasing.
+               <b>Not counted as confirmed copying.</b></p>`
+            : '';
 
         let summary = `
             <div class="check-summary">
@@ -246,13 +266,15 @@
                     ${bar('Verbatim', ov.verbatim_pct || 0, 'hl-verbatim')}
                     ${bar('Paraphrase', ov.paraphrase_pct || 0, 'hl-paraphrase')}
                     ${(ov.translated_pct || 0) > 0 ? bar('Translated', ov.translated_pct, 'hl-translated') : ''}
+                    ${reviewPct > 0 ? bar('Needs review', reviewPct, 'hl-review') : ''}
                     <div class="cs-stats">
                         <span class="cs-chip"><b>${ov.match_count || 0}</b> matches</span>
+                        ${reviewCount > 0 ? `<span class="cs-chip cs-chip-review"><b>${reviewCount}</b> need review</span>` : ''}
                         <span class="cs-chip"><b>${ov.source_count || 0}</b> sources</span>
                         <span class="cs-chip"><b>${ov.matched_words || 0}</b>/${ov.total_words || 0} words</span>
                     </div>
                 </div>
-            </div>`;
+            </div>${reviewNote}`;
 
         const warnings = (data.warnings || []).length
             ? `<div class="results-warnings">${data.warnings.map(w => `<span>⚠ ${esc(w)}</span>`).join('')}</div>`
@@ -275,6 +297,7 @@
                                 <span class="lg"><span class="sw hl-verbatim"></span>Verbatim</span>
                                 <span class="lg"><span class="sw hl-paraphrase"></span>Paraphrase</span>
                                 ${hasTranslated ? '<span class="lg"><span class="sw hl-translated"></span>Translated</span>' : ''}
+                                ${reviewCount > 0 ? '<span class="lg"><span class="sw sw-review"></span>Needs review</span>' : ''}
                             </span>
                         </div>
                         <div class="doc-view" id="doc-view">${buildHighlightHtml(data.document_text || '', matches)}</div>
@@ -325,15 +348,15 @@
 
     function matchRowHtml(m) {
         return `
-            <button class="match-row" type="button" data-match="${m.id}">
-                <span class="mr-top">${typeBadge(m.match_type)}<span class="mr-sim">${pctInt(m.similarity)}%</span>${langPair(m)}${originTag(m.source_origin)}<span class="mr-src" title="${esc(m.source_name)}">${esc(trim(m.source_name, 24))}</span></span>
+            <button class="match-row${isReview(m) ? ' is-review' : ''}" type="button" data-match="${m.id}">
+                <span class="mr-top">${typeBadge(m.match_type)}${reviewBadge(m)}<span class="mr-sim">${pctInt(m.similarity)}%</span>${langPair(m)}${originTag(m.source_origin)}<span class="mr-src" title="${esc(m.source_name)}">${esc(trim(m.source_name, 24))}</span></span>
                 <span class="mr-text">${esc(trim(m.doc_excerpt, 96))}</span>
             </button>`;
     }
 
     function buildHighlightHtml(text, matches) {
         const spans = matches
-            .map(m => ({ start: m.doc_start, end: m.doc_end, id: m.id, type: m.match_type }))
+            .map(m => ({ start: m.doc_start, end: m.doc_end, id: m.id, type: m.match_type, review: isReview(m) }))
             .filter(s => Number.isInteger(s.start) && Number.isInteger(s.end) && s.end > s.start)
             .sort((a, b) => a.start - b.start || (a.type === 'verbatim' ? -1 : 1));
 
@@ -343,7 +366,7 @@
         for (const s of spans) {
             const st = Math.max(s.start, cursor);
             if (st >= s.end) continue;
-            kept.push({ start: st, end: s.end, id: s.id, type: s.type });
+            kept.push({ start: st, end: s.end, id: s.id, type: s.type, review: s.review });
             cursor = s.end;
         }
 
@@ -351,7 +374,9 @@
         let pos = 0;
         for (const s of kept) {
             html += esc(text.slice(pos, s.start));
-            html += `<mark class="hl hl-${s.type}" data-match="${s.id}">${esc(text.slice(s.start, s.end))}</mark>`;
+            // Review-band spans get a distinct (dashed, muted) treatment so an
+            // inconclusive hit never looks like a confirmed copy.
+            html += `<mark class="hl hl-${s.type}${s.review ? ' hl-review' : ''}" data-match="${s.id}">${esc(text.slice(s.start, s.end))}</mark>`;
             pos = s.end;
         }
         html += esc(text.slice(pos));
@@ -376,14 +401,21 @@
 
     function renderDetail(m) {
         const para = m.paragraph_index != null ? `Paragraph ${m.paragraph_index + 1}` : '';
+        const reviewCallout = isReview(m)
+            ? `<p class="cmp-review-note"><b>Inconclusive — needs your review.</b> This passage is similar to the
+               source but falls below our confidence cutoff. Independently written text on the same topic (shared
+               terminology, standard methods phrasing) can look like this too. Compare them yourself before
+               treating it as reuse.</p>`
+            : '';
         return `
+            ${reviewCallout}
             <div class="cmp">
                 <div class="cmp-col">
                     <div class="cmp-head">Your paper <span class="cmp-sub">${esc(para)}</span></div>
                     <div class="cmp-body">${esc(m.doc_excerpt || '')}</div>
                 </div>
                 <div class="cmp-col">
-                    <div class="cmp-head">${typeBadge(m.match_type)}${langPair(m)}${originTag(m.source_origin)}${sourceNameHtml(m)}<span class="cmp-sub">${pctInt(m.similarity)}% match</span></div>
+                    <div class="cmp-head">${typeBadge(m.match_type)}${reviewBadge(m)}${langPair(m)}${originTag(m.source_origin)}${sourceNameHtml(m)}<span class="cmp-sub">${pctInt(m.similarity)}% match</span></div>
                     <div class="cmp-body">${highlightExcerpt(m.source_context || m.source_excerpt || '', m.source_excerpt || '')}</div>
                 </div>
             </div>`;
@@ -426,15 +458,22 @@
             .legend{font-size:12px;color:#4b5563;margin-bottom:6px}
             .legend .sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:middle;margin:0 4px 0 10px}
             .legend .sw.v{background:#dc2626} .legend .sw.p{background:#d97706} .legend .sw.t{background:#0d9488}
+            .legend .sw.r{background:transparent;border:1.5px dashed #6b7280}
+            .rep-score .sub.rev{color:#6b7280;font-style:italic}
             .doc{white-space:pre-wrap;word-break:break-word;font-size:13px;background:#fff;border:1px solid #e7e9ef;border-radius:12px;padding:18px}
             mark.hl{border-radius:3px;padding:0 1px}
             mark.hl-verbatim{background:rgba(220,38,38,.16);border-bottom:2px solid rgba(220,38,38,.55)}
             mark.hl-paraphrase{background:rgba(217,119,6,.18);border-bottom:2px solid rgba(217,119,6,.55)}
             mark.hl-translated{background:rgba(13,148,136,.16);border-bottom:2px solid rgba(13,148,136,.6)}
+            /* Inconclusive band: muted fill + dashed underline so it reads as "unconfirmed". */
+            mark.hl.hl-review{background:rgba(107,114,128,.10);border-bottom:2px dashed rgba(107,114,128,.7)}
             .m{border:1px solid #e7e9ef;border-radius:10px;padding:12px;margin-bottom:10px;background:#fff}
+            .m.m-review{border-style:dashed;background:#fcfcfd}
+            .m-note{font-size:11px;color:#6b7280;font-style:italic;margin:-4px 0 8px}
             .m-h{font-size:12px;font-weight:600;margin-bottom:8px}
             .m-badge{font-size:10px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:999px;margin-right:6px}
             .m-badge.verbatim{color:#dc2626;background:rgba(220,38,38,.1)} .m-badge.paraphrase{color:#d97706;background:rgba(217,119,6,.1)} .m-badge.translated{color:#0d9488;background:rgba(13,148,136,.1)}
+            .m-badge.review{color:#4b5563;background:transparent;border:1px dashed #9ca3af}
             .lp{font-size:10px;color:#0d9488;font-weight:700;margin-right:4px}
             .m-h a{color:#4f46e5} .oa{font-size:10px;color:#0369a1;background:rgba(14,165,233,.12);padding:1px 6px;border-radius:999px;font-weight:700} .oa.oa-arxiv{color:#b31b1b;background:rgba(179,27,27,.1)}
             .m-b{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -470,9 +509,11 @@
             const src = m.source_url ? `<a href="${esc(m.source_url)}">${esc(m.source_name || '')}</a>` : esc(m.source_name || '');
             const oa = reportOrigin(m.source_origin);
             const para = m.paragraph_index != null ? ` · ¶${m.paragraph_index + 1}` : '';
+            const rev = isReview(m) ? `<span class="m-badge review">Needs review</span>` : '';
             return `
-                <div class="m">
-                    <div class="m-h"><span class="m-badge ${m.match_type}">${label}</span>${lp}${pctInt(m.similarity)}% — ${src}${oa}${para}</div>
+                <div class="m${isReview(m) ? ' m-review' : ''}">
+                    <div class="m-h"><span class="m-badge ${m.match_type}">${label}</span>${rev}${lp}${pctInt(m.similarity)}% — ${src}${oa}${para}</div>
+                    ${isReview(m) ? `<div class="m-note">Below the confidence cutoff — similar wording that can also arise independently. Not a confirmed copy; verify in context.</div>` : ''}
                     <div class="m-b">
                         <div><div class="m-lab">Your paper</div><div class="m-x">${esc(m.doc_excerpt || '')}</div></div>
                         <div><div class="m-lab">Source</div><div class="m-x">${highlightExcerpt(m.source_context || m.source_excerpt || '', m.source_excerpt || '')}</div></div>
@@ -490,18 +531,24 @@
         <div class="big">${(ov.similarity_pct || 0).toFixed(1)}%</div>
         <div class="lbl">overall similarity</div>
         <div class="sub">Verbatim ${(ov.verbatim_pct || 0).toFixed(1)}% · Paraphrase ${(ov.paraphrase_pct || 0).toFixed(1)}%${(ov.translated_pct || 0) > 0 ? ` · Translated ${(ov.translated_pct || 0).toFixed(1)}%` : ''} · ${ov.match_count || 0} matches · ${ov.source_count || 0} sources · ${ov.matched_words || 0}/${ov.total_words || 0} words</div>
+        ${(ov.review_count || 0) > 0 ? `<div class="sub rev">${ov.review_count} match${ov.review_count === 1 ? '' : 'es'} (${(ov.review_pct || 0).toFixed(1)}% of the document) fall below the confidence cutoff and are marked <b>Needs review</b> — not counted as confirmed copying.</div>` : ''}
     </section>
     ${sources ? `<h2>Sources checked</h2><ul class="src">${sources}</ul>` : ''}
     <h2>Document</h2>
-    <div class="legend"><span class="sw v"></span>Verbatim<span class="sw p"></span>Paraphrase${hasTranslated ? '<span class="sw t"></span>Translated' : ''}</div>
+    <div class="legend"><span class="sw v"></span>Verbatim<span class="sw p"></span>Paraphrase${hasTranslated ? '<span class="sw t"></span>Translated' : ''}${(ov.review_count || 0) > 0 ? '<span class="sw r"></span>Needs review (inconclusive)' : ''}</div>
     <div class="doc">${docHtml}</div>
     ${matches.length ? `<h2>Matches (${matches.length})</h2>${matchesHtml}` : '<p class="none">No matching passages were found.</p>'}
     <footer class="rep-foot"><h3>Method &amp; limitations</h3>
         <p>Verbatim matches are contiguous identical word sequences; paraphrase matches are sentence-level
-        semantic similarity (local MiniLM cosine ≥ 0.66). This is a self-check aid and <b>not a determination
-        of misconduct</b>. Legitimate quotation, common phrasing, shared terminology and citations can also
-        match. Academic-database matches are compared against paper <i>abstracts</i>, not full text. Review
-        every flagged passage in context.</p>
+        semantic similarity (local MiniLM cosine). Matches at/above a cosine of <b>0.78</b> are reported as
+        confident; those between <b>0.66 and 0.78</b> are reported as <b>“Needs review”</b> — an explicit
+        inconclusive band, because independently written text on the same topic can reach that range.
+        This is a self-check aid and <b>not a determination of misconduct</b>. Legitimate quotation, common
+        phrasing, shared terminology and citations can also match. Academic-database matches are compared
+        against paper <i>abstracts</i>, not full text. Review every flagged passage in context.</p>
+        <p><b>Coverage:</b> your uploaded references plus (if enabled) OpenAlex and arXiv — <b>not</b> the full
+        web or subscription journal databases. A clean result here is not a guarantee of passing a publisher’s
+        similarity check.</p>
     </footer>
 </div></body></html>`;
     }

@@ -663,9 +663,21 @@ a { color: inherit; }
 .cs-bar-fill.hl-verbatim { background: var(--danger); }
 .cs-bar-fill.hl-paraphrase { background: var(--warning); }
 .cs-bar-fill.hl-translated { background: var(--accent-teal); }
+/* Inconclusive band (ADR-0017): deliberately neutral/hatched, never a "severity" colour. */
+.cs-bar-fill.hl-review { background: repeating-linear-gradient(45deg, var(--text-tertiary) 0 4px, transparent 4px 8px); opacity: .7; }
 .cs-stats { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: 2px; }
 .cs-chip { font-size: var(--font-size-xs); color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border-primary); padding: 4px 10px; border-radius: var(--radius-full); }
 .cs-chip b { color: var(--accent-purple); font-family: var(--font-mono); }
+.cs-chip-review { border-style: dashed; }
+.cs-chip-review b { color: var(--text-secondary); }
+
+/* "Needs review" explanation under the score card */
+.results-review-note {
+    margin-top: var(--space-md); padding: var(--space-md);
+    background: var(--bg-tertiary); border: 1px dashed var(--border-primary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs); color: var(--text-secondary); line-height: 1.65;
+}
 
 .results-warnings { display: flex; flex-direction: column; gap: 4px; margin-top: var(--space-md); font-size: var(--font-size-xs); color: var(--warning); }
 
@@ -678,6 +690,7 @@ a { color: inherit; }
 .sw.hl-verbatim { background: var(--danger); }
 .sw.hl-paraphrase { background: var(--warning); }
 .sw.hl-translated { background: var(--accent-teal); }
+.sw.sw-review { background: transparent; border: 1.5px dashed var(--text-tertiary); }
 
 .doc-panel { min-width: 0; }
 .doc-view {
@@ -691,6 +704,8 @@ mark.hl { border-radius: 3px; padding: 0 1px; cursor: pointer; transition: box-s
 mark.hl.hl-verbatim { background: rgba(220,38,38,0.16); border-bottom: 2px solid rgba(220,38,38,0.55); }
 mark.hl.hl-paraphrase { background: rgba(217,119,6,0.18); border-bottom: 2px solid rgba(217,119,6,0.55); }
 mark.hl.hl-translated { background: rgba(13,148,136,0.16); border-bottom: 2px solid rgba(13,148,136,0.6); }
+/* Review band overrides the type colour: muted fill + dashed underline = "not confirmed". */
+mark.hl.hl-review { background: rgba(107,114,128,0.10); border-bottom: 2px dashed rgba(107,114,128,0.7); }
 mark.hl.active { box-shadow: 0 0 0 2px var(--accent-violet); }
 
 .side-panel { position: sticky; top: 84px; align-self: start; display: flex; flex-direction: column; }
@@ -728,7 +743,18 @@ mark.hl.active { box-shadow: 0 0 0 2px var(--accent-violet); }
 .mtag-verbatim { color: var(--danger); background: rgba(220,38,38,0.1); }
 .mtag-paraphrase { color: var(--warning); background: rgba(217,119,6,0.1); }
 .mtag-translated { color: var(--accent-teal); background: rgba(13,148,136,0.12); }
+.mtag-review { color: var(--text-secondary); background: transparent; border: 1px dashed var(--text-tertiary); }
 .lang-pair { font-size: 0.66rem; font-weight: 700; color: var(--accent-teal); font-family: var(--font-mono); }
+
+/* A review-band match row reads as provisional, not as a confirmed hit. */
+.match-row.is-review { border-style: dashed; }
+.match-row.is-review .mr-sim { color: var(--text-secondary); font-weight: 600; }
+.cmp-review-note {
+    margin: 0 0 var(--space-md); padding: 10px 12px;
+    background: var(--bg-tertiary); border: 1px dashed var(--border-primary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs); color: var(--text-secondary); line-height: 1.6;
+}
 
 /* Academic toggle (switch) */
 .academic-toggle {
