@@ -30,6 +30,17 @@ Offline tests (no server/key): `venv\Scripts\python -m pytest` (unit + `/api/che
 public sets first with `venv\Scripts\python -m eval.fetch_datasets paws mrpc` then `... -m eval.run_pairs paws mrpc --gate`.
 Browser E2E: `cd d:\PRISM-UI\_e2e && node check_e2e.mjs`. CI runs all of these.
 
+## Checking CI without `gh`
+`gh` is not installed, but the repo is **public**, so the Actions API is readable unauthenticated:
+```bash
+curl -s "https://api.github.com/repos/HarshalAndhale9657/P.R.I.S.M/actions/runs?per_page=5" \
+  -H "Accept: application/vnd.github+json"        # .workflow_runs[]: status, conclusion, head_sha, jobs_url
+curl -s "<jobs_url>" -H "Accept: application/vnd.github+json"   # per-job + per-step conclusions
+```
+Use this to confirm a push is green instead of waiting for an email — GitHub only emails on **failure**, so
+"no email" is not proof of success. A `cancelled` run is usually normal: `ci.yml` sets
+`concurrency: cancel-in-progress: true`, so a newer push cancels the older run.
+
 ## Repo map (essentials)
 - `backend/main.py` — FastAPI app. **`POST /api/check`** = the checker; `_compute_check` runs the **pipeline** below.
 - `backend/pipeline/` — **pluggable check pipeline** (ADR-0015/0016): `base.py` (CheckContext + Stage), `stages.py`
