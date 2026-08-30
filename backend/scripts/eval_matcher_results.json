@@ -1,0 +1,48 @@
+{
+  "n_positives": 17,
+  "n_negatives": 15,
+  "precision": 1.0,
+  "recall": 0.7647,
+  "f1": 0.8667,
+  "specificity": 1.0,
+  "false_positive_rate": 0.0,
+  "tp": 13,
+  "fn": 4,
+  "fp": 0,
+  "tn": 15,
+  "recall_by_group": {
+    "verbatim/easy": {
+      "hit": 3,
+      "total": 3
+    },
+    "verbatim/medium": {
+      "hit": 2,
+      "total": 2
+    },
+    "paraphrase/easy": {
+      "hit": 3,
+      "total": 3
+    },
+    "paraphrase/medium": {
+      "hit": 2,
+      "total": 3
+    },
+    "paraphrase/hard": {
+      "hit": 0,
+      "total": 3
+    },
+    "translated/medium": {
+      "hit": 3,
+      "total": 3
+    }
+  },
+  "fpr_by_stratum": {
+    "boilerplate": 0.0,
+    "esl": 0.0,
+    "same_topic": 0.0,
+    "shared_terminology": 0.0,
+    "unrelated": 0.0
+  },
+  "paraphrase_enabled": true,
+  "gates_pass": true
+}

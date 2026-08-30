@@ -3,284 +3,190 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="P.R.I.S.M. — Plagiarism Recognition via Integrated Stylometric Mapping. AI-powered academic integrity analysis.">
-    <title>P.R.I.S.M. — Academic Integrity Analyzer</title>
+    <meta name="description" content="P.R.I.S.M. Originality Checker — find copied and paraphrased passages in a paper and attribute them to your reference sources.">
+    <title>P.R.I.S.M. — Originality Checker</title>
 
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-
-    <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-
-    <!-- Stylesheet -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+<div class="app-shell">
 
-    <!-- ═══════════════════════════════════════════ -->
-    <!-- HEADER / NAVBAR                             -->
-    <!-- ═══════════════════════════════════════════ -->
-    <header id="app-header">
-        <div class="header-inner">
-            <div class="logo-group">
-                <div class="logo-icon" id="logo-icon">
-                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                        <path d="M14 2L26 8V20L14 26L2 20V8L14 2Z" stroke="url(#logoGrad)" stroke-width="2" fill="none"/>
-                        <circle cx="14" cy="14" r="4" fill="url(#logoGrad)"/>
-                        <defs>
-                            <linearGradient id="logoGrad" x1="2" y1="2" x2="26" y2="26">
-                                <stop offset="0%" stop-color="#6366f1"/>
-                                <stop offset="100%" stop-color="#0ea5e9"/>
-                            </linearGradient>
-                        </defs>
-                    </svg>
-                </div>
-                <h1 class="logo-text">P.R.I.S.M.</h1>
-                <span class="logo-badge">v2 Hybrid</span>
-            </div>
-            <nav class="nav-tabs" id="nav-tabs">
-                <button class="nav-tab active" data-panel="upload" id="tab-upload">
-                    <span class="tab-icon">📤</span> Upload
-                </button>
-                <button class="nav-tab" data-panel="heatmap" id="tab-heatmap" disabled>
-                    <span class="tab-icon">🎨</span> Heatmap
-                </button>
-                <button class="nav-tab" data-panel="charts" id="tab-charts" disabled>
-                    <span class="tab-icon">📊</span> Charts
-                </button>
-                <button class="nav-tab" data-panel="citations" id="tab-citations" disabled>
-                    <span class="tab-icon">📚</span> Citations
-                </button>
-                <button class="nav-tab" data-panel="sources" id="tab-sources" disabled>
-                    <span class="tab-icon">🔍</span> Sources
-                </button>
-                <button class="nav-tab" data-panel="report" id="tab-report" disabled>
-                    <span class="tab-icon">📋</span> Report
-                </button>
-            </nav>
-            <div class="header-actions">
-                <button class="btn-icon" id="btn-new-analysis" title="New Analysis" style="display:none;">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                </button>
+    <!-- ═══════════ SIDEBAR ═══════════ -->
+    <aside class="sidebar">
+        <div class="brand">
+            <span class="brand-mark" aria-hidden="true">
+                <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+                    <path d="M16 3L28 10V22L16 29L4 22V10L16 3Z" stroke="url(#bg)" stroke-width="1.8" fill="url(#bgf)"/>
+                    <path d="M16 10L22 13.5V20.5L16 24L10 20.5V13.5L16 10Z" stroke="url(#bg)" stroke-width="1.4" fill="none"/>
+                    <circle cx="16" cy="17" r="2.4" fill="url(#bg)"/>
+                    <defs>
+                        <linearGradient id="bg" x1="4" y1="3" x2="28" y2="29"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient>
+                        <linearGradient id="bgf" x1="4" y1="3" x2="28" y2="29"><stop stop-color="#6366f1" stop-opacity="0.08"/><stop offset="1" stop-color="#0ea5e9" stop-opacity="0.08"/></linearGradient>
+                    </defs>
+                </svg>
+            </span>
+            <div class="brand-text">
+                <span class="brand-name">P.R.I.S.M.</span>
+                <span class="brand-sub">Originality Checker</span>
             </div>
         </div>
-    </header>
 
-    <!-- ═══════════════════════════════════════════ -->
-    <!-- MAIN CONTENT AREA                           -->
-    <!-- ═══════════════════════════════════════════ -->
-    <main id="app-main">
+        <nav class="nav" aria-label="Sections">
+            <span class="nav-label">Workflow</span>
+            <button class="nav-tab active" type="button" id="nav-check">
+                <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span class="nav-txt">Originality Check</span>
+            </button>
+            <button class="nav-tab" type="button" id="nav-results" disabled>
+                <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
+                <span class="nav-txt">Results</span>
+            </button>
 
-        <!-- ─── Upload Panel ─── -->
-        <section class="panel active" id="panel-upload">
-            <div class="upload-hero">
-                <div class="hero-content">
-                    <div class="hero-icon">
-                        <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-                            <path d="M32 4L58 18V46L32 60L6 46V18L32 4Z" stroke="url(#heroGrad)" stroke-width="2.5" fill="none" opacity="0.3"/>
-                            <path d="M32 12L50 22V42L32 52L14 42V22L32 12Z" stroke="url(#heroGrad)" stroke-width="2" fill="none" opacity="0.6"/>
-                            <circle cx="32" cy="32" r="8" fill="url(#heroGrad)" opacity="0.8"/>
-                            <defs>
-                                <linearGradient id="heroGrad" x1="6" y1="4" x2="58" y2="60">
-                                    <stop offset="0%" stop-color="#6366f1"/>
-                                    <stop offset="50%" stop-color="#818cf8"/>
-                                    <stop offset="100%" stop-color="#0ea5e9"/>
-                                </linearGradient>
-                            </defs>
-                        </svg>
-                    </div>
-                    <h2 class="hero-title">Analyze Academic Integrity</h2>
-                    <p class="hero-subtitle">Upload a PDF to detect stylometric anomalies using <strong>mathematical proof</strong> and <strong>AI reasoning</strong></p>
+            <span class="nav-label" style="margin-top:12px;">Other</span>
+            <a class="nav-tab" href="authorship.html">
+                <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+                <span class="nav-txt">Authorship (legacy)</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-foot">
+            <div class="engine-chip">
+                <span class="dot-pulse"></span>
+                <div>
+                    <span class="engine-title">Local engine</span>
+                    <span class="engine-sub">offline · MiniLM + n-gram</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ═══════════ MAIN ═══════════ -->
+    <div class="main">
+        <header class="topbar">
+            <div class="topbar-lead">
+                <h1 class="topbar-title" id="topbar-title">Originality Check</h1>
+                <p class="topbar-desc" id="topbar-desc">Find copied &amp; paraphrased passages and their sources</p>
+            </div>
+            <div class="topbar-actions">
+                <a class="btn btn-ghost" href="http://localhost:8000/docs" target="_blank" rel="noopener">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
+                    API
+                </a>
+                <button class="btn btn-primary" id="btn-new-check" style="display:none;">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                    New check
+                </button>
+            </div>
+        </header>
+
+        <main id="app-main">
+
+            <!-- ═══════ UPLOAD VIEW ═══════ -->
+            <section class="check-view active" id="view-upload">
+                <div class="check-hero">
+                    <span class="eyebrow">Source-attribution plagiarism</span>
+                    <h2 class="hero-title">Check your writing against <span class="grad">your sources</span></h2>
+                    <p class="hero-subtitle">Upload your paper and the references it draws on. P.R.I.S.M. finds copied and paraphrased passages, shows exactly where they are, and links each to its source — all offline, on your machine.</p>
                 </div>
 
-                <!-- Drop Zone -->
-                <div class="drop-zone" id="drop-zone">
-                    <div class="drop-zone-inner">
-                        <div class="drop-icon" id="drop-icon">
-                            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                                <path d="M24 4V32M24 4L16 12M24 4L32 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                <path d="M8 28V38C8 40.2 9.8 42 12 42H36C38.2 42 40 40.2 40 38V28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
+                <div class="check-grid">
+                    <!-- Paper -->
+                    <div class="upload-card">
+                        <div class="upload-card-head">
+                            <span class="uc-step">1</span>
+                            <div>
+                                <h3>Your paper</h3>
+                                <p>The document to check</p>
+                            </div>
                         </div>
-                        <p class="drop-text">Drag & drop your PDF here</p>
-                        <p class="drop-subtext">or</p>
-                        <button class="btn-primary" id="btn-browse">
-                            <span>Browse Files</span>
-                        </button>
-                        <p class="drop-hint">Supports academic papers in PDF format</p>
-                        <input type="file" id="file-input" accept=".pdf" hidden>
+                        <div class="drop-zone compact" id="paper-drop">
+                            <input type="file" id="paper-input" accept=".pdf,.txt" hidden>
+                            <div class="drop-zone-inner">
+                                <div class="drop-icon">
+                                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+                                </div>
+                                <p class="drop-text">Drop your paper</p>
+                                <p class="drop-hint">PDF or TXT</p>
+                            </div>
+                        </div>
+                        <div class="chip-list" id="paper-chip"></div>
+                    </div>
+
+                    <!-- References -->
+                    <div class="upload-card">
+                        <div class="upload-card-head">
+                            <span class="uc-step">2</span>
+                            <div>
+                                <h3>Reference sources</h3>
+                                <p>Papers to compare against <span class="opt">(optional with academic search)</span></p>
+                            </div>
+                        </div>
+                        <div class="drop-zone compact" id="refs-drop">
+                            <input type="file" id="refs-input" accept=".pdf,.txt" multiple hidden>
+                            <div class="drop-zone-inner">
+                                <div class="drop-icon">
+                                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v6M9 14h6"/></svg>
+                                </div>
+                                <p class="drop-text">Add reference files</p>
+                                <p class="drop-hint">PDF or TXT · multiple</p>
+                            </div>
+                        </div>
+                        <div class="chip-list" id="refs-list"></div>
                     </div>
                 </div>
 
-                <!-- File Info (shown after selection) -->
-                <div class="file-info" id="file-info" style="display:none;">
-                    <div class="file-info-card">
-                        <div class="file-icon">📄</div>
-                        <div class="file-details">
-                            <span class="file-name" id="file-name"></span>
-                            <span class="file-meta" id="file-meta"></span>
-                        </div>
-                        <button class="btn-remove" id="btn-remove" title="Remove file">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M18 6L6 18M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+                <label class="academic-toggle" for="academic-toggle">
+                    <input type="checkbox" id="academic-toggle">
+                    <span class="at-switch" aria-hidden="true"></span>
+                    <span class="at-text">
+                        <strong>Also search open-access academic databases</strong>
+                        <span>Check against OpenAlex when you don't have the source files (matches paper abstracts). Requires internet.</span>
+                    </span>
+                </label>
 
-                <!-- Progress Bar -->
-                <div class="progress-container" id="progress-container" style="display:none;">
-                    <div class="progress-header">
-                        <span class="progress-label" id="progress-label">Initializing...</span>
-                        <span class="progress-percent" id="progress-percent">0%</span>
-                    </div>
-                    <div class="progress-track">
-                        <div class="progress-fill" id="progress-fill"></div>
-                    </div>
-                    <div class="progress-steps" id="progress-steps">
-                        <div class="step" data-step="parse">
-                            <span class="step-dot"></span>
-                            <span class="step-label">Parsing PDF</span>
-                        </div>
-                        <div class="step" data-step="features">
-                            <span class="step-dot"></span>
-                            <span class="step-label">Extracting Features</span>
-                        </div>
-                        <div class="step" data-step="cluster">
-                            <span class="step-dot"></span>
-                            <span class="step-label">Clustering</span>
-                        </div>
-                        <div class="step" data-step="reasoning">
-                            <span class="step-dot"></span>
-                            <span class="step-label">AI Reasoning</span>
-                        </div>
-                        <div class="step" data-step="citations">
-                            <span class="step-dot"></span>
-                            <span class="step-label">Citation Analysis</span>
-                        </div>
-                        <div class="step" data-step="sources">
-                            <span class="step-dot"></span>
-                            <span class="step-label">Source Tracing</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Analyze Button -->
-                <button class="btn-analyze" id="btn-analyze" style="display:none;">
-                    <span class="btn-analyze-icon">⚡</span>
-                    <span>Run Full Analysis</span>
+                <button class="btn-analyze" id="btn-check" disabled>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    <span>Check originality</span>
                 </button>
 
-                <!-- Error Display -->
-                <div class="error-card" id="error-card" style="display:none;">
-                    <div class="error-icon">⚠️</div>
-                    <p class="error-message" id="error-message"></p>
-                    <button class="btn-secondary" id="btn-retry">Try Again</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- ─── Heatmap Panel ─── -->
-        <section class="panel" id="panel-heatmap">
-            <div class="panel-header">
-                <h2>Authorship Heatmap</h2>
-                <p class="panel-desc">Color-coded paragraphs by detected authorship cluster</p>
-            </div>
-            <div class="panel-body">
-                <div class="heatmap-legend" id="heatmap-legend"></div>
-                <div class="heatmap-grid" id="heatmap-grid">
-                    <!-- Dynamically populated -->
-                </div>
-            </div>
-        </section>
-
-        <!-- ─── Charts Panel ─── -->
-        <section class="panel" id="panel-charts">
-            <div class="panel-header">
-                <h2>Style Analysis Charts</h2>
-                <p class="panel-desc">Stylometric feature visualization across paragraphs</p>
-            </div>
-            <div class="panel-body">
-                <div class="charts-grid" id="charts-grid">
-                    <div class="chart-card">
-                        <h3>Feature Trends</h3>
-                        <canvas id="chart-features"></canvas>
+                <div class="check-progress" id="check-progress" style="display:none;">
+                    <div class="progress-header">
+                        <span class="progress-label" id="check-progress-label">Analyzing…</span>
                     </div>
-                    <div class="chart-card">
-                        <h3>Function Word Ratios</h3>
-                        <canvas id="chart-ratios"></canvas>
+                    <div class="progress-track"><div class="progress-fill indeterminate"></div></div>
+                    <p class="muted" style="text-align:center;">Matching passages against your sources. This can take a few seconds on first run while the local model loads.</p>
+                </div>
+
+                <div class="error-card" id="check-error" style="display:none;">
+                    <div class="error-icon">
+                        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
                     </div>
-                    <div class="chart-card full-width">
-                        <h3>Cluster Distribution</h3>
-                        <canvas id="chart-clusters"></canvas>
-                    </div>
+                    <p class="error-message" id="check-error-msg"></p>
+                    <button class="btn btn-secondary" id="btn-check-retry">Try again</button>
                 </div>
-            </div>
-        </section>
 
-        <!-- ─── Citations Panel ─── -->
-        <section class="panel" id="panel-citations">
-            <div class="panel-header">
-                <h2>Citation Forensics</h2>
-                <p class="panel-desc">Temporal analysis of citation patterns</p>
-            </div>
-            <div class="panel-body">
-                <div class="citations-content" id="citations-content">
-                    <!-- Dynamically populated -->
-                </div>
-            </div>
-        </section>
+                <p class="hero-disclaimer">
+                    A self-check aid — <strong>not a verdict</strong>. "Matches" are passages similar to your reference
+                    sources; review each in context. Similarity is not proof of misconduct.
+                </p>
+            </section>
 
-        <!-- ─── Sources Panel ─── -->
-        <section class="panel" id="panel-sources">
-            <div class="panel-header">
-                <h2>Source Matches</h2>
-                <p class="panel-desc">Potential source papers from global academic databases</p>
-            </div>
-            <div class="panel-body">
-                <div class="sources-content" id="sources-content">
-                    <!-- Dynamically populated -->
-                </div>
-            </div>
-        </section>
+            <!-- ═══════ RESULTS VIEW ═══════ -->
+            <section class="check-view" id="view-results">
+                <div id="results-content"></div>
+            </section>
 
-        <!-- ─── Report Panel ─── -->
-        <section class="panel" id="panel-report">
-            <div class="panel-header">
-                <h2>Forensic Report</h2>
-                <p class="panel-desc">AI-synthesized integrity assessment</p>
-            </div>
-            <div class="panel-body">
-                <div class="report-content" id="report-content">
-                    <!-- Dynamically populated -->
-                </div>
-            </div>
-        </section>
+            <footer id="app-footer">
+                <p>P.R.I.S.M. — Originality Checker</p>
+                <p class="footer-sub">Verbatim (n-gram) &amp; paraphrase (MiniLM) matching · offline · source-attributed</p>
+            </footer>
+        </main>
+    </div>
+</div>
 
-    </main>
-
-    <!-- ═══════════════════════════════════════════ -->
-    <!-- FOOTER                                      -->
-    <!-- ═══════════════════════════════════════════ -->
-    <footer id="app-footer">
-        <p>P.R.I.S.M. &mdash; Plagiarism Recognition via Integrated Stylometric Mapping</p>
-        <p class="footer-sub">Mathematical Proof (spaCy + HDBSCAN) &bull; AI Reasoning (GPT-4o)</p>
-    </footer>
-
-    <!-- ═══════════════════════════════════════════ -->
-    <!-- SCRIPTS                                     -->
-    <!-- ═══════════════════════════════════════════ -->
-    <script src="js/app.js"></script>
-    <script src="js/upload.js"></script>
-    <script src="js/heatmap.js"></script>
-    <script src="js/charts.js"></script>
-    <script src="js/citations.js"></script>
-    <script src="js/sources.js"></script>
-    <script src="js/report.js"></script>
-
+    <script src="js/check.js"></script>
 </body>
 </html>

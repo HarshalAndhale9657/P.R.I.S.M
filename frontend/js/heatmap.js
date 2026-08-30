@@ -3,120 +3,94 @@
  * ═══════════════════════════════════════════════════════════
  * Renders color-coded paragraph blocks grouped by HDBSCAN cluster assignment.
  *
- * Visual encoding:
- *   - Each cluster gets a unique HSL color (auto-generated, infinite scalability)
- *   - Cluster -1 (HDBSCAN noise) = red border + pulsing anomaly badge
- *   - Click any paragraph → expands to show stylometric feature bars + GPT reasoning
- *   - Click legend swatch → filters view to that cluster only
- *
- * Data flow:
- *   analysisData.paragraphs[]     → text + cluster_id per paragraph
- *   analysisData.features.profiles[] → 11-dim feature vectors for bar rendering
- *   analysisData.reasoning         → GPT explanations for anomalous paragraphs
- *
- * Performance:
- *   - Single DOM build pass (innerHTML concat, one append)
- *   - YIQ contrast computation for text readability on any hue
- *   - Staggered CSS entrance animations (no JS timers)
+ * Data flow (matches /api/analyze response):
+ *   data.paragraphs[]            → { text, cluster_id, is_anomaly, is_boundary }
+ *   data.features.profiles[]     → name-keyed stylometric dicts, one per paragraph
+ *   data.features.feature_names  → ordered feature-name list
+ *   data.reasoning               → { available, boundary_explanations{}, anomaly_profiles{} }
  */
 
 const HeatmapRenderer = (() => {
-    // ─── DOM Cache ───
     let legendContainer = null;
     let gridContainer = null;
-    let expandedBlock = null; // currently expanded paragraph
+    let expandedBlock = null;
 
-    // ─── Dynamic HSL Color Palette ───
-    /** Generate an HSL color palette mapping for each authorship cluster. */
+    // Curated, human-readable subset of the 27-dim feature vector.
+    const CORE_FEATURES = [
+        'avg_sentence_length',
+        'avg_word_length',
+        'pronoun_ratio',
+        'preposition_ratio',
+        'conjunction_ratio',
+        'passive_voice_pct',
+        'yules_k',
+        'burstiness_coefficient',
+    ];
+
+    // ─── Light-theme cluster palette (readable on white) ───
     function generateClusterPalette(clusterLabels) {
         const unique = [...new Set(clusterLabels)].filter(c => c !== -1).sort((a, b) => a - b);
         const total = unique.length;
         const palette = {};
 
         unique.forEach((label, i) => {
-            const hue = (i * (360 / Math.max(total, 1)) + 220) % 360; // Start from blue range
+            const hue = (i * (360 / Math.max(total, 1)) + 210) % 360;
             palette[label] = {
-                bg: `hsla(${hue}, 60%, 55%, 0.10)`,
-                bgHover: `hsla(${hue}, 60%, 55%, 0.18)`,
-                border: `hsl(${hue}, 60%, 55%)`,
-                text: `hsl(${hue}, 50%, 75%)`,
+                bg: `hsla(${hue}, 68%, 55%, 0.10)`,
+                bgHover: `hsla(${hue}, 68%, 55%, 0.16)`,
+                border: `hsl(${hue}, 62%, 48%)`,
+                text: `hsl(${hue}, 55%, 36%)`,
                 label: `Cluster ${label}`,
                 hue: hue,
             };
         });
 
-        // Anomaly cluster (-1)
         palette[-1] = {
-            bg: 'rgba(248, 113, 113, 0.08)',
-            bgHover: 'rgba(248, 113, 113, 0.15)',
-            border: '#f87171',
-            text: '#fca5a5',
-            label: 'Anomaly (Cluster -1)',
+            bg: 'rgba(239, 68, 68, 0.06)',
+            bgHover: 'rgba(239, 68, 68, 0.12)',
+            border: '#ef4444',
+            text: '#b91c1c',
+            label: 'Anomaly (Cluster −1)',
             hue: 0,
         };
 
         return palette;
     }
 
-    // ─── YIQ Contrast ───
-    /** Compute ideal text color (dark/light) based on background YIQ contrast. */
-    function getTextColor(hue, saturation, lightness) {
-        // Convert HSL to RGB to determine contrast
-        const h = hue / 360;
-        const s = saturation / 100;
-        const l = lightness / 100;
-
-        let r, g, b;
-        if (s === 0) {
-            r = g = b = l;
-        } else {
-            const hue2rgb = (p, q, t) => {
-                if (t < 0) t += 1;
-                if (t > 1) t -= 1;
-                if (t < 1/6) return p + (q - p) * 6 * t;
-                if (t < 1/2) return q;
-                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                return p;
-            };
-            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-            const p = 2 * l - q;
-            r = hue2rgb(p, q, h + 1/3);
-            g = hue2rgb(p, q, h);
-            b = hue2rgb(p, q, h - 1/3);
-        }
-
-        // YIQ formula
-        const yiq = (r * 255 * 299 + g * 255 * 587 + b * 255 * 114) / 1000;
-        return yiq >= 128 ? '#0d1117' : '#e6edf3';
-    }
-
-    // ─── Build Legend ───
-    /** Render the clickable cluster legend and statistics. */
-    function renderLegend(palette, clusterSizes) {
+    // ─── Legend + stats ───
+    function renderLegend(palette, clusterSizes, meta) {
         legendContainer.innerHTML = '';
 
-        // Summary stats
         const statsEl = document.createElement('div');
         statsEl.className = 'heatmap-stats';
+        const realClusters = Object.keys(clusterSizes).filter(k => parseInt(k) !== -1).length;
         statsEl.innerHTML = `
             <div class="stat-chip">
-                <span class="stat-value">${Object.keys(clusterSizes).length}</span>
+                <span class="stat-value">${meta.estimatedAuthors}</span>
+                <span class="stat-label">Est. Authors</span>
+            </div>
+            <div class="stat-chip">
+                <span class="stat-value">${realClusters}</span>
                 <span class="stat-label">Clusters</span>
             </div>
             <div class="stat-chip anomaly-chip">
                 <span class="stat-value">${clusterSizes[-1] || 0}</span>
                 <span class="stat-label">Anomalies</span>
             </div>
+            <div class="stat-chip">
+                <span class="stat-value">${meta.noisePct}%</span>
+                <span class="stat-label">Noise</span>
+            </div>
         `;
         legendContainer.appendChild(statsEl);
 
-        // Color swatches
         const swatchContainer = document.createElement('div');
         swatchContainer.className = 'legend-swatches';
 
         Object.entries(palette).forEach(([label, colors]) => {
             const item = document.createElement('div');
             item.className = 'legend-item';
+            item.dataset.cluster = label;
             if (parseInt(label) === -1) item.classList.add('anomaly');
 
             item.innerHTML = `
@@ -125,10 +99,8 @@ const HeatmapRenderer = (() => {
                 <span class="legend-count">${clusterSizes[label] || 0}</span>
             `;
 
-            // Click to filter
             item.addEventListener('click', () => {
                 toggleClusterFilter(parseInt(label));
-                item.classList.toggle('filter-active');
             });
 
             swatchContainer.appendChild(item);
@@ -137,38 +109,38 @@ const HeatmapRenderer = (() => {
         legendContainer.appendChild(swatchContainer);
     }
 
-    // ─── Filter by Cluster ───
+    // ─── Cluster filter ───
     let activeFilter = null;
 
-    /** Filter the heatmap to highlight a specific cluster ID. */
     function toggleClusterFilter(clusterId) {
         const blocks = gridContainer.querySelectorAll('.heatmap-block');
+        const legendItems = legendContainer.querySelectorAll('.legend-item');
 
         if (activeFilter === clusterId) {
-            // Remove filter
             activeFilter = null;
-            blocks.forEach(b => b.style.opacity = '1');
-            legendContainer.querySelectorAll('.legend-item').forEach(li => li.classList.remove('filter-active'));
+            blocks.forEach(b => (b.style.opacity = '1'));
+            legendItems.forEach(li => li.classList.remove('filter-active'));
         } else {
             activeFilter = clusterId;
             blocks.forEach(b => {
                 const blockCluster = parseInt(b.dataset.cluster);
-                b.style.opacity = blockCluster === clusterId ? '1' : '0.2';
+                b.style.opacity = blockCluster === clusterId ? '1' : '0.25';
+            });
+            legendItems.forEach(li => {
+                li.classList.toggle('filter-active', parseInt(li.dataset.cluster) === clusterId);
             });
         }
     }
 
-    // ─── Build Heatmap Grid ───
-    /** Render the color-coded paragraph blocks for the heatmap grid. */
-    function renderGrid(paragraphs, palette, profiles, featureNames, reasoning) {
+    // ─── Grid ───
+    function renderGrid(paragraphs, palette, profiles, featureNames, reasoning, featureMax) {
         gridContainer.innerHTML = '';
 
         paragraphs.forEach((para, index) => {
-            const cluster = para.cluster_id !== undefined ? para.cluster_id : (para.cluster !== undefined ? para.cluster : 0);
-            const colors = palette[cluster] || palette[0];
-            const isAnomaly = cluster === -1;
+            const cluster = getCluster(para);
+            const colors = palette[cluster] || palette[0] || palette[-1];
+            const isAnomaly = cluster === -1 || para.is_anomaly === true;
 
-            // Block container
             const block = document.createElement('div');
             block.className = `heatmap-block${isAnomaly ? ' anomaly' : ''}`;
             block.dataset.cluster = cluster;
@@ -176,47 +148,45 @@ const HeatmapRenderer = (() => {
             block.style.borderLeftColor = colors.border;
             block.style.background = colors.bg;
 
-            // Paragraph index
             const indexEl = document.createElement('div');
             indexEl.className = 'para-index';
-            indexEl.textContent = `¶ ${index + 1}`;
-            if (isAnomaly) {
-                indexEl.innerHTML += ` <span style="color:#f87171;font-weight:600;">— FLAGGED</span>`;
-            } else {
-                indexEl.innerHTML += ` <span style="color:${colors.text};">— ${colors.label}</span>`;
-            }
+            const tag = isAnomaly
+                ? `<span style="color:#b91c1c;font-weight:600;">— FLAGGED</span>`
+                : `<span style="color:${colors.text};font-weight:600;">— ${colors.label}</span>`;
+            indexEl.innerHTML = `¶ ${index + 1} ${tag}`;
 
-            // Paragraph text preview
             const textEl = document.createElement('div');
             textEl.className = 'para-text';
-            textEl.textContent = para.text || para;
+            textEl.textContent = (para && para.text) ? para.text : (typeof para === 'string' ? para : '');
 
-            // Anomaly badge
             let badgeEl = null;
             if (isAnomaly) {
                 badgeEl = document.createElement('span');
                 badgeEl.className = 'anomaly-badge';
-                badgeEl.textContent = '🚨 Anomaly';
+                badgeEl.textContent = '🚩 Anomaly';
             }
 
-            // Expandable detail section
             const detailEl = document.createElement('div');
             detailEl.className = 'heatmap-detail';
             detailEl.style.display = 'none';
 
-            // Feature profile
+            // Stylometric feature bars (curated + normalized per feature)
             const profile = profiles ? profiles[index] : null;
-            if (profile && featureNames) {
-                const featuresHtml = featureNames.map((name, fi) => {
-                    const val = profile.features ? profile.features[fi] : (profile[fi] || 0);
-                    const formatted = typeof val === 'number' ? val.toFixed(3) : val;
+            if (profile) {
+                const names = (featureNames && featureNames.length)
+                    ? CORE_FEATURES.filter(f => featureNames.includes(f))
+                    : CORE_FEATURES;
+                const featuresHtml = names.map(name => {
+                    const val = typeof profile[name] === 'number' ? profile[name] : 0;
+                    const max = featureMax[name] || 1;
+                    const pct = Math.max(2, Math.min(Math.abs(val) / max * 100, 100));
                     return `
                         <div class="feature-row">
                             <span class="feature-name">${formatFeatureName(name)}</span>
                             <div class="feature-bar-track">
-                                <div class="feature-bar-fill" style="width:${Math.min(Math.abs(val) * 100, 100)}%;background:${colors.border};"></div>
+                                <div class="feature-bar-fill" style="width:${pct}%;background:${colors.border};"></div>
                             </div>
-                            <span class="feature-value">${formatted}</span>
+                            <span class="feature-value">${val.toFixed(3)}</span>
                         </div>
                     `;
                 }).join('');
@@ -229,132 +199,136 @@ const HeatmapRenderer = (() => {
                 `;
             }
 
-            // GPT Reasoning (if available for this paragraph)
-            if (reasoning && isAnomaly) {
-                const paraReasoning = findReasoningForParagraph(reasoning, index);
-                if (paraReasoning) {
-                    detailEl.innerHTML += `
-                        <div class="detail-section reasoning-section">
-                            <h4>🤖 AI Reasoning</h4>
-                            <p class="reasoning-text">${paraReasoning}</p>
-                        </div>
-                    `;
-                }
+            // AI reasoning for flagged paragraphs
+            const paraReasoning = findReasoningForParagraph(reasoning, index);
+            if (paraReasoning) {
+                detailEl.innerHTML += `
+                    <div class="detail-section reasoning-section">
+                        <h4>🤖 AI Reasoning</h4>
+                        <p class="reasoning-text">${escapeHtml(paraReasoning)}</p>
+                    </div>
+                `;
             }
 
-            // Assemble block
             block.appendChild(indexEl);
             block.appendChild(textEl);
             if (badgeEl) block.appendChild(badgeEl);
-            block.appendChild(detailEl);
+            if (detailEl.innerHTML.trim()) block.appendChild(detailEl);
 
-            // Click to expand
-            block.addEventListener('click', () => {
-                if (expandedBlock === block) {
-                    // Collapse
-                    detailEl.style.display = 'none';
-                    block.classList.remove('expanded');
-                    expandedBlock = null;
-                } else {
-                    // Collapse previous
-                    if (expandedBlock) {
-                        expandedBlock.querySelector('.heatmap-detail').style.display = 'none';
-                        expandedBlock.classList.remove('expanded');
+            if (detailEl.innerHTML.trim()) {
+                block.style.cursor = 'pointer';
+                block.addEventListener('click', () => {
+                    if (expandedBlock === block) {
+                        detailEl.style.display = 'none';
+                        block.classList.remove('expanded');
+                        expandedBlock = null;
+                    } else {
+                        if (expandedBlock) {
+                            const prev = expandedBlock.querySelector('.heatmap-detail');
+                            if (prev) prev.style.display = 'none';
+                            expandedBlock.classList.remove('expanded');
+                        }
+                        detailEl.style.display = 'block';
+                        block.classList.add('expanded');
+                        expandedBlock = block;
                     }
-                    // Expand this
-                    detailEl.style.display = 'block';
-                    block.classList.add('expanded');
-                    expandedBlock = block;
-                }
-            });
+                });
+            }
 
             gridContainer.appendChild(block);
         });
     }
 
-    // ─── Find GPT Reasoning ───
-    /** Extract the AI generated explanation for a flagged paragraph boundary. */
+    // ─── AI reasoning lookup (matches backend shape) ───
     function findReasoningForParagraph(reasoning, paraIndex) {
-        if (!reasoning) return null;
+        if (!reasoning || reasoning.available === false) return null;
 
-        // Check style_profiles
-        if (reasoning.style_profiles) {
-            const profile = reasoning.style_profiles.find(p =>
-                p.paragraph_index === paraIndex || p.index === paraIndex
-            );
-            if (profile) return profile.explanation || profile.style_summary || JSON.stringify(profile);
+        // Anomaly profiles are keyed by paragraph index as a string.
+        const profiles = reasoning.anomaly_profiles || {};
+        if (profiles[paraIndex] != null) return profiles[paraIndex];
+        if (profiles[String(paraIndex)] != null) return profiles[String(paraIndex)];
+
+        // Boundary explanations are keyed "a_to_b".
+        const boundaries = reasoning.boundary_explanations || {};
+        for (const key of Object.keys(boundaries)) {
+            const [a, b] = key.split('_to_').map(n => parseInt(n, 10));
+            if (a === paraIndex || b === paraIndex) return boundaries[key];
         }
-
-        // Check boundary_analyses
-        if (reasoning.boundary_analyses) {
-            const boundary = reasoning.boundary_analyses.find(b =>
-                b.paragraph_a === paraIndex || b.paragraph_b === paraIndex ||
-                b.index_a === paraIndex || b.index_b === paraIndex
-            );
-            if (boundary) return boundary.explanation || boundary.reasoning || JSON.stringify(boundary);
-        }
-
-        // Check if reasoning is an array
-        if (Array.isArray(reasoning)) {
-            const item = reasoning.find(r => r.paragraph_index === paraIndex || r.index === paraIndex);
-            if (item) return item.explanation || item.reasoning || JSON.stringify(item);
-        }
-
         return null;
     }
 
-    // ─── Format Feature Names ───
-    /** Format a raw feature snake_case name into a display-friendly label. */
     function formatFeatureName(name) {
         return name
             .replace(/_/g, ' ')
-            .replace(/\b\w/g, c => c.toUpperCase())
-            .replace('Pct', '%')
-            .replace('Avg', 'Avg.');
+            .replace(/\bpct\b/i, '%')
+            .replace(/\byules k\b/i, "Yule's K")
+            .replace(/\bavg\b/i, 'Avg.')
+            .replace(/\b\w/g, c => c.toUpperCase());
     }
 
-    // ─── Compute Cluster Sizes ───
-    /** Tally the number of paragraphs assigned to each cluster. */
+    function getCluster(p) {
+        if (p && p.cluster_id !== undefined && p.cluster_id !== null) return p.cluster_id;
+        if (p && p.cluster !== undefined && p.cluster !== null) return p.cluster;
+        return 0;
+    }
+
     function computeClusterSizes(paragraphs) {
         const sizes = {};
         paragraphs.forEach(p => {
-            const c = p.cluster_id !== undefined ? p.cluster_id : (p.cluster !== undefined ? p.cluster : 0);
+            const c = getCluster(p);
             sizes[c] = (sizes[c] || 0) + 1;
         });
         return sizes;
     }
 
-    // ─── Main Render ───
-    /** Main render entry point for the heatmap visualization. */
+    function computeFeatureMax(profiles, names) {
+        const max = {};
+        names.forEach(n => (max[n] = 0));
+        (profiles || []).forEach(p => {
+            if (!p) return;
+            names.forEach(n => {
+                const v = Math.abs(typeof p[n] === 'number' ? p[n] : 0);
+                if (v > max[n]) max[n] = v;
+            });
+        });
+        return max;
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
+    }
+
+    // ─── Main render ───
     function render(data) {
         legendContainer = document.getElementById('heatmap-legend');
         gridContainer = document.getElementById('heatmap-grid');
-
         if (!legendContainer || !gridContainer) return;
 
         const paragraphs = data.paragraphs || [];
-        const profiles = data.profiles || null;
-        const featureNames = data.feature_names || [];
+        const features = data.features || {};
+        const profiles = features.profiles || data.profiles || null;
+        const featureNames = features.feature_names || data.feature_names || CORE_FEATURES;
         const reasoning = data.reasoning || null;
+        const clustering = data.clustering || {};
 
-        // Extract cluster labels
-        const clusterLabels = paragraphs.map(p => p.cluster_id !== undefined ? p.cluster_id : (p.cluster !== undefined ? p.cluster : 0));
-
-        // Generate palette
+        const clusterLabels = paragraphs.map(getCluster);
         const palette = generateClusterPalette(clusterLabels);
-
-        // Cluster sizes
         const clusterSizes = computeClusterSizes(paragraphs);
+        const featureMax = computeFeatureMax(profiles, CORE_FEATURES);
 
-        // Render
-        renderLegend(palette, clusterSizes);
-        renderGrid(paragraphs, palette, profiles, featureNames, reasoning);
+        const meta = {
+            estimatedAuthors: clustering.estimated_authors != null ? clustering.estimated_authors : Object.keys(clusterSizes).filter(k => parseInt(k) !== -1).length,
+            noisePct: clustering.noise_percentage != null ? Number(clustering.noise_percentage).toFixed(0) : '0',
+        };
 
-        // Reset filter state
+        renderLegend(palette, clusterSizes, meta);
+        renderGrid(paragraphs, palette, profiles, featureNames, reasoning, featureMax);
+
         activeFilter = null;
         expandedBlock = null;
     }
 
-    // ─── Public API ───
     return { render };
 })();

@@ -9,6 +9,7 @@ Fully offline — no API calls required.
 """
 
 import logging
+import threading
 import numpy as np
 from typing import List, Optional
 from sklearn.metrics.pairwise import cosine_similarity
@@ -16,6 +17,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 logger = logging.getLogger(__name__)
 
 _INSTANCE: Optional["LocalEmbeddingService"] = None
+_INSTANCE_LOCK = threading.Lock()
 
 
 class LocalEmbeddingService:
@@ -29,10 +31,15 @@ class LocalEmbeddingService:
 
     def __init__(self):
         self._model = None
+        self._load_lock = threading.Lock()
 
     def _load_model(self):
-        """Lazy-load the model on first use."""
-        if self._model is None:
+        """Lazy-load the model on first use (thread-safe, double-checked)."""
+        if self._model is not None:
+            return
+        with self._load_lock:
+            if self._model is not None:
+                return
             try:
                 from sentence_transformers import SentenceTransformer
                 logger.info(f"[P.R.I.S.M.] Loading {self.MODEL_NAME}...")
@@ -100,8 +107,10 @@ class LocalEmbeddingService:
 
 
 def get_instance() -> LocalEmbeddingService:
-    """Get the singleton embedding service instance."""
+    """Get the singleton embedding service instance (thread-safe)."""
     global _INSTANCE
     if _INSTANCE is None:
-        _INSTANCE = LocalEmbeddingService()
+        with _INSTANCE_LOCK:
+            if _INSTANCE is None:
+                _INSTANCE = LocalEmbeddingService()
     return _INSTANCE

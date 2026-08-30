@@ -23,5 +23,11 @@ arxiv==2.1.3
 tenacity==8.5.0
 requests
 
+# Local semantic matching (offline paraphrase / translated detection)
+# Heavy (pulls torch); paraphrase matching degrades gracefully if unavailable.
+sentence-transformers>=2.7.0
+# Language identification for labelling cross-lingual (translated) matches.
+langdetect==1.0.9
+
 # Utils
 python-dotenv==1.0.1

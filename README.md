@@ -28,6 +28,20 @@
 
 ---
 
+> ## 🔀 Project update (2026) — now an **Originality Checker**
+> PRISM has **pivoted** from stylometric *authorship* detection to **source-attribution plagiarism detection**:
+> find *what* is copied in a paper, *where* it is, and *from which source*. The live product is the
+> **Originality Checker** (`frontend/index.html` → `POST /api/check`); verbatim + paraphrase + translated
+> matching against your uploaded references and open-access databases (OpenAlex), with a downloadable report.
+> The stylometric engine described below is now **legacy** (kept at `frontend/authorship.html`).
+>
+> 👉 Read **[`PROJECT_BRIEF.md`](PROJECT_BRIEF.md)** for current scope and **[`CHANGELOG.md`](CHANGELOG.md)** for what shipped.
+> ⚠️ Performance claims further down describe the *legacy* engine and are **superseded** — its measured detection
+> was near-noise (see [`prism_diagnostic.md`](prism_diagnostic.md)); the new matcher is measured honestly by
+> `backend/scripts/eval_matcher.py` (Precision 1.00 · Recall 0.86 · False-Positive-Rate 0.00 on a controlled set).
+
+---
+
 ## The Core Problem
 
 Modern academic plagiarism has evolved far beyond copy-paste. Traditional detection tools like Turnitin perform **lexical matching** — they check whether a sentence has appeared in a known corpus. This approach fails catastrophically against a growing pattern called **stitched plagiarism**:
@@ -56,7 +70,7 @@ P.R.I.S.M. uses a **Hybrid Dual-Engine Architecture** that separates mathematica
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    MATH provides the PROOF                  │
+│                MATH provides the SIGNALS                    │
 │            spaCy · HDBSCAN · Yule's K · Burstiness         │
 │                                                             │
 │        Deterministic · Reproducible · Zero API Cost         │
@@ -64,7 +78,7 @@ P.R.I.S.M. uses a **Hybrid Dual-Engine Architecture** that separates mathematica
 │                  AI provides the EXPLANATION                │
 │            GPT-4o-mini · GPT-4o · Embeddings                │
 │                                                             │
-│        Natural Language · Prosecutable · Contextual         │
+│        Natural Language · Explanatory · Contextual          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -187,12 +201,17 @@ P.R.I.S.M. uses a **Hybrid Dual-Engine Architecture** that separates mathematica
 
 ---
 
-## Performance Validation — Empirical Benchmark
+## Legacy Benchmark (N=2 — illustrative only, not validated)
+
+> ⚠️ **Superseded / legacy.** The figures in this section come from an **N=2** run of the *old stylometric
+> engine* and overstate real performance — internal audits ([`prism_diagnostic.md`](prism_diagnostic.md),
+> `research/HONEST_AUDIT.md`) measured boundary **F1 ≈ 0.40**. Treat "100% accuracy" and "zero false positives"
+> as **not credible**. The current product is the Originality Checker, measured by `backend/scripts/eval_matcher.py`.
 
 > **Every number below was measured on our own ground-truth test papers — not simulated, not estimated.**
 > Run `python backend/scripts/benchmark.py` to reproduce these results independently.
 
-P.R.I.S.M. was validated using a controlled benchmark comparing **three detection approaches** on the same set of documents: a known single-author paper (`test_genuine.pdf`) and a known multi-source stitched paper (`test_stitched.pdf`). The goal: prove that the hybrid approach isn't just a buzzword — it delivers **measurably superior detection** over traditional methods.
+P.R.I.S.M. was validated using a controlled benchmark comparing **three detection approaches** on the same set of documents: a known single-author paper (`test_genuine.pdf`) and a known multi-source stitched paper (`test_stitched.pdf`). The goal was to sanity-check the hybrid approach on two documents. ⚠️ With only one document per class, this **cannot** establish superiority over any tool — treat it as an illustrative smoke test, not a benchmark.
 
 ### Approaches Compared
 
@@ -208,12 +227,12 @@ P.R.I.S.M. was validated using a controlled benchmark comparing **three detectio
 |:---|:---:|:---:|:---:|
 | **Stitched Paper Detected** | ❌ Missed | ✅ Detected | ✅ **Detected** |
 | **Genuine Paper (False Positive)** | ❌ False Alarm | ✅ Clean | ✅ **Clean** |
-| **Overall Accuracy** | 50% | 85% | **100%** |
-| **Confidence Score** | N/A (no probabilistic model) | 0.74 | **0.91** |
-| **Boundaries Identified** | 2 (mostly noise) | 4 (some noise) | **6 (precise)** |
+| **Result on 2-doc toy set** | missed | detected | detected — *n=1 per class; not an accuracy figure* |
+| **Confidence (single run)** | N/A | 0.74 | 0.91 — *uncalibrated, one document* |
+| **Boundaries flagged** | 2 | 4 | 6 — *raw count only; precision unmeasured here* |
 | **Feature Dimensions** | ~500 (sparse) | 8 (dense) | **11 (dense, hybrid)** |
-| **False Positive Rate** | HIGH | LOW | **ZERO** |
-| **AI Paraphraser Resistance** | ❌ None | ⚠️ Partial | ✅ **Full (Idea Triplets)** |
+| **False positives (1 genuine doc)** | yes | no | none on that one doc — *cannot establish a rate from n=1* |
+| **AI paraphrase handling** | ❌ None | ⚠️ Partial | ⚠️ *"Idea Triplets" was never implemented (dead code)* |
 
 ### Why the Hybrid Wins
 
@@ -226,7 +245,7 @@ P.R.I.S.M. was validated using a controlled benchmark comparing **three detectio
    - **Semantic embeddings** (3 PCA-reduced dimensions from OpenAI's 1536-dim vectors) — captures *what* an author discusses
    - **GPT-4o reasoning** — provides human-readable forensic explanations for each detected boundary
 
-   This 11-dimensional hybrid feature space gives HDBSCAN richer signal for cluster separation, resulting in higher confidence scores and zero false positives.
+   On this two-document toy set the hybrid separated the two papers — a result that did **not** hold on labelled data (measured boundary F1 ≈ 0.40; see [`prism_diagnostic.md`](prism_diagnostic.md)).
 
 ### Reproducibility
 
@@ -585,7 +604,7 @@ The following AI tools and models are used in this project:
 7. **Crossref API** verifies that cited references actually exist (hallucination detection)
 8. **Source tracer** searches arXiv + OpenAlex, embeds results with MiniLM, ranks by cosine similarity
 9. **Idea Triplets** defeat AI paraphrasers by comparing logical structure, not vocabulary
-10. **GPT-4o** synthesizes all evidence into a scored, prosecutable forensic report
+10. **GPT-4o** synthesizes all evidence into a scored, explanatory report (a self-check aid, not misconduct evidence)
 
 ---
 
@@ -643,7 +662,7 @@ P.R.I.S.M.'s hybrid forensic approach is grounded in peer-reviewed research acro
 └──────────────────┴──────────────────────────────────────────────────┘
 ```
 
-> **To Judges:** Every algorithm in P.R.I.S.M. is traceable to published, peer-reviewed research. We did not invent new ML — we **engineered a novel combination** of proven techniques into a unified forensic pipeline that delivers measurably superior results (see [Performance Validation](#performance-validation--empirical-benchmark) above).
+> **Note:** Every algorithm in P.R.I.S.M. traces to published research; we combined proven techniques into one pipeline. ⚠️ The legacy benchmark above is **N=2 and superseded** — on labelled data this engine measured near chance (boundary F1 ≈ 0.40). The current product is the Originality Checker; see [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md).
 
 ---
 

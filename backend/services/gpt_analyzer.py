@@ -166,16 +166,23 @@ class GPTAnalyzer:
 
         boundaries = cluster_result.get("boundaries", [])
         anomaly_indices = cluster_result.get("anomaly_indices", [])
+        anomaly_set = set(anomaly_indices)
 
         # ── Boundary explanations ────────────────────────────────────────────
+        # `boundaries` is a list of integer paragraph indices where the cluster
+        # label changes (boundary i sits between paragraph i-1 and i). Prioritise
+        # transitions adjacent to a flagged anomaly, then take the first three.
         boundary_tasks = []
         boundary_info = []
 
-        valid_boundaries = [b for b in boundaries if b.get("is_anomaly_transition")][:3]
-        for boundary in valid_boundaries:
-            pa_idx = boundary["after_paragraph"]
-            pb_idx = pa_idx + 1
-            if pb_idx < len(paragraphs):
+        int_boundaries = [b for b in boundaries if isinstance(b, int)]
+        int_boundaries.sort(
+            key=lambda b: 0 if (b in anomaly_set or (b - 1) in anomaly_set) else 1
+        )
+        for b in int_boundaries[:3]:
+            pa_idx = b - 1
+            pb_idx = b
+            if pa_idx >= 0 and pb_idx < len(paragraphs):
                 para_a = paragraphs[pa_idx].get("text", "")
                 para_b = paragraphs[pb_idx].get("text", "")
                 boundary_tasks.append(self.explain_boundary(para_a, para_b))

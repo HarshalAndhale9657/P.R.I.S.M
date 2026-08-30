@@ -49,11 +49,49 @@ const ReportRenderer = (() => {
                     <span style="color: var(--text-secondary);">${label}</span>
                     <span style="font-weight: 600; color: ${barColor};">${value.toFixed(1)}/10</span>
                 </div>
-                <div style="height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
+                <div style="height: 6px; background: rgba(15,23,42,0.08); border-radius: 3px; overflow: hidden;">
                     <div style="width: ${pct}%; height: 100%; background: ${barColor}; border-radius: 3px; transition: width 0.8s ease;"></div>
                 </div>
             </div>
         `;
+    }
+
+    /** Derive evidence sub-scores from the /api/analyze response when the
+     *  dedicated scoring engine payload is not present. */
+    function deriveSubScores(data) {
+        const clustering = data.clustering || {};
+        const citations = data.citations || {};
+        const features = data.features || {};
+        const clamp = v => Math.max(0, Math.min(10, v));
+
+        // Noise fraction (noise_percentage is 0–100).
+        const noiseFrac = Math.min(Math.max((clustering.noise_percentage || 0) / 100, 0), 1);
+        const reliable = !(clustering.noise_override || clustering.too_short);
+
+        // Boundary detection: fewer stylistic boundaries → cleaner.
+        const boundary = reliable
+            ? clamp(10 - Math.min((clustering.boundary_count || 0) * 0.6, 8))
+            : 10;
+
+        // Topic coherence proxy: inverse of stylometric noise.
+        const coherence = reliable ? clamp(10 - noiseFrac * 10) : 10;
+
+        // Citation forensics: penalise temporal anomalies.
+        const anomalies = (citations.temporal_anomalies || []).length || citations.temporal_anomaly_count || 0;
+        const citation = clamp(10 - Math.min(anomalies * 2.5, 8));
+
+        // Burstiness: soft signal; low burstiness (<0.35) hints at AI-flat text.
+        const profiles = Array.isArray(features.profiles) ? features.profiles : [];
+        const bvals = profiles
+            .filter(p => p && (p.num_sentences || 0) >= 2 && typeof p.burstiness_coefficient === 'number')
+            .map(p => p.burstiness_coefficient);
+        let burstiness = 10;
+        if (bvals.length >= 3) {
+            const avg = bvals.reduce((a, b) => a + b, 0) / bvals.length;
+            burstiness = clamp(Math.min(avg / 0.35, 1) * 10);
+        }
+
+        return { boundary, coherence, citation, burstiness };
     }
 
     /** Render the forensic integrity report dashboard. */
@@ -65,7 +103,9 @@ const ReportRenderer = (() => {
 
         const r = analysisData.report;
         const scoring = analysisData.scoring || {};
-        const subScores = scoring.sub_scores || {};
+        const subScores = Object.keys(scoring.sub_scores || {}).length
+            ? scoring.sub_scores
+            : deriveSubScores(analysisData);
 
         // ─── Score & Visual Mapping ───
         const score = scoring.integrity_score != null ? scoring.integrity_score : (r.integrity_score != null ? r.integrity_score : 10);
@@ -159,7 +199,7 @@ const ReportRenderer = (() => {
         if (hasBadges) {
             html += `
                 <div style="margin-top: 32px;">
-                    <h3 style="margin-bottom: 8px; font-weight: 700;">Security Certificate Dashboard</h3>
+                    <h3 style="margin-bottom: 8px; font-weight: 700;">Evidence Dashboard</h3>
                     <div class="trust-dashboard">
             `;
 
@@ -168,7 +208,7 @@ const ReportRenderer = (() => {
                         <div class="trust-badge ${styloStatus}">
                             <div class="trust-icon">🧬</div>
                             <div class="trust-content">
-                                <div class="trust-title">Structural Autonomy</div>
+                                <div class="trust-title">Stylometric Consistency</div>
                                 <div class="trust-desc">${evidence.stylometric_analysis}</div>
                             </div>
                         </div>
@@ -201,7 +241,7 @@ const ReportRenderer = (() => {
                         <div class="trust-badge ${sourceStatus}">
                             <div class="trust-icon">🔍</div>
                             <div class="trust-content">
-                                <div class="trust-title">Database Originality</div>
+                                <div class="trust-title">Source Originality</div>
                                 <div class="trust-desc">${evidence.source_matches}</div>
                             </div>
                         </div>
@@ -228,7 +268,7 @@ const ReportRenderer = (() => {
         html += `
             <div style="margin-top: 32px; text-align: center;">
                 <button class="btn-primary" id="btn-export-report" style="box-shadow: var(--shadow-glow);">
-                    <span style="margin-right: 8px;">⬇️</span> Download Cryptographic JSON Report
+                    <span style="margin-right: 8px;">⬇️</span> Download Full JSON Report
                 </button>
             </div>
         `;

@@ -1,42 +1,46 @@
 /**
  * P.R.I.S.M. — Citations Renderer
  * Visualizes citation temporal anomalies and baseline vs noise divergence.
- * Reads data from the /api/analyze response's `citations` object.
- *
- * Backend schema:
- *   citations.total_citations_found
- *   citations.temporal_anomaly_count
- *   citations.temporal_baseline.core_median_year
- *   citations.temporal_baseline.threshold
- *   citations.temporal_anomalies[] -> { paragraph_index, paragraph_median_year, core_baseline_year, year_difference, severity }
- *   citations.per_paragraph[] -> { paragraph_index, citations[], citation_count, years[], median_year }
- *   citations.density_analysis.avg_core_density / avg_noise_density
+ * Reads from the /api/analyze response `citations` object.
  */
 
 const CitationsRenderer = (() => {
-    /** Render the temporal citation anomaly timeline. */
+    function sevClass(sev) {
+        if (sev === 'high') return 'sev-high';
+        if (sev === 'medium') return 'sev-med';
+        return 'sev-low';
+    }
+    function sevIcon(sev) {
+        if (sev === 'high') return '🚨';
+        if (sev === 'medium') return '⚠️';
+        return 'ℹ️';
+    }
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
+    }
+
     function render(analysisData) {
         if (!analysisData || !analysisData.citations) return;
-        
         const container = document.getElementById('citations-content');
         if (!container) return;
 
         const data = analysisData.citations;
 
-        // Handle error case from backend
         if (data.error) {
             container.innerHTML = `
                 <div class="no-anomalies">
                     <span class="success-icon">⚠️</span>
-                    <p>Citation analysis encountered an error: ${data.error}</p>
+                    <p class="empty-title">Citation analysis error</p>
+                    <p>${escapeHtml(data.error)}</p>
                 </div>
             `;
             return;
         }
-        
+
         let html = '';
 
-        // ─── Overview Stats ───
         const totalCitations = data.total_citations_found || 0;
         const anomalyCount = data.temporal_anomaly_count || 0;
         const baseline = data.temporal_baseline || {};
@@ -61,48 +65,48 @@ const CitationsRenderer = (() => {
                 </div>
             </div>
         `;
-        
-        // ─── Temporal Baseline Info ───
+
         if (coreMedianYear) {
+            const div = baseline.year_difference;
+            const flag = baseline.is_anomalous
+                ? '<span class="pill pill-danger">⚠️ Anomalous</span>'
+                : '<span class="pill pill-ok">✅ Normal</span>';
             html += `
                 <div class="baseline-info">
                     <h3>Temporal Baseline Analysis</h3>
                     <p><strong>Core Author Median Year:</strong> ${coreMedianYear}</p>
                     ${noiseMedianYear ? `<p><strong>Noise Cluster Median Year:</strong> ${noiseMedianYear}</p>` : ''}
-                    ${baseline.year_difference != null ? `<p><strong>Year Divergence:</strong> ${baseline.year_difference} years ${baseline.is_anomalous ? '<span style="color:#f85149;">⚠️ ANOMALOUS</span>' : '<span style="color:#3fb950;">✅ Normal</span>'}</p>` : ''}
-                    <p style="color:#8b949e; font-size:0.9em; margin-top:8px;">Paragraphs citing sources more than ${threshold} years from the core baseline are flagged as temporal anomalies — a strong indicator of stitched content.</p>
+                    ${div != null ? `<p><strong>Year Divergence:</strong> ${div} years ${flag}</p>` : ''}
+                    <p class="muted">Paragraphs citing sources more than ${threshold} years from the core baseline
+                    are flagged as temporal anomalies — a strong indicator of stitched content.</p>
                 </div>
             `;
         }
 
-        // ─── Density Analysis ───
         if (densityAnalysis.avg_core_density != null) {
             html += `
                 <div class="baseline-info" style="margin-top:1rem;">
                     <h3>Citation Density</h3>
-                    <p><strong>Core Cluster Density:</strong> ${densityAnalysis.avg_core_density.toFixed(4)} citations per 100 words</p>
-                    <p><strong>Noise Cluster Density:</strong> ${densityAnalysis.avg_noise_density ? densityAnalysis.avg_noise_density.toFixed(4) : 'N/A'} citations per 100 words</p>
-                    ${densityAnalysis.density_ratio != null ? `<p><strong>Density Ratio (Noise/Core):</strong> ${densityAnalysis.density_ratio}x</p>` : ''}
+                    <p><strong>Core Cluster Density:</strong> ${densityAnalysis.avg_core_density.toFixed(4)} citations / 100 words</p>
+                    <p><strong>Noise Cluster Density:</strong> ${densityAnalysis.avg_noise_density != null ? densityAnalysis.avg_noise_density.toFixed(4) : 'N/A'} citations / 100 words</p>
+                    ${densityAnalysis.density_ratio != null ? `<p><strong>Density Ratio (Noise/Core):</strong> ${densityAnalysis.density_ratio}×</p>` : ''}
                 </div>
             `;
         }
 
-        // ─── Temporal Anomalies Timeline ───
         const anomalies = data.temporal_anomalies || [];
         if (anomalies.length > 0) {
             html += `<h3 class="timeline-title">Flagged Temporal Anomalies</h3><div class="timeline">`;
-            anomalies.forEach((anomaly) => {
-                const severityColor = anomaly.severity === 'high' ? '#f85149' : (anomaly.severity === 'medium' ? '#d29922' : '#3fb950');
-                const severityIcon = anomaly.severity === 'high' ? '🚨' : (anomaly.severity === 'medium' ? '⚠️' : 'ℹ️');
-                
+            anomalies.forEach(a => {
                 html += `
                     <div class="timeline-item anomaly-item">
-                        <div class="timeline-badge">${severityIcon}</div>
+                        <div class="timeline-badge">${sevIcon(a.severity)}</div>
                         <div class="timeline-content">
-                            <h4>Paragraph ${anomaly.paragraph_index + 1} <span style="color:${severityColor}; font-size:0.85em; text-transform:uppercase;">[${anomaly.severity}]</span></h4>
-                            <p><strong>Median Citation Year:</strong> ${anomaly.paragraph_median_year} (Core Baseline: ${anomaly.core_baseline_year})</p>
-                            <p><strong>Year Difference:</strong> ${anomaly.year_difference} years</p>
-                            <p style="font-size:0.85em; color:#8b949e;">Cluster: ${anomaly.is_noise_cluster ? 'Noise (anomalous)' : `Cluster ${anomaly.cluster_id}`}</p>
+                            <h4>Paragraph ${a.paragraph_index + 1}
+                                <span class="sev-tag ${sevClass(a.severity)}">[${escapeHtml(a.severity || '')}]</span></h4>
+                            <p><strong>Median Citation Year:</strong> ${a.paragraph_median_year} (Core Baseline: ${a.core_baseline_year})</p>
+                            <p><strong>Year Difference:</strong> ${a.year_difference} years</p>
+                            <p class="muted">Cluster: ${a.is_noise_cluster ? 'Noise (anomalous)' : `Cluster ${a.cluster_id}`}</p>
                         </div>
                     </div>
                 `;
@@ -112,29 +116,35 @@ const CitationsRenderer = (() => {
             html += `
                 <div class="no-anomalies">
                     <span class="success-icon">✅</span>
-                    <p>No significant temporal citation anomalies detected.</p>
+                    <p class="empty-title">No temporal citation anomalies</p>
+                    <p>Citation years are temporally consistent across the document.</p>
                 </div>
             `;
         }
 
-        // ─── Per-Paragraph Citation Summary ───
         const perParagraph = data.per_paragraph || [];
-        const paragraphsWithCitations = perParagraph.filter(p => p.citation_count > 0);
-        if (paragraphsWithCitations.length > 0) {
-            html += `<h3 class="timeline-title" style="margin-top:2rem;">Per-Paragraph Citations (${paragraphsWithCitations.length} paragraphs with citations)</h3>`;
-            html += `<div style="max-height: 400px; overflow-y: auto; border: 1px solid #30363d; border-radius: 6px; padding: 12px;">`;
-            paragraphsWithCitations.forEach(p => {
+        const withCitations = perParagraph.filter(p => p.citation_count > 0);
+        if (withCitations.length > 0) {
+            html += `<h3 class="timeline-title" style="margin-top:2rem;">Per-Paragraph Citations
+                        <span class="muted">(${withCitations.length} with citations)</span></h3>`;
+            html += `<div class="citation-scroll">`;
+            withCitations.forEach(p => {
+                const anomalous = p.cluster_id === -1;
                 html += `
-                    <div style="margin-bottom: 12px; padding: 8px; background: rgba(22,27,34,0.5); border-radius: 4px; border-left: 3px solid ${p.cluster_id === -1 ? '#f85149' : '#3fb950'};">
-                        <strong>¶ ${p.paragraph_index + 1}</strong> — ${p.citation_count} citation(s) | Median Year: ${p.median_year || 'N/A'} | Density: ${p.citation_density ? p.citation_density.toFixed(4) : 'N/A'}
-                        <div style="color:#8b949e; font-size:0.85em; margin-top:4px;">${p.citations.join(', ')}</div>
+                    <div class="citation-row ${anomalous ? 'anomalous' : ''}">
+                        <div class="citation-row-head">
+                            <strong>¶ ${p.paragraph_index + 1}</strong>
+                            <span>${p.citation_count} citation(s)</span>
+                            <span>Median Year: ${p.median_year || 'N/A'}</span>
+                            <span>Density: ${p.citation_density != null ? p.citation_density.toFixed(4) : 'N/A'}</span>
+                        </div>
+                        <div class="citation-list">${escapeHtml((p.citations || []).join(', '))}</div>
                     </div>
                 `;
             });
             html += `</div>`;
         }
 
-        // ─── Bibliography Info ───
         const bib = data.bibliography || {};
         if (bib.total_references > 0) {
             html += `
@@ -142,6 +152,7 @@ const CitationsRenderer = (() => {
                     <h3>Bibliography</h3>
                     <p><strong>Total References:</strong> ${bib.total_references}</p>
                     ${bib.bibliography_median_year ? `<p><strong>Bibliography Median Year:</strong> ${bib.bibliography_median_year}</p>` : ''}
+                    ${bib.hallucination_count != null ? `<p><strong>Potentially Hallucinated:</strong> ${bib.hallucination_count}</p>` : ''}
                 </div>
             `;
         }

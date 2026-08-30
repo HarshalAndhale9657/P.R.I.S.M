@@ -124,32 +124,41 @@ class ReportGenerator:
         if isinstance(citations, dict):
             citation_anomalies = citations.get("temporal_anomalies", [])
         
+        # noise_percentage is reported on a 0–100 scale by the clustering
+        # engine; normalise to a 0–1 fraction for scoring.
         noise = clustering.get("noise_percentage", 0.0)
+        noise_frac = min(max(noise / 100.0, 0.0), 1.0)
         anomaly_count = clustering.get("anomaly_count", 0)
         estimated_authors = clustering.get("estimated_authors", 1)
         boundary_count = clustering.get("boundary_count", 0)
         confidence = clustering.get("confidence", 1.0)
         noise_override = clustering.get("noise_override", False)
         too_short = clustering.get("too_short", False)
-        
+
+        # When the clustering is unreliable (noise saturation) or the document
+        # is too short to cluster, the maths could not separate authors — this
+        # is NOT evidence of plagiarism, so stylometric penalties are suppressed.
+        clustering_reliable = not (noise_override or too_short)
+
         # ── Compute integrity score from multiple evidence streams ──
         score = 10.0
-        
-        # 1. Noise-based penalty (HDBSCAN noise = stylistic anomalies)
-        if noise > 0:
-            score -= noise * 8.0  # e.g., 30% noise = -2.4 points
-        
-        # 2. Multiple authors penalty
-        if estimated_authors > 1:
-            score -= (estimated_authors - 1) * 1.5  # Each extra author = -1.5
-            
-        # 3. Anomaly count penalty
-        if anomaly_count > 0:
-            score -= min(anomaly_count * 0.5, 3.0)  # Cap at -3
-        
-        # 4. Boundary transitions penalty
-        if boundary_count > 2:
-            score -= min((boundary_count - 2) * 0.3, 1.5)
+
+        if clustering_reliable:
+            # 1. Noise-based penalty (HDBSCAN noise = stylistic anomalies)
+            if noise_frac > 0:
+                score -= noise_frac * 8.0  # e.g., 30% noise = -2.4 points
+
+            # 2. Multiple authors penalty
+            if estimated_authors > 1:
+                score -= (estimated_authors - 1) * 1.5  # Each extra author = -1.5
+
+            # 3. Anomaly count penalty
+            if anomaly_count > 0:
+                score -= min(anomaly_count * 0.5, 3.0)  # Cap at -3
+
+            # 4. Boundary transitions penalty
+            if boundary_count > 2:
+                score -= min((boundary_count - 2) * 0.3, 1.5)
         
         # 5. Citation temporal anomalies penalty
         if citation_anomalies:
@@ -196,13 +205,13 @@ class ReportGenerator:
         explanations = reasoning.get("boundary_explanations", {}) if isinstance(reasoning, dict) else {}
         if "API errors" in str(explanations):
             stylometric_desc = (
-                f"The HDBSCAN clustering identified {estimated_authors} estimated authors with {anomaly_count} anomalies and a noise percentage of {noise*100:.1f}%. "
+                f"The HDBSCAN clustering identified {estimated_authors} estimated authors with {anomaly_count} anomalies and a noise percentage of {noise:.1f}%. "
                 f"The boundary count of {boundary_count} and low confidence score of {confidence} indicate substantial stylistic shifts, "
                 f"although specific reasoning for these shifts is unavailable due to API errors.{burstiness_note}"
             )
         else:
             stylometric_desc = (
-                f"The HDBSCAN clustering identified {estimated_authors} estimated authors with {anomaly_count} anomalies and a noise percentage of {noise*100:.1f}%. "
+                f"The HDBSCAN clustering identified {estimated_authors} estimated authors with {anomaly_count} anomalies and a noise percentage of {noise:.1f}%. "
                 f"Boundary count: {boundary_count}. Cluster confidence: {confidence}.{burstiness_note}"
             )
         
@@ -226,13 +235,35 @@ class ReportGenerator:
                 f"(highest similarity: {max_sim*100:.1f}%)."
             )
 
-        # Executive summary
+        # Executive summary — describe the signals that actually drove the score
+        signals = []
+        if estimated_authors > 1:
+            signals.append(f"{estimated_authors} distinct stylistic clusters")
+        if anomaly_count > 0:
+            signals.append(f"{anomaly_count} anomalous section(s)")
+        if noise > 0:
+            signals.append(f"{noise:.1f}% stylistic noise")
+        if boundary_count > 0:
+            signals.append(f"{boundary_count} style transition(s)")
+        if source_matches:
+            signals.append(f"{len(source_matches)} external source match(es)")
+        signal_text = ", ".join(signals) if signals else "no significant stylistic divergence"
+
         if verdict == "Clean":
-            summary = f"The document shows consistent writing style with {noise*100:.1f}% stylistic noise. No significant plagiarism indicators were found."
+            summary = (
+                f"The document reads as the work of a single, consistent author "
+                f"({signal_text}). No significant plagiarism indicators were found."
+            )
         elif verdict == "Suspicious":
-            summary = f"The document exhibits {noise*100:.1f}% stylistic noise with {anomaly_count} anomalous section(s). Multiple evidence streams suggest potential integrity concerns."
+            summary = (
+                f"The document shows some internal stylistic variation ({signal_text}). "
+                f"These signals warrant a closer manual review."
+            )
         else:
-            summary = f"The document shows strong plagiarism indicators: {noise*100:.1f}% stylistic noise, {anomaly_count} anomalous section(s), and {len(source_matches)} external source match(es)."
+            summary = (
+                f"The document shows strong stitching indicators: {signal_text}. "
+                f"The stylistic profile is not consistent with a single author."
+            )
 
         return {
             "integrity_score": score,

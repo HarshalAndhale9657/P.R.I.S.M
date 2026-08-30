@@ -41,7 +41,19 @@ const PRISM = (() => {
         dom.navTabs = document.querySelectorAll('.nav-tab');
         dom.panels = document.querySelectorAll('.panel');
         dom.btnNewAnalysis = document.getElementById('btn-new-analysis');
+        dom.topbarTitle = document.getElementById('topbar-title');
+        dom.topbarDesc = document.getElementById('topbar-desc');
     }
+
+    // Topbar copy per panel.
+    const PANEL_META = {
+        upload:    { title: 'Analyze Academic Integrity', desc: 'Detect stitched plagiarism through mathematical stylometry' },
+        heatmap:   { title: 'Authorship Heatmap',         desc: 'Where the writing style shifts across the document' },
+        charts:    { title: 'Style Analysis',             desc: 'Stylometric features visualised across paragraphs' },
+        citations: { title: 'Citation Forensics',         desc: 'Temporal analysis of citation patterns' },
+        sources:   { title: 'Source Matches',             desc: 'Potential source papers from academic databases' },
+        report:    { title: 'Forensic Report',            desc: 'Synthesised integrity assessment' },
+    };
 
     // ─── Panel Navigation ───
     /** Switch active view panel by ID. */
@@ -63,6 +75,13 @@ const PRISM = (() => {
             targetPanel.style.animation = 'none';
             targetPanel.offsetHeight; // force reflow
             targetPanel.style.animation = '';
+        }
+
+        // Update topbar copy
+        const meta = PANEL_META[panelId];
+        if (meta) {
+            if (dom.topbarTitle) dom.topbarTitle.textContent = meta.title;
+            if (dom.topbarDesc) dom.topbarDesc.textContent = meta.desc;
         }
 
         state.currentPanel = panelId;

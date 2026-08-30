@@ -1,0 +1,52 @@
+{
+  "_about": "Controlled synthetic benchmark for the PlagiarismMatcher. NOT real-world prevalence: each passage is deliberately authored. Positives are copies/paraphrases/translations of the sources; negatives are original text (same-topic, boilerplate, ESL, shared-terminology, unrelated) that must NOT be flagged. Used as a regression + failure-mode gauge.",
+  "sources": [
+    {"id": "S1", "name": "Transformers", "text": "The transformer architecture relies entirely on self-attention mechanisms to draw global dependencies between input and output sequences. Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions. Positional encodings inject information about the order of the tokens because the model contains no recurrence."},
+    {"id": "S2", "name": "Density clustering", "text": "Density-based clustering automatically determines the number of clusters present in a dataset without requiring a preset count parameter. Points that lie in low-density regions are labelled as noise rather than being forced into a cluster. The approach is robust to clusters of arbitrary shape and varying size."},
+    {"id": "S3", "name": "Stylometry", "text": "Stylometric analysis measures an author's involuntary linguistic fingerprint through quantifiable features such as vocabulary richness and function-word frequency. These invariants tend to remain stable across the body of writing produced by a single author. Because paraphrasing changes the words but not the underlying habits, the fingerprint often survives light editing."},
+    {"id": "S4", "name": "Deep learning (FR)", "text": "L'apprentissage profond a transformé le traitement automatique du langage naturel au cours de la dernière décennie. Les grands modèles pré-entraînés atteignent des performances élevées sur de nombreuses tâches de compréhension du texte. Le réglage fin sur des données spécifiques améliore encore la qualité des prédictions."},
+    {"id": "S5", "name": "Computer vision (ES)", "text": "Las redes neuronales convolucionales han revolucionado la visión por computador al aprender características jerárquicas directamente de los píxeles. El aumento de datos mejora la generalización cuando el conjunto de entrenamiento es pequeño. La normalización por lotes acelera el entrenamiento y estabiliza la convergencia."},
+    {"id": "S6", "name": "Reinforcement learning (DE)", "text": "Bestärkendes Lernen ermöglicht es einem Agenten, durch Versuch und Irrtum optimale Handlungen in einer Umgebung zu erlernen. Die Belohnungsfunktion steuert das Verhalten des Agenten über viele Zeitschritte hinweg. Erfahrungswiederholung verbessert die Stabilität des Trainings tiefer neuronaler Netze."}
+  ],
+  "cases": [
+    {"kind": "positive", "type": "verbatim", "difficulty": "easy", "src": "S1", "text": "The transformer architecture relies entirely on self-attention mechanisms to draw global dependencies between input and output sequences."},
+    {"kind": "positive", "type": "verbatim", "difficulty": "easy", "src": "S2", "text": "Density-based clustering automatically determines the number of clusters present in a dataset without requiring a preset count parameter."},
+    {"kind": "positive", "type": "verbatim", "difficulty": "easy", "src": "S3", "text": "Stylometric analysis measures an author's involuntary linguistic fingerprint through quantifiable features such as vocabulary richness and function-word frequency."},
+    {"kind": "positive", "type": "verbatim", "difficulty": "medium", "src": "S1", "text": "Multi-head attention allows the model to jointly attend to information from different representation subspaces at various different positions."},
+    {"kind": "positive", "type": "verbatim", "difficulty": "medium", "src": "S3", "text": "These invariants tend to remain quite stable across the body of writing produced by a single author."},
+
+    {"kind": "positive", "type": "paraphrase", "difficulty": "easy", "src": "S1", "text": "The transformer relies purely on self-attention to capture global dependencies between the input and the output sequences."},
+    {"kind": "positive", "type": "paraphrase", "difficulty": "easy", "src": "S2", "text": "Density-based clustering figures out the number of clusters on its own, without any preset count parameter being supplied."},
+    {"kind": "positive", "type": "paraphrase", "difficulty": "easy", "src": "S3", "text": "Stylometry quantifies an author's involuntary linguistic fingerprint using features like vocabulary richness and how often function words appear."},
+    {"kind": "positive", "type": "paraphrase", "difficulty": "medium", "src": "S1", "text": "Because it applies attention throughout and has no recurrence at all, the model captures long-range relationships across the whole sequence."},
+    {"kind": "positive", "type": "paraphrase", "difficulty": "medium", "src": "S2", "text": "Instead of fixing the number of groups in advance, the method infers it from the density of the data and treats sparse points as noise."},
+    {"kind": "positive", "type": "paraphrase", "difficulty": "medium", "src": "S3", "text": "An author's subconscious writing habits, such as vocabulary diversity and function-word rates, stay fairly constant across their work and survive light rewording."},
+    {"kind": "positive", "type": "paraphrase", "difficulty": "hard", "src": "S1", "text": "Distant parts of the text influence one another directly, so information no longer has to be passed step by step through hidden state."},
+    {"kind": "positive", "type": "paraphrase", "difficulty": "hard", "src": "S2", "text": "The algorithm lets the data reveal how many natural groupings exist and quietly sets the outliers aside instead of assigning them."},
+    {"kind": "positive", "type": "paraphrase", "difficulty": "hard", "src": "S3", "text": "Even after a passage is lightly rewritten, the deeper statistical signature of how a person habitually writes tends to persist."},
+
+    {"kind": "positive", "type": "translated", "difficulty": "medium", "src": "S4", "text": "Deep learning has transformed natural language processing over the course of the last decade."},
+    {"kind": "positive", "type": "translated", "difficulty": "medium", "src": "S5", "text": "Convolutional neural networks have revolutionised computer vision by learning hierarchical features directly from the pixels."},
+    {"kind": "positive", "type": "translated", "difficulty": "medium", "src": "S6", "text": "Reinforcement learning lets an agent learn optimal actions in an environment through trial and error."},
+
+    {"kind": "negative", "stratum": "same_topic", "text": "In our study we mainly examined how attention maps can be visualised so that instructors can explain a model's predictions to their students."},
+    {"kind": "negative", "stratum": "same_topic", "text": "During deployment we noticed that the choice of distance metric influenced our results far more than which specific clustering algorithm we selected."},
+    {"kind": "negative", "stratum": "same_topic", "text": "We asked three annotators to rate each paragraph for readability, and their scores agreed closely after a brief calibration session."},
+    {"kind": "negative", "stratum": "same_topic", "text": "Our benchmark focuses on the energy consumed while training rather than on the accuracy that the final model eventually reaches."},
+
+    {"kind": "negative", "stratum": "boilerplate", "text": "In this paper, we present a comprehensive study and report our main findings across several controlled experiments."},
+    {"kind": "negative", "stratum": "boilerplate", "text": "The remainder of this paper is organised as follows, beginning with related work and ending with a discussion of limitations."},
+    {"kind": "negative", "stratum": "boilerplate", "text": "To the best of our knowledge, this is the first work to systematically address the problem in this particular setting."},
+
+    {"kind": "negative", "stratum": "esl", "text": "The transformer is a very good model. It use attention for look all the words in same time and give better result than the old method."},
+    {"kind": "negative", "stratum": "esl", "text": "Clustering is when we put similar things together. Many time we not know how many group, so the computer must decide by itself somehow."},
+    {"kind": "negative", "stratum": "esl", "text": "Writing style of a person is like a fingerprint. Every people have own way and it is difficult to change even when they try very hard."},
+
+    {"kind": "negative", "stratum": "shared_terminology", "text": "Our library exposes a self-attention layer and some positional encoding utilities, but this paper only benchmarks their memory footprint on mobile phones."},
+    {"kind": "negative", "stratum": "shared_terminology", "text": "We report the wall-clock runtime of our density-based pipeline and note that the vocabulary richness of the log messages had no measurable effect."},
+
+    {"kind": "negative", "stratum": "unrelated", "text": "On weekends the campus cafeteria serves a rotating menu of regional dishes that many of the students look forward to."},
+    {"kind": "negative", "stratum": "unrelated", "text": "The hiking trail climbs steadily for three kilometres before opening onto a ridge with a wide view of the valley below."},
+    {"kind": "negative", "stratum": "unrelated", "text": "She tuned the guitar carefully, replaced a worn string, and spent the evening practising the same difficult passage again and again."}
+  ]
+}

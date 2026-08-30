@@ -44,6 +44,9 @@ class WarningCode(str, Enum):
     CLUSTER_NOISE_OVERRIDE = "cluster_noise_override"
     CLUSTER_ZERO_VARIANCE = "cluster_zero_variance"
     CLUSTER_SINGLE_AUTHOR = "cluster_single_author"
+    CLUSTER_HDBSCAN_UNAVAILABLE = "cluster_hdbscan_unavailable"
+    CLUSTER_SCALING_FAILED = "cluster_scaling_failed"
+    CLUSTER_FIT_FAILED = "cluster_fit_failed"
 
     # GPT / AI reasoning
     GPT_UNAVAILABLE = "gpt_unavailable"

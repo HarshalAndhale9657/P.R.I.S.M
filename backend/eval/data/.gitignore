@@ -1,0 +1,7 @@
+# Fetched public datasets are a local cache — do not commit them (licences + size).
+# Keep only the committed smoke sample and the docs.
+*
+!.gitignore
+!README.md
+!sample/
+!sample/pairs.jsonl

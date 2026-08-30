@@ -1,0 +1,131 @@
+# Changelog
+
+All notable changes to P.R.I.S.M. are documented here.
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: [SemVer](https://semver.org/).
+
+## [Unreleased]
+
+### Direction
+- **Pivot decided:** core reframed from *stylometric authorship* ("how many authors?") to
+  **source-attribution plagiarism detection** ("what is copied, where, and from which source?").
+  See [`docs/DECISIONS.md`](docs/DECISIONS.md) (ADR-0001..0009) and [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md).
+  The source-attribution Originality Checker is now **live** (Phases 1–3 + evaluation harness).
+- **Core-ML investment decided (ADR-0015 → refined by ADR-0016):** within the ~3-month timebox, invest in real
+  ML **plagiarism-first**, **pretrained-first + fine-tune selectively** (only the paraphrase cross-encoder, on
+  free Colab/Kaggle GPU, and only if it beats pretrained), measured on **ready-made PUBLIC datasets**
+  (PAWS/MRPC/STS-B/QQP/PAWS-X) — **no PAN** (the on-disk `research/datasets/pan/` is the PAN-2023 *style-change*
+  task: wrong task, no doc→source pairs). AI-text detector **deferred** behind this (still honesty-gated). See
+  [`docs/LAUNCH_PLAN.md`](docs/LAUNCH_PLAN.md) §5 + [`docs/DECISIONS.md`](docs/DECISIONS.md) ADR-0015/0016.
+
+### Added — core-ML re-architecture (W1)
+- **Pluggable pipeline** (`backend/pipeline/`) — clean, injectable stages
+  `parse → retrieve → match → rerank → ai_risk → triage → coach → report`. Live today: `RetrieveStage`,
+  `MatchStage`, `LocalizeStage` (wrapping the existing matcher + academic corpus); the rest are declared
+  skeletons for W3–W9. `main._compute_check` now runs this pipeline (matcher + `academic_search` injected from
+  the module globals, so behaviour and the tests' monkeypatch seams are unchanged).
+- **Evaluation harness v2** (`backend/eval/`) — dataset-agnostic measurement of the paraphrase pillar against
+  **public sentence-pair datasets**: a unified `pairs.jsonl` schema + loaders (`eval.pairs`), `eval.fetch_datasets`
+  (explicit HF-`datasets` download → unified schema), stdlib-only `eval.metrics` (P/R/F1/specificity/FPR +
+  **FPR-by-stratum** + threshold sweep + Brier), an embedder-cosine `eval.scorer` seam (what W3/W4 swap), and a
+  CLI `python -m eval.run_pairs`. Ships a committed 10-pair **smoke sample** (not a benchmark) so it runs offline.
+- **Model registry** (`backend/modelhub/`) — one place to name/version/lazily-load/cache models (the "models/
+  layer"; named `modelhub/` because `backend/models.py` owns `models`). Registers the bi-encoder today; W3's
+  bge/gte ONNX swap and W4's cross-encoder become registry entries.
+
+### Added
+- **arXiv academic corpus** — added arXiv alongside OpenAlex. Providers run **concurrently** and results are
+  merged + de-duplicated by title (preferring the longer abstract). arXiv matches get an "arXiv" origin badge
+  + link (in the UI and the downloadable report). *Crossref was evaluated and intentionally dropped for
+  content matching — its records almost never carry abstracts (0/5 in testing), so there's nothing to match against.*
+- **Test suite** (`backend/tests/`, pytest + FastAPI `TestClient`) — 19 tests, offline & deterministic:
+  matcher unit tests (verbatim/paraphrase/translated/edge cases, model-aware skips) and `/api/check`
+  integration tests (success contract, 400/413/422, size cap via monkeypatch, and a check that internal
+  exception text never leaks to the client). `requirements-dev.txt` + `pytest.ini` added; wired into CI.
+- **Evaluation harness** (`backend/scripts/eval_matcher.py` + `eval_data.json`) — a controlled, labelled
+  benchmark (32 cases) that measures passage-level precision / recall / F1, **recall by type × difficulty**
+  (verbatim/paraphrase/translated × easy/medium/hard), and the **false-positive rate per negative stratum**
+  (same-topic, boilerplate, **ESL**, shared-terminology, unrelated). Writes a JSON artifact; CI-gated on
+  overall recall + FPR **and a per-stratum FPR ceiling**. Current: **P=1.00, R=0.765, FPR=0.00 on every
+  stratum** (incl. ESL); the honest gap is hard paraphrases (0/3).
+- **Translated-plagiarism detection (Phase 3, part 1)** — cross-lingual matches are labelled `translated`
+  (language identified with `langdetect`) and shown with the language pair (e.g. FR→EN), a teal
+  highlight/bar/badge, and a `translated_pct`. The multilingual MiniLM already embeds across languages, so
+  matching is unchanged — the paraphrase path is simply re-classified when source and passage languages differ.
+- **Downloadable evidence report** — from the results view, "Download report" saves a self-contained,
+  printable HTML report (header, score band, highlighted document, side-by-side matches with source
+  links, and a method/limitations footer); "Print / Save PDF" opens it for printing. Offline, deterministic.
+- **Academic-database corpus (Phase 2)** — check a paper without uploading sources:
+  - `services/academic_corpus.py` — retrieves candidate sources from **OpenAlex** (free, no key):
+    builds distinctive queries from the document, reconstructs abstracts, returns `SourceDoc`s that
+    feed the same matcher. Fully defensive (network failure → warning, never raises).
+  - `POST /api/check` gains `use_academic` (references become optional when on); matches carry
+    `source_origin` + `source_url`; response adds `academic_used`.
+  - UI: an "Also search open-access academic databases" toggle, **OpenAlex origin badges**, and
+    clickable source links in the match list + comparison.
+- **Originality Checker (Phase 1)** — the first slice of the new source-attribution engine:
+  - `services/plagiarism_matcher.py` — deterministic matcher: **verbatim** (k-gram anchoring →
+    exact char spans) + **paraphrase** (local MiniLM sentence embeddings, cosine). Pure & unit-tested;
+    degrades to verbatim-only if the embedding model is unavailable.
+  - `POST /api/check` — upload a paper + reference sources → localized matches (type, similarity,
+    doc span, source span/context, paragraph) + overall/verbatim/paraphrase %; PDF & TXT; input guards.
+  - New primary UI `index.html` + `js/check.js`: dual upload (paper + references), **highlighted
+    document**, ranked **match list**, and **side-by-side source comparison**. Offline, self-check framed.
+  - Legacy authorship app preserved at `authorship.html`.
+  - `sentence-transformers` added to `requirements.txt`; `_smoketest_check.py` (offline matcher test).
+- `PROJECT_BRIEF.md` — product spec & knowledge base (single source of truth).
+- Project scaffolding: `CHANGELOG.md`, `ROADMAP.md`, `TODO.md`, `CONTRIBUTING.md`,
+  `SECURITY.md`, `CLAUDE.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`, `.github/workflows/ci.yml`.
+- `backend/.env.example` — documents optional `OPENAI_API_KEY` (system runs offline without it).
+- `backend/_smoketest.py` — offline, in-process end-to-end pipeline check (no server/API key).
+- `frontend/_serve.py` — no-cache static dev server (prevents stale HTML/CSS during dev).
+
+### Fixed (offline end-to-end now works)
+- `report_generator.py`: `noise_percentage` unit bug (0–100 treated as 0–1) that made the
+  offline report always return "Highly Plagiarized / 0.0"; penalties now gated on clustering
+  reliability; executive summary rewritten to name the real driving signals.
+- `gpt_analyzer.py`: `boundaries` were iterated as dicts (`b.get(...)`) but are ints →
+  `AttributeError` silently disabled AI reasoning. Now treated as paragraph indices.
+- `hdbscan_detector.py`: referenced `WarningCode` members that didn't exist; implemented the
+  documented **noise-saturation override** so short all-noise docs aren't flagged 100% anomalous.
+- `models.py`: added `CLUSTER_HDBSCAN_UNAVAILABLE`, `CLUSTER_SCALING_FAILED`, `CLUSTER_FIT_FAILED`.
+- Frontend `heatmap.js`: read `data.features.profiles`/`feature_names` (were wrong paths),
+  name-keyed profile lookup, correct reasoning shape → feature bars & AI reasoning now render.
+- `report.js`: derives real evidence sub-scores from the response (were always 10/10).
+
+### Security
+- **CORS** now uses an explicit origin allow-list (env `PRISM_ALLOWED_ORIGINS`; defaults to
+  `localhost:3000` / `127.0.0.1:3000` / `5173`) instead of `allow_origins=["*"] + credentials`.
+- **Upload size cap** — `_enforce_size` rejects files over `MAX_FILE_BYTES` (20 MB) with **413**, now
+  covering the primary paper across every read endpoint (previously only reference files were capped) + `/api/upload`.
+- **Generic client errors everywhere** — added a `_server_error` helper (logs server-side, returns a generic
+  500); swept raw `str(e)` from `/api/check`, `/api/upload`, and the legacy read endpoints
+  (`parse|features|cluster|reasoning|citations|analyze`). A test asserts internal detail never reaches the client.
+
+### Removed
+- Deleted 8 unreferenced "v3" backend modules (`pipeline_orchestrator`, `clustering`, `boundary_fusion`,
+  `pelt_detector`, `topic_coherence`, `scoring_engine`, `window_aggregator`, `embedding_similarity_detector`)
+  — verified not imported by live code (the unused fusion bought only ~+0.02 F1). `local_embeddings.py` kept (used by the matcher).
+
+### Changed
+- **Recalibrated the paraphrase threshold 0.75 → 0.66** — a data-driven improvement from the expanded eval:
+  a threshold sweep showed 0.66 catches medium paraphrases (recall 0.65 → 0.765) with the false-positive rate
+  still **0.00 across every stratum** (below ~0.65 a negative starts to flag). Docs/UI updated to match.
+- **`/api/check` is now asynchronous** — `POST` validates uploads synchronously (400/413 fail fast) then
+  returns **202 + `job_id`**; matching + OpenAlex run in a bounded background worker (`ThreadPoolExecutor`,
+  4 workers) so the network call never blocks the request. New **`GET /api/check/{job_id}`** returns
+  `queued|running|done|error` (+ the result when done). Adds **content-hash result caching** (idempotent
+  re-submits return instantly) and a thread-safe embedding-model singleton. The frontend now submits + polls.
+- **UI redesign → state-of-the-art light design system.** Rebuilt `index.html` into a SaaS
+  dashboard shell (sidebar workflow nav, SVG icon set, contextual sticky topbar); rewrote
+  `css/styles.css` (design tokens, restyled every component); rewrote `sources.js` & `citations.js`
+  to clean light-theme classes (removed hardcoded dark inline colors).
+- **Legacy README de-hyped** — removed "100% accuracy / ZERO false positives / prosecutable / measurably
+  superior / Full (Idea Triplets)"; benchmark relabelled an N=2 illustrative legacy smoke test; added a pivot banner.
+
+### Known / not yet done (see [`ROADMAP.md`](ROADMAP.md) / [`TODO.md`](TODO.md))
+- For any multi-user/public deployment: auth + rate limiting; move OpenAlex search off the request path (worker/job model).
+- Add Crossref/arXiv corpora; expand the eval set; finer (sliding-window) paraphrase localization.
+- AI-generated-text detection intentionally deferred until it can be shipped calibrated + hedged.
+
+---
+_Releases will be tagged here once a versioned build of the Originality Checker is cut._

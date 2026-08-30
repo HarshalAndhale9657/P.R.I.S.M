@@ -1,0 +1,10 @@
+{"a": "A cat sat quietly on the woven mat by the door.", "b": "A cat was sitting calmly on the rug near the doorway.", "label": 1, "stratum": "paraphrase", "id": "sample-1"}
+{"a": "Researchers discovered a new species of frog in the Amazon.", "b": "Scientists found a previously unknown frog species in the Amazon rainforest.", "label": 1, "stratum": "paraphrase", "id": "sample-2"}
+{"a": "The transformer relies on self-attention to model long-range dependencies.", "b": "Self-attention is the mechanism the transformer uses to capture long-range dependencies.", "label": 1, "stratum": "paraphrase", "id": "sample-3"}
+{"a": "Average global temperatures have risen substantially over the past century.", "b": "Over the last hundred years, the planet has warmed considerably on average.", "label": 1, "stratum": "paraphrase", "id": "sample-4"}
+{"a": "Density-based clustering finds the number of groups without a preset count.", "b": "Without needing a fixed number in advance, density-based clustering infers how many groups exist.", "label": 1, "stratum": "paraphrase", "id": "sample-5"}
+{"a": "The large corporation acquired the small startup last spring.", "b": "The small startup acquired the large corporation last spring.", "label": 0, "stratum": "high_overlap_negative", "id": "sample-6"}
+{"a": "Flights from New York to London were unusually cheap this week.", "b": "Flights from London to New York were unusually cheap this week.", "label": 0, "stratum": "high_overlap_negative", "id": "sample-7"}
+{"a": "The committee approved the proposal despite the mayor's objection.", "b": "The mayor approved the proposal despite the committee's objection.", "label": 0, "stratum": "high_overlap_negative", "id": "sample-8"}
+{"a": "The recipe calls for two cups of flour and a pinch of salt.", "b": "Quantum entanglement links the states of particles across great distances.", "label": 0, "stratum": "unrelated", "id": "sample-9"}
+{"a": "She practises the violin every morning before school.", "b": "The regional stock index fell sharply on Tuesday afternoon.", "label": 0, "stratum": "unrelated", "id": "sample-10"}

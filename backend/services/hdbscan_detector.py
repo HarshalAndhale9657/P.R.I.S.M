@@ -132,6 +132,27 @@ class AuthorshipClustering:
         real_clusters = [l for l in unique_labels if l >= 0]
         noise_mask = labels == -1
 
+        # ── Noise-saturation override ────────────────────────────────────────
+        # When HDBSCAN forms zero stable clusters, every paragraph lands in
+        # noise (-1). This is a small-sample / low-variance degeneracy, NOT
+        # proof that every paragraph is anomalous. Per the documented
+        # architecture ("noise saturation → override"), collapse to a single
+        # unclustered author instead of flagging the whole document.
+        if len(real_clusters) == 0 and n_paragraphs > 0:
+            return {
+                "clusters": [0] * n_paragraphs,
+                "estimated_authors": 1,
+                "anomaly_indices": [],
+                "anomaly_count": 0,
+                "boundaries": [],
+                "boundary_count": 0,
+                "noise_percentage": 0.0,
+                "cluster_sizes": {"0": n_paragraphs},
+                "confidence": "low",
+                "noise_override": True,
+                "too_short": False,
+            }
+
         anomaly_indices = [i for i, l in enumerate(labels) if l == -1]
         cluster_sizes = {str(cl): int(np.sum(labels == cl)) for cl in real_clusters}
 
