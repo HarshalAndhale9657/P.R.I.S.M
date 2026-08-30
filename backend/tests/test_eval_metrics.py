@@ -65,7 +65,11 @@ def test_sample_dataset_loads():
     assert all(c.a and c.b and c.dataset == "sample" for c in cases)
 
 
-def test_unfetched_dataset_raises_with_hint():
+def test_unfetched_dataset_raises_with_hint(tmp_path, monkeypatch):
+    # Point DATA_DIR at an empty temp dir so the result is deterministic regardless
+    # of which datasets happen to be fetched locally (e.g. PAWS from a W2 run).
+    import eval.pairs as pairs_mod
+    monkeypatch.setattr(pairs_mod, "DATA_DIR", tmp_path)
     assert "paws" in DATASETS
     with pytest.raises(DatasetNotAvailable) as exc:
         load_dataset("paws")
