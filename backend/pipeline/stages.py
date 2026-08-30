@@ -153,6 +153,11 @@ class RerankStage:
             and (m.get("doc_excerpt") or "").strip()
             and (m.get("source_excerpt") or "").strip()
         ]
+        # Highest-similarity first: when the cap bites, we spend the budget verifying
+        # the STRONGEST claims. Those are the ones currently labelled "confident", so a
+        # wrong call there is a false accusation — the failure mode we care most about.
+        # (Lower-scoring pairs are already labelled "review", so a missed promotion is
+        # a far cheaper error than a missed demotion.)
         cand.sort(key=lambda m: float(m.get("similarity", 0.0)), reverse=True)
         return cand[: self.max_pairs]
 

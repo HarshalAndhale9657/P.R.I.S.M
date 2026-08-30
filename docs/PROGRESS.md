@@ -139,9 +139,26 @@ latency budget is measured on a real 20-page PDF, since flipping it silently wou
 6 unit tests with a fake cross-encoder cover promote/demote, the skip rules, the cap, fail-soft, and aggregate
 recomputation.
 
-**Still open:** measure rerank latency on a real 20-page PDF, then decide whether to default it on; run the W5
-notebook (needs a GPU session — cannot be driven from this environment); re-derive the cutoff after rerank is
-default-on, accounting for the **max-over-sources** upward bias (pairwise 0.78 is a lower bound).
+**Rerank latency measured (dev machine, ~11-page / 5.2k-word doc, 6 sources):**
+| | wall time | matches | reranked |
+|---|---|---|---|
+| rerank OFF | **2.82s** | 515 | — |
+| rerank ON | **11.03s** | 515 | 126 |
+**+8.2s for 126 pairs ≈ 65 ms/pair.** The `max_pairs=200` cap bounds rerank cost at ~13s *regardless of document
+length*, so the check stays well inside the <60s budget on this hardware. (The confident→review shift in that run
+is **not** a quality signal — the synthetic doc repeats filler that also appears in the sources, so nearly every
+sentence matches. Timing is valid; that percentage is not.)
+**Decision: keep it opt-in for now.** Two honest reasons: (1) this was measured on a dev machine, while production
+is a shared-vCPU Hetzner CX32 that will be materially slower — flipping a latency-affecting default on untested
+hardware is the kind of unmeasured assumption we've been avoiding; (2) it adds a ~500MB model to the deploy image.
+**Flip it at W6 (deploy) after measuring on the actual VPS.**
+Prioritisation note: candidates are reranked **highest-similarity first**, so when the cap bites the budget is spent
+verifying the *strongest* claims — the ones currently labelled `confident`, where a wrong call is a false
+accusation. A missed promotion (leaving something in `review`) is the far cheaper error.
+
+**Still open:** measure rerank on the real VPS at W6 → then default it on; run the W5 notebook (needs a GPU session
+— cannot be driven from this environment); re-derive the cutoff once rerank is default-on, accounting for the
+**max-over-sources** upward bias (pairwise 0.78 is a lower bound).
 
 ## 2026-08-21 (cont.) — Expanded eval set + threshold recalibration (ADR-0013)
 
