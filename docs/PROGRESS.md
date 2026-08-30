@@ -117,9 +117,19 @@ wrong, not the real-data conclusion.
    Verified end-to-end: a 0.7593 reword → `review` (review_pct 68.97, confident_pct 0.0) where it would
    previously have been shown as a confirmed 76% match; verbatim stays `confident`. All 8 JS files pass `node --check`.
 
-**Still open:** re-derive the cutoff after the cross-encoder rerank lands, accounting for the **max-over-sources**
-upward bias (pairwise 0.78 is a lower bound). W5 fine-tune (LoRA cross-encoder on PAWS/MRPC, free GPU) is the
-remaining sanctioned training step — needs a Colab/Kaggle notebook, which cannot be driven from this environment.
+**W5 training kit prepared** (`backend/training/`): `finetune_cross_encoder.py` + README. It trains the one
+sanctioned fine-tune (ADR-0016) on a free Colab/Kaggle T4 **and enforces the ship/no-ship gate itself** — FPR@0.66
+must not rise, best-F1 must improve by ≥0.01, Brier must not worsen; exit 2 = "trained fine, didn't earn its place".
+It imports the repo's own `eval/metrics.py`, so its numbers are directly comparable to `eval.run_pairs` (no
+reimplementation drift), scores the pretrained baseline *in the same run* (apples-to-apples), and trains on **train**
+splits while evaluating on the **validation** splits our published numbers came from (no leakage). 8 unit tests cover
+the gate logic (`tests/test_w5_gate.py`), including that a raised FPR fails even when F1 improves and that an
+unchanged result never ships. **Deviation from ADR-0016, stated plainly:** it does a **full fine-tune, not LoRA** —
+the cross-encoder is roberta-base (~125M), which trains fine on a free T4; LoRA exists for much larger models and
+would add a `peft` dependency for no benefit here.
+
+**Still open:** run the W5 notebook (needs a GPU session — cannot be driven from this environment); re-derive the
+cutoff after any rerank lands, accounting for the **max-over-sources** upward bias (pairwise 0.78 is a lower bound).
 
 ## 2026-08-21 (cont.) — Expanded eval set + threshold recalibration (ADR-0013)
 

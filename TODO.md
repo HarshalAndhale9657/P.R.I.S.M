@@ -25,8 +25,11 @@ Check items off with a date. Newest priorities on top.
       recalibrate on the real benchmark; **ship only if recall ↑ with FPR flat** (esp. high-overlap negatives); torch fallback. _(M)_
 - [ ] **W4 · Cross-encoder rerank (pretrained) + OA full-text** — pretrained cross-encoder over top-k for hard
       paraphrases (recall 0.77 → ↑); add **Semantic Scholar** + **Unpaywall/arXiv/PMC** full text; re-eval, keep gate green. _(L)_
-- [ ] **W5 · Selective cross-encoder fine-tune (go/no-go)** — LoRA fine-tune the reranker on **PAWS/MRPC** (free
-      Colab/Kaggle GPU) → export ONNX; **ship only if it beats the pretrained cross-encoder on the W2 benchmark** (FPR flat), else keep pretrained. _(M)_
+- [~] **W5 · Selective cross-encoder fine-tune (go/no-go)** — **kit is ready**: `backend/training/` (script +
+      README + 8 gate tests). Full fine-tune (not LoRA — roberta-base is small; rationale in the README) on a free
+      Colab/Kaggle T4; **the script enforces the gate itself** (FPR must not rise, best-F1 +≥0.01, Brier must not
+      worsen). ⏳ **Needs someone to run one GPU session** — cannot be driven from the coding environment.
+      "Do not ship" is a legitimate outcome; keep `cross-encoder-stsb` and bank the time. _(M)_
 - [ ] **Later · AI-text detector** — deferred behind plagiarism-first (ADR-0016); when built, honesty-gated on RAID/HC3/M4 + real ESL set. _(L)_
 
 ## ✅ Now — honesty & safety (done)
