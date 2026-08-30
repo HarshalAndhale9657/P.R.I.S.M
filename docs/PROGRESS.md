@@ -109,8 +109,17 @@ wrong, not the real-data conclusion.
    false clean" guardrail.
 2. **`scripts/eval_matcher.py` demoted to a SMOKE TEST** (banner + MIN_RECALL 0.70→0.55); **the quality gate is
    `python -m eval.run_pairs`** on public data. Its FPR must never be quoted as accuracy again.
-**Still open:** render the review band distinctly in the UI/report (frontend follow-up); re-derive the cutoff after
-the cross-encoder rerank lands (and account for the max-over-sources upward bias).
+3. **UI + report now render the band** (same day). Badge, muted/dashed highlight (never a severity colour),
+   hatched "Needs review" bar, chip, plain-language note, and an explicit "Inconclusive — needs your review"
+   callout in the detail pane; the downloadable report gets the same treatment plus a corrected method footer
+   (states **both** cutoffs instead of the stale "≥ 0.66") and an explicit **coverage limitation** (uploads +
+   OpenAlex/arXiv only — not the full web or paywalled journals; a clean result is not a guaranteed pass).
+   Verified end-to-end: a 0.7593 reword → `review` (review_pct 68.97, confident_pct 0.0) where it would
+   previously have been shown as a confirmed 76% match; verbatim stays `confident`. All 8 JS files pass `node --check`.
+
+**Still open:** re-derive the cutoff after the cross-encoder rerank lands, accounting for the **max-over-sources**
+upward bias (pairwise 0.78 is a lower bound). W5 fine-tune (LoRA cross-encoder on PAWS/MRPC, free GPU) is the
+remaining sanctioned training step — needs a Colab/Kaggle notebook, which cannot be driven from this environment.
 
 ## 2026-08-21 (cont.) — Expanded eval set + threshold recalibration (ADR-0013)
 
