@@ -81,7 +81,13 @@ class PlagiarismMatcher:
     Args:
         ngram: seed k-gram length for verbatim anchoring.
         min_verbatim_words: minimum contiguous words for a verbatim match to count.
-        paraphrase_threshold: cosine cutoff for a paraphrase match (0..1).
+        paraphrase_threshold: cosine floor for reporting a paraphrase match (0..1).
+        confident_threshold: cosine at/above which a paraphrase match is reported as
+            *confident*; between `paraphrase_threshold` and this it is reported but
+            labelled "review" (an explicit inconclusive band rather than a false
+            "clean" or a false accusation). Calibrated on public paraphrase data
+            (STS-B/QQP/MRPC): at 0.66 the false-positive rate on same-topic,
+            independently-written text is 0.23-0.64; at ~0.78 it roughly halves.
         min_sentence_words: sentences shorter than this are not embedded.
         max_source_sentences: safety cap on embedded source sentences (warns, never silent).
     """
@@ -92,6 +98,7 @@ class PlagiarismMatcher:
         ngram: int = 5,
         min_verbatim_words: int = 8,
         paraphrase_threshold: float = 0.66,
+        confident_threshold: float = 0.78,
         min_sentence_words: int = 6,
         max_source_sentences: int = 6000,
     ) -> None:
@@ -100,6 +107,7 @@ class PlagiarismMatcher:
         self.ngram = ngram
         self.min_verbatim_words = max(min_verbatim_words, ngram)
         self.paraphrase_threshold = paraphrase_threshold
+        self.confident_threshold = max(confident_threshold, paraphrase_threshold)
         self.min_sentence_words = min_sentence_words
         self.max_source_sentences = max_source_sentences
 
@@ -205,6 +213,7 @@ class PlagiarismMatcher:
                 matches.append({
                     "match_type": "verbatim",
                     "similarity": 1.0,
+                    "confidence": "confident",   # exact text overlap — never inconclusive
                     "words": best_len,
                     "doc_start": doc_start,
                     "doc_end": doc_end,
@@ -272,6 +281,7 @@ class PlagiarismMatcher:
             matches.append({
                 "match_type": "translated" if is_translated else "paraphrase",
                 "similarity": round(score, 4),
+                "confidence": "confident" if score >= self.confident_threshold else "review",
                 "words": len(_WORD_RE.findall(dsent.text)),
                 "doc_start": dsent.start,
                 "doc_end": dsent.end,
@@ -330,6 +340,8 @@ class PlagiarismMatcher:
         verbatim_tokens: set[int] = set()
         paraphrase_tokens: set[int] = set()
         translated_tokens: set[int] = set()
+        confident_tokens: set[int] = set()
+        review_tokens: set[int] = set()
         per_source_tokens: Dict[str, set[int]] = {s.id: set() for s in sources}
 
         for m in matches:
@@ -342,6 +354,10 @@ class PlagiarismMatcher:
                 translated_tokens.update(idx)
             else:
                 paraphrase_tokens.update(idx)
+            if m.get("confidence") == "review":
+                review_tokens.update(idx)
+            else:
+                confident_tokens.update(idx)
             per_source_tokens.setdefault(m["source_id"], set()).update(idx)
 
         # Verbatim takes precedence; paraphrase and translated are disjoint by match type.
@@ -352,14 +368,21 @@ class PlagiarismMatcher:
         def pct(x: int) -> float:
             return round(100.0 * x / total, 2) if total else 0.0
 
+        # Confidence split: tokens covered only by "review"-band matches are reported
+        # separately so a borderline semantic hit is never presented as a confirmed copy.
+        review_only = review_tokens - confident_tokens
+
         overall = {
             "similarity_pct": pct(len(matched)),
             "verbatim_pct": pct(len(verbatim_tokens)),
             "paraphrase_pct": pct(len(paraphrase_only)),
             "translated_pct": pct(len(translated_only)),
+            "confident_pct": pct(len(confident_tokens)),
+            "review_pct": pct(len(review_only)),
             "matched_words": len(matched),
             "total_words": total,
             "match_count": len(matches),
+            "review_count": sum(1 for m in matches if m.get("confidence") == "review"),
             "source_count": len({m["source_id"] for m in matches}),
         }
 
@@ -421,8 +444,9 @@ class PlagiarismMatcher:
         return {
             "overall": {
                 "similarity_pct": 0.0, "verbatim_pct": 0.0, "paraphrase_pct": 0.0, "translated_pct": 0.0,
+                "confident_pct": 0.0, "review_pct": 0.0,
                 "matched_words": 0, "total_words": total_words,
-                "match_count": 0, "source_count": 0,
+                "match_count": 0, "review_count": 0, "source_count": 0,
             },
             "per_source": [],
             "matches": [],

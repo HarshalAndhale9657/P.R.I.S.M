@@ -61,6 +61,57 @@ recall@FPR≤15% 0.44→0.61** — validates the W4 direction. (3) **PAWS stays 
 `eval/results/pairs_*_{mpnet,…}.json` (git-ignored; numbers here are the record). **Next:** cross-encoder-qqp on
 PAWS; then recalibrate the live threshold (MRPC best-F1 is already ≈0.66, so the cross-encoder is a drop-in on threshold).
 
+**W4b + broadened benchmark (STS-B 1221, QQP 3000 added; 4 real datasets, 6629 pairs total).**
+Cross-encoder comparison — **no single pretrained winner**, they trade off:
+| model | PAWS FPR@0.66 | PAWS TN | PAWS Brier | MRPC F1 | MRPC FPR@0.66 |
+|---|---|---|---|---|---|
+| MiniLM (baseline) | 1.00 | 0 | 0.538 | 0.84 | 0.64 |
+| mpnet | 0.99 | 6 | 0.516 | 0.84 | 0.64 |
+| CE-stsb | 0.99 | 16 | 0.519 | **0.865** | **0.40** |
+| CE-qqp | **0.85** | **167** | **0.430** | 0.788 | 0.52 |
+CE-qqp is the first model to move PAWS at all (TN 0→167) but regresses MRPC — pretrained-first is now exhausted.
+
+**⚠️ CORRECTION to the W2 alarm (I over-generalized from PAWS).** Adding two datasets whose negatives are
+*same-topic but independently written* — the real ESL/boilerplate/shared-terminology risk — shows the baseline
+bi-encoder is **much better than W2 implied**, and that **the threshold, not the model, is the main problem**.
+Separation gap (mean pos − mean neg) is the decisive diagnostic:
+| dataset | gap | FPR@0.66 | best operating point |
+|---|---|---|---|
+| STS-B | **0.460** | 0.234 | t=0.82 → **FPR 0.063, R 0.841, F1 0.813** |
+| QQP | 0.303 | 0.451 | t=0.78 → FPR 0.257, R 0.856 |
+| MRPC | 0.141 | 0.643 | t=0.82 → FPR 0.302, R 0.720 |
+| PAWS | **0.007** | 1.000 | *none exists* |
+**PAWS gap = 0.007** (mean pos 0.981 vs neg 0.974) — the distributions coincide, so **no threshold can ever
+separate them**; that is a representational limit of bi-encoders on word-order/role swaps, not miscalibration.
+It also confirms PAWS is partly **task-mismatched** for us: both its sentences always share an origin, so it tests
+*semantic equivalence*, while plagiarism asks about *derivation* (reusing a source's words with roles swapped is
+arguably a true positive for us). STS-B/QQP/MRPC are the product-relevant sets.
+**Live threshold 0.66 is too low** (it was fitted to the self-authored set). Moving to ~0.78–0.82 roughly halves
+FPR on every product-relevant set for ~10–15pp recall — the right trade for a tool whose cardinal sin is a false
+accusation. **Caveat:** these are *pairwise* numbers, but the matcher takes a **max over many source sentences**,
+which biases the top score upward (multiple comparisons) — so the pairwise-optimal threshold is a **lower bound**
+for production. Verify on the matcher itself before changing the default.
+
+**Threshold test on the ACTUAL matcher (synthetic set) — the two benchmarks disagree, and that IS the finding:**
+| threshold | recall | FPR | smoke gate |
+|---|---|---|---|
+| 0.66 (live) | 0.765 | **0.000** | PASS |
+| 0.70 → 0.82 | 0.647 | **0.000** | FAIL (old MIN_RECALL 0.70) |
+FPR is **0.000 at every threshold** → the synthetic negatives never approach the boundary, so raising the cutoff
+is pure recall loss there while the real data shows a large FPR win. Conclusion: the *synthetic instrument* is
+wrong, not the real-data conclusion.
+
+**→ Shipped (ADR-0017), decided with the owner:**
+1. **Confidence band instead of moving one cutoff.** 0.66 is now the *reporting floor*; `confident_threshold=0.78`
+   is the *confidence* cutoff. Each match carries `confidence: confident|review`; `overall` gains
+   `confident_pct` / `review_pct` / `review_count`; verbatim is always confident. **Additive — nothing detected is
+   lost, borderline hits are just labelled honestly.** Implements the standing "prefer an inconclusive band over a
+   false clean" guardrail.
+2. **`scripts/eval_matcher.py` demoted to a SMOKE TEST** (banner + MIN_RECALL 0.70→0.55); **the quality gate is
+   `python -m eval.run_pairs`** on public data. Its FPR must never be quoted as accuracy again.
+**Still open:** render the review band distinctly in the UI/report (frontend follow-up); re-derive the cutoff after
+the cross-encoder rerank lands (and account for the max-over-sources upward bias).
+
 ## 2026-08-21 (cont.) — Expanded eval set + threshold recalibration (ADR-0013)
 
 - Expanded the benchmark to **32 labelled cases** (`scripts/eval_data.json`): positives by type × difficulty

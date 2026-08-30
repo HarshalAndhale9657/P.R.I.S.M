@@ -116,6 +116,34 @@ def best_threshold(
     return max(pool, key=lambda m: (key(m), -m.fpr, m.threshold))
 
 
+def percentiles(values: Sequence[float], points: Sequence[int] = (5, 25, 50, 75, 95)) -> Dict[str, float]:
+    """Nearest-rank percentiles (stdlib only) — used to inspect score spread."""
+    if not values:
+        return {f"p{p}": 0.0 for p in points}
+    ordered = sorted(values)
+    out = {}
+    for p in points:
+        idx = min(len(ordered) - 1, max(0, round(p / 100 * len(ordered) + 0.5) - 1))
+        out[f"p{p}"] = round(ordered[idx], 4)
+    return out
+
+
+def separation(scores: Sequence[float], labels: Sequence[int]) -> Dict[str, object]:
+    """Score distribution split by label — the diagnostic that says WHY a threshold
+    fails: saturation (both classes crushed into one end) vs genuine overlap."""
+    pos = [s for s, y in zip(scores, labels) if y]
+    neg = [s for s, y in zip(scores, labels) if not y]
+    mean_pos = round(sum(pos) / len(pos), 4) if pos else 0.0
+    mean_neg = round(sum(neg) / len(neg), 4) if neg else 0.0
+    return {
+        "positive": percentiles(pos),
+        "negative": percentiles(neg),
+        "mean_positive": mean_pos,
+        "mean_negative": mean_neg,
+        "mean_gap": round(mean_pos - mean_neg, 4),
+    }
+
+
 def brier(scores: Sequence[float], labels: Sequence[int]) -> float:
     """Mean squared error between score (as P[positive]) and label — a calibration
     proxy. Only meaningful when scores are in [0, 1]."""

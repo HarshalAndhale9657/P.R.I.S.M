@@ -66,6 +66,19 @@ def _run_one(name: str, *, threshold: float, max_fpr: float, gate: bool,
           f"R={best_recall.recall:.3f}  FPR={best_recall.fpr:.3f}")
     print(f"Brier (calibration proxy, lower=better): {brier:.4f}")
 
+    # Operating points: same scores, several candidate thresholds (no re-embedding).
+    op_points = [M.binary_metrics(scores, labels, t) for t in (0.66, 0.70, 0.74, 0.78, 0.82, 0.86)]
+    print("\nOperating points (threshold -> P/R/F1/FPR):")
+    for m in op_points:
+        print(f"  t={m.threshold:.2f}   P={m.precision:.3f}  R={m.recall:.3f}  "
+              f"F1={m.f1:.3f}  FPR={m.fpr:.3f}")
+
+    sep = M.separation(scores, labels)
+    print(f"Separation: mean(pos)={sep['mean_positive']:.3f}  mean(neg)={sep['mean_negative']:.3f}  "
+          f"gap={sep['mean_gap']:.3f}")
+    print(f"  positive p5/25/50/75/95: {[sep['positive'][k] for k in ('p5','p25','p50','p75','p95')]}")
+    print(f"  negative p5/25/50/75/95: {[sep['negative'][k] for k in ('p5','p25','p50','p75','p95')]}")
+
     if strat:
         print("\nFalse-positive rate by negative stratum (at matcher threshold):")
         for st, v in strat.items():
@@ -88,6 +101,8 @@ def _run_one(name: str, *, threshold: float, max_fpr: float, gate: bool,
         "best_f1": best_f1.as_dict(),
         "best_recall_at_fpr_cap": best_recall.as_dict(),
         "fpr_by_stratum": strat,
+        "operating_points": [m.as_dict() for m in op_points],
+        "separation": sep,
         "brier": brier,
         "gates_pass": gates_pass,
     }

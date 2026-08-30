@@ -6,9 +6,16 @@ reports passage-level precision / recall / F1, **recall by type x difficulty**, 
 most importantly for a self-check tool — the **false-positive rate per negative
 stratum** (same-topic, boilerplate, ESL, shared-terminology, unrelated).
 
-This is a *controlled synthetic* benchmark (not real-world prevalence): each passage is
-deliberately authored. It is a regression + failure-mode gauge, not proof of accuracy.
-Exits non-zero if quality regresses past the gates below.
+⚠️ STATUS: **SMOKE TEST ONLY** (demoted 2026-08-31, ADR-0016 follow-up).
+Measured against real public data, this set's negatives proved unrealistically easy:
+its false-positive rate is **0.000 at every threshold from 0.66 to 0.82**, i.e. its
+negatives never approach the decision boundary, so its "FPR 0.00 / precision 1.00" is
+an artifact of easy negatives and must NEVER be quoted as evidence of accuracy.
+On real same-topic data the same matcher shows FPR 0.23-0.64 at the same threshold.
+
+Its remaining job: a fast, offline, download-free regression check that the matcher
+still runs and still finds obvious copies. **The quality gate is `python -m eval.run_pairs`**
+(public paraphrase datasets: STS-B / MRPC / QQP / PAWS). See docs/PROGRESS.md.
 
     python scripts/eval_matcher.py            # from backend/
 """
@@ -23,10 +30,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # allow `import se
 
 from services.plagiarism_matcher import PlagiarismMatcher, SourceDoc
 
-# ── CI gates ──────────────────────────────────────────────────────────────────
-MIN_RECALL = 0.70          # overall positive recall
-MAX_FPR = 0.15             # overall false-positive rate on originals
-MAX_STRATUM_FPR = 0.34     # no single negative stratum may exceed this
+# ── Smoke gates ───────────────────────────────────────────────────────────────
+# Deliberately loose: this is a "did the matcher stop working?" tripwire, not a
+# quality bar (see the module docstring — the FPR here is uninformative). The real
+# quality gate lives in `eval/run_pairs.py` against public datasets.
+MIN_RECALL = 0.55          # detects a gross regression, not a quality claim
+MAX_FPR = 0.15
+MAX_STRATUM_FPR = 0.34
 
 _DATA = json.loads((Path(__file__).with_name("eval_data.json")).read_text(encoding="utf-8"))
 SOURCES = [SourceDoc(id=s["id"], name=s["name"], text=s["text"]) for s in _DATA["sources"]]
@@ -95,7 +105,8 @@ def main() -> int:
     fpr = _rate(fp, fp + tn)
 
     print("=" * 78)
-    print(f"PRISM Matcher Evaluation  -  {len(pos)} positives, {len(neg)} negatives")
+    print(f"PRISM Matcher SMOKE TEST  -  {len(pos)} positives, {len(neg)} negatives")
+    print("  (synthetic set; its FPR is uninformative - real gate: python -m eval.run_pairs)")
     print("=" * 78)
     print(f"Precision={precision:.3f}  Recall={recall:.3f}  F1={f1:.3f}  "
           f"Specificity={specificity:.3f}  FalsePositiveRate={fpr:.3f}")

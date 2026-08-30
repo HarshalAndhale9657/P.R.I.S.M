@@ -22,7 +22,8 @@ def matcher():
 def _overall_keys(ov):
     return {
         "similarity_pct", "verbatim_pct", "paraphrase_pct", "translated_pct",
-        "matched_words", "total_words", "match_count", "source_count",
+        "confident_pct", "review_pct",
+        "matched_words", "total_words", "match_count", "review_count", "source_count",
     } <= set(ov)
 
 
@@ -100,6 +101,35 @@ def test_every_match_has_excerpts(matcher):
         assert m["doc_excerpt"], "doc_excerpt must be populated"
         assert m["source_excerpt"], "source_excerpt must be populated"
         assert m["doc_end"] > m["doc_start"]
+
+
+# ── Confidence band (inconclusive "review" vs "confident") ───────────────────
+
+def test_verbatim_is_always_confident(matcher):
+    doc = SRC_TRANSFORMER + " A closing original remark about weekend plans and weather."
+    r = matcher.check(doc, [SourceDoc("s0", "Src", SRC_TRANSFORMER)])
+    verbatim = [m for m in r["matches"] if m["match_type"] == "verbatim"]
+    assert verbatim
+    assert all(m["confidence"] == "confident" for m in verbatim)
+    assert r["overall"]["confident_pct"] > 0
+    assert r["overall"]["review_pct"] == 0.0
+
+
+def test_confidence_band_thresholds():
+    """A match between paraphrase_threshold and confident_threshold is labelled
+    'review'; at/above confident_threshold it is 'confident'."""
+    m = PlagiarismMatcher(paraphrase_threshold=0.66, confident_threshold=0.78)
+    assert m.paraphrase_threshold == 0.66 and m.confident_threshold == 0.78
+    # confident_threshold can never sit below the reporting floor
+    m2 = PlagiarismMatcher(paraphrase_threshold=0.80, confident_threshold=0.50)
+    assert m2.confident_threshold == 0.80
+
+
+def test_every_match_carries_a_confidence(matcher):
+    doc = SRC_TRANSFORMER + " plus original tail text about nothing in particular here."
+    r = matcher.check(doc, [SourceDoc("s0", "Src", SRC_TRANSFORMER)])
+    for mm in r["matches"]:
+        assert mm["confidence"] in ("confident", "review")
 
 
 # ── Paraphrase / translated (model-dependent) ────────────────────────────────

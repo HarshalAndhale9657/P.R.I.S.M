@@ -59,7 +59,15 @@ Browser E2E: `cd d:\PRISM-UI\_e2e && node check_e2e.mjs`. CI runs all of these.
 - `/api/check` is **async**: `POST` → `202 + job_id` (uploads validated synchronously), heavy work runs in a
   bounded in-process `ThreadPoolExecutor`; poll `GET /api/check/{job_id}`. The job store + content-hash cache
   are **in-process only** (not shared across workers / not restart-durable) — use Redis + a real queue to scale.
-- Matcher thresholds: verbatim min 8 words / k-gram 5; paraphrase cosine ≥ 0.66 (recalibrated via eval — best recall at FPR 0 across all strata). Keep the eval green (`scripts/eval_matcher.py`) when changing them.
+- Matcher thresholds (ADR-0017): verbatim min 8 words / k-gram 5. Paraphrase has **two** cutoffs — a reporting
+  floor `paraphrase_threshold=0.66` and a confidence cutoff `confident_threshold=0.78`. Matches in between are
+  reported with `confidence="review"` (explicit inconclusive band); at/above 0.78 they are `"confident"`.
+  Verbatim is always confident. `overall` carries `confident_pct` / `review_pct` / `review_count`.
+  **Never present a `review` match as confirmed plagiarism.**
+- ⚠️ **`scripts/eval_matcher.py` is a SMOKE TEST, not a quality gate** (ADR-0017): its synthetic negatives never
+  reach the boundary (FPR 0.000 at every threshold 0.66-0.82), so its precision/FPR must never be quoted as
+  accuracy. **The quality gate is `python -m eval.run_pairs`** on public data (STS-B/MRPC/QQP/PAWS). Real
+  numbers + the separation-gap analysis live in `docs/PROGRESS.md`.
 - When you change product shape: add an ADR, update CHANGELOG `[Unreleased]`, and log in `docs/PROGRESS.md`.
 
 ## Current priorities

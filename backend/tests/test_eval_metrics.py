@@ -49,6 +49,21 @@ def test_best_threshold_f1_and_fpr_cap():
     assert capped.fpr <= 0.0 and capped.recall == 1.0
 
 
+def test_percentiles_and_separation():
+    assert M.percentiles([]) == {"p5": 0.0, "p25": 0.0, "p50": 0.0, "p75": 0.0, "p95": 0.0}
+    p = M.percentiles([0.0, 0.25, 0.5, 0.75, 1.0])
+    assert p["p50"] == 0.5 and p["p5"] <= p["p50"] <= p["p95"]
+
+    # Well-separated: positives high, negatives low -> large positive gap.
+    sep = M.separation([0.9, 0.95, 0.1, 0.05], [1, 1, 0, 0])
+    assert sep["mean_positive"] > sep["mean_negative"]
+    assert sep["mean_gap"] > 0.5
+
+    # Saturated/overlapping: both classes crushed together -> ~zero gap.
+    flat = M.separation([0.8, 0.82, 0.81, 0.79], [1, 1, 0, 0])
+    assert abs(flat["mean_gap"]) < 0.05
+
+
 def test_brier():
     assert M.brier([1.0, 0.0], [1, 0]) == 0.0
     assert M.brier([0.5, 0.5], [1, 0]) == 0.25

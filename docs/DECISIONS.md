@@ -227,3 +227,36 @@ source-attribution matcher. Owner also directed: **do not use PAN at all** as ou
 §2) is now *pretrained bi-encoder + a cross-encoder that may be lightly fine-tuned on PAWS/MRPC*. The moat stays
 the **product/coach + honesty**, with a modest ML edge from a tuned reranker if it earns its place on the eval.
 Keeps everything bootstrap-cheap (free GPU, CPU inference). Revises [`LAUNCH_PLAN.md`](LAUNCH_PLAN.md) §3/§5/§9.
+
+## ADR-0017 — Confidence band ("review" vs "confident") + synthetic set demoted to a smoke test
+**Status:** Accepted (2026-08-31) — owner Q&A, following the W2-W4b measurements.
+**Context:** Measuring the matcher's paraphrase pillar on four *public* datasets (STS-B 1221, MRPC 408,
+QQP 3000, PAWS 2000) produced two findings that change how we report and how we gate:
+1. **The live threshold 0.66 is too low.** It was fitted to the self-authored 32-case set. On real
+   same-topic-but-independently-written negatives — our actual ESL / boilerplate / shared-terminology risk —
+   FPR at 0.66 is **0.234 (STS-B) / 0.451 (QQP) / 0.643 (MRPC)**. At ~0.78-0.82 it roughly halves
+   (STS-B 0.097@0.78, 0.063@0.82) for ~10-15pp recall. The **separation gap** (mean positive − mean negative)
+   confirms the model itself is fine where the task is well posed: STS-B **0.460**, QQP 0.303, MRPC 0.141.
+2. **The synthetic 32-case set is not a quality instrument.** Its FPR is **0.000 at every threshold 0.66-0.82**
+   — its negatives never approach the decision boundary — so its "precision 1.00 / FPR 0.00" is an artifact of
+   easy negatives. Raising the threshold on it only *loses* recall (0.765 → 0.647) while its FPR signal stays flat.
+   (Separately, **PAWS's gap is 0.007** — mean pos 0.981 vs neg 0.974 — so no threshold can ever separate it;
+   that is a representational limit of bi-encoders on word-order/role swaps, and PAWS is also partly
+   *task-mismatched* for us: its pairs always share an origin, so it tests semantic equivalence, whereas
+   plagiarism asks about **derivation**. STS-B/QQP/MRPC are the product-relevant sets.)
+**Decision:**
+1. **Ship an explicit inconclusive band instead of moving one cutoff.** `paraphrase_threshold=0.66` becomes the
+   *reporting floor*; new `confident_threshold=0.78` is the *confidence* cutoff. Every match carries
+   `confidence: "confident" | "review"`, and `overall` gains `confident_pct` / `review_pct` / `review_count`.
+   Verbatim is always `confident`. This is **additive**: nothing previously detected is dropped, borderline
+   semantic hits are simply labelled honestly. It implements the standing guardrail — *"prefer a triage band +
+   an explicit inconclusive state over a false clean"* — and avoids presenting a 0.70-cosine hit as a confirmed copy.
+2. **Demote `scripts/eval_matcher.py` to a smoke test.** It stays in CI as a fast, offline, download-free
+   tripwire ("does the matcher still run and still catch obvious copies?"), with loosened gates
+   (MIN_RECALL 0.70 → 0.55) and a banner saying its FPR is uninformative. **The quality gate is
+   `python -m eval.run_pairs`** over the public datasets.
+**Consequences:** The UI/report should render the review band distinctly (not as confirmed plagiarism) — a
+frontend follow-up. `similarity_pct` keeps its old meaning (all matches) for API compatibility; consumers that
+want the strict number use `confident_pct`. **Caveat carried forward:** these are *pairwise* calibrations, but the
+matcher takes a **max over many source sentences**, which biases the top score upward (multiple comparisons), so
+0.78 is a **lower bound** for production — revisit after the cross-encoder rerank lands.
