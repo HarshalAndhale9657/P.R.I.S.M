@@ -74,6 +74,25 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 - When you change product shape: add an ADR, update CHANGELOG `[Unreleased]`, log the session in `docs/PROGRESS.md`.
 
 ## Current priorities
-See [`TODO.md`](TODO.md). Core-ML W1–W4b done; W5 needs a human GPU session; **next is W6 (first deploy on the
-real box, measure rerank + full-text latency, decide the rerank default)**, then W7 accounts + Postgres job store. An open owner
-decision blocks nothing but matters: **the repository has no LICENSE**.
+
+**State as of 2026-09-06** (`main` @ `ee5c3dc`, CI green on all five jobs, 180 tests, working tree clean):
+W1–W4b + W8 shipped · licensed PolyForm Noncommercial 1.0.0 · PAN purged from history.
+Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0024.
+
+**Next, in order:**
+1. **W6 — first deploy.** `deploy/README.md` is a complete runbook; it needs a VPS and nothing else. On the box:
+   measure `timings_ms` on a real 20-page PDF with `PRISM_RERANK=true` and academic full text on, then set the
+   rerank default and `PRISM_MAX_SOURCE_SENTENCES` **from those numbers**. Also point UptimeRobot at
+   `/health/ready` and set `PRISM_CONTACT_EMAIL` + `PRISM_SENTRY_DSN`.
+2. **Re-measure corpus scaling against the full matcher** (ADR-0024 measured the paraphrase pillar alone, with
+   *unrelated* distractors; production sources are retrieved by similarity, so the real effect is likely larger).
+   Then refit `k`/`pivot` and refresh `eval/gates.json`.
+3. **W5 fine-tune** — kit is ready and self-gating; needs one human-run Colab/Kaggle GPU session. "Do not ship"
+   is a legitimate outcome.
+4. **W7** — Supabase JWT + `PostgresJobStore` implementing the existing `worker.store.JobStore` Protocol.
+
+**Owner decisions still open** (TODO 🔴, none blocking): the legal copyright holder for `NOTICE`; consent from
+three past teammates for ~176 surviving boilerplate lines; confirming the old Vercel/Render demo is offline.
+
+**Before claiming anything works, run the Verify block above.** This project's rule is that a number is only
+real if it was measured — two defaults changed on 2026-09-06 purely because measurement contradicted intuition.
