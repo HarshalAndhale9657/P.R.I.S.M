@@ -9,10 +9,21 @@
 (() => {
     'use strict';
 
-    const API_BASE =
-        window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? 'http://localhost:8000'
-            : 'https://p-r-i-s-m.onrender.com';
+    // API base resolution — no hostname sniffing, no hard-coded hosts:
+    //   1. <meta name="prism-api-base" content="https://api.example.org">  (explicit)
+    //   2. same origin                                                    (production: the
+    //      reverse proxy serves this page and proxies /api on one host)
+    //   3. localhost:8000                                                  (local dev fallback)
+    const API_BASE = (() => {
+        const meta = document.querySelector('meta[name="prism-api-base"]');
+        const explicit = meta && meta.content ? meta.content.trim().replace(/\/+$/, '') : '';
+        if (explicit) return explicit;
+        const h = window.location.hostname;
+        const isLocal = h === 'localhost' || h === '127.0.0.1';
+        if (isLocal && window.location.port !== '8000') return `http://${h}:8000`;
+        return '';
+    })();
+    const API = `${API_BASE}/api/v1`;
 
     const MAX_FILE_MB = 20;
 
@@ -184,20 +195,33 @@
     // ─── Run ───
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-    /** Poll a submitted job until it finishes; resolves with the result or throws. */
-    async function pollJob(jobId) {
-        const TIMEOUT_MS = 180000;   // 3 minutes
+    /** Poll a submitted job until it finishes; resolves with the result or throws.
+     *  Backs off from 0.8s to 3s so a busy server isn't hammered by idle tabs. */
+    async function pollJob(jobId, onStatus) {
+        const TIMEOUT_MS = 240000;   // 4 minutes (queue wait + check)
         const started = Date.now();
+        let delay = 800;
         while (Date.now() - started < TIMEOUT_MS) {
-            await sleep(1000);
-            const r = await fetch(`${API_BASE}/api/check/${jobId}`);
+            await sleep(delay);
+            delay = Math.min(3000, Math.round(delay * 1.5));
+            const r = await fetch(`${API}/check/${jobId}`);
+            if (r.status === 404) throw new Error('This check has expired or the server restarted. Please run it again.');
             if (!r.ok) throw new Error(`Could not retrieve the check (${r.status}).`);
             const d = await r.json();
             if (d.status === 'done') return d.result;
             if (d.status === 'error') throw new Error(d.error || 'Check failed.');
-            // queued / running → keep polling
+            if (onStatus) onStatus(d.status);   // queued | running
         }
         throw new Error('The check timed out. Please try again.');
+    }
+
+    /** Turn a non-2xx submit response into a message a person can act on. */
+    async function submitError(resp) {
+        const body = await resp.json().catch(() => ({}));
+        const retry = resp.headers.get('Retry-After');
+        if (resp.status === 429) return `You've run several checks in a short time. Please wait ${retry ? retry + ' seconds' : 'a few minutes'} and try again.`;
+        if (resp.status === 503) return `The checker is busy right now. Please try again in ${retry ? retry + ' seconds' : 'about half a minute'}.`;
+        return body.detail || `Check failed (${resp.status}).`;
     }
 
     async function runCheck() {
@@ -206,7 +230,12 @@
         updateButton();
         showProgress(true);
         const label = document.getElementById('check-progress-label');
-        if (label) label.textContent = state.useAcademic ? 'Searching academic databases…' : 'Analyzing…';
+        const setLabel = (status) => {
+            if (!label) return;
+            if (status === 'queued') label.textContent = 'Waiting in queue…';
+            else label.textContent = state.useAcademic ? 'Searching academic databases and matching…' : 'Matching passages…';
+        };
+        setLabel('uploading');
 
         try {
             const fd = new FormData();
@@ -214,13 +243,10 @@
             state.refs.forEach(r => fd.append('references', r));
             fd.append('use_academic', state.useAcademic ? 'true' : 'false');
 
-            const submit = await fetch(`${API_BASE}/api/check`, { method: 'POST', body: fd });
-            if (!submit.ok) {
-                const err = await submit.json().catch(() => ({}));
-                throw new Error(err.detail || `Check failed (${submit.status})`);
-            }
+            const submit = await fetch(`${API}/check`, { method: 'POST', body: fd });
+            if (!submit.ok) throw new Error(await submitError(submit));
             const { job_id } = await submit.json();
-            const result = await pollJob(job_id);
+            const result = await pollJob(job_id, setLabel);
             state.result = result;
             renderResults(result);
             showView('results');
@@ -491,6 +517,16 @@
         const docName = esc((state.paper && state.paper.name) || data.filename || 'document');
         const when = esc(new Date().toLocaleString());
         const scoreBand = band(ov.similarity_pct || 0);
+        // The method footer is driven by what the server actually ran — never by copy that
+        // can go stale when a threshold or model changes (ADR-0017).
+        const eng = data.engine || {};
+        const tConf = Number.isFinite(eng.confident_threshold) ? eng.confident_threshold.toFixed(2) : '0.78';
+        const tFloor = Number.isFinite(eng.paraphrase_threshold) ? eng.paraphrase_threshold.toFixed(2) : '0.66';
+        const engineLine = esc(`P.R.I.S.M. ${eng.version || ''} · n-gram + ${eng.bi_encoder || 'sentence embeddings'}` +
+            (eng.reranked ? ` · cross-encoder rerank (${eng.rerank_model || ''})` : ''));
+        const coverage = esc(eng.coverage || 'Checked against your uploaded references' +
+            (data.academic_used ? ' and open-access abstracts from OpenAlex/arXiv' : '') +
+            ' — not the full web or subscription journal databases.');
 
         const sources = (data.sources || []).map(s => {
             const nm = esc(s.name || '');
@@ -525,7 +561,7 @@
 <title>Originality Report — ${docName}</title><style>${reportStyles()}</style></head>
 <body><div class="wrap">
     <header><h1>Originality Report</h1>
-        <div class="meta">Document: <b>${docName}</b> · Generated: ${when} · Engine: P.R.I.S.M. (offline · n-gram + MiniLM)</div>
+        <div class="meta">Document: <b>${docName}</b> · Generated: ${when} · Engine: ${engineLine}</div>
     </header>
     <section class="rep-score ${scoreBand}">
         <div class="big">${(ov.similarity_pct || 0).toFixed(1)}%</div>
@@ -540,15 +576,14 @@
     ${matches.length ? `<h2>Matches (${matches.length})</h2>${matchesHtml}` : '<p class="none">No matching passages were found.</p>'}
     <footer class="rep-foot"><h3>Method &amp; limitations</h3>
         <p>Verbatim matches are contiguous identical word sequences; paraphrase matches are sentence-level
-        semantic similarity (local MiniLM cosine). Matches at/above a cosine of <b>0.78</b> are reported as
-        confident; those between <b>0.66 and 0.78</b> are reported as <b>“Needs review”</b> — an explicit
-        inconclusive band, because independently written text on the same topic can reach that range.
-        This is a self-check aid and <b>not a determination of misconduct</b>. Legitimate quotation, common
-        phrasing, shared terminology and citations can also match. Academic-database matches are compared
-        against paper <i>abstracts</i>, not full text. Review every flagged passage in context.</p>
-        <p><b>Coverage:</b> your uploaded references plus (if enabled) OpenAlex and arXiv — <b>not</b> the full
-        web or subscription journal databases. A clean result here is not a guarantee of passing a publisher’s
-        similarity check.</p>
+        semantic similarity (sentence-embedding cosine${eng.reranked ? ', re-scored by a cross-encoder' : ''}).
+        Matches at/above <b>${tConf}</b> are reported as confident; those between <b>${tFloor} and ${tConf}</b>
+        are reported as <b>“Needs review”</b> — an explicit inconclusive band, because independently written
+        text on the same topic can reach that range. This is a self-check aid and <b>not a determination of
+        misconduct</b>. Legitimate quotation, common phrasing, shared terminology and citations can also match.
+        Academic-database matches are compared against paper <i>abstracts</i>, not full text. Review every
+        flagged passage in context.</p>
+        <p><b>Coverage:</b> ${coverage}</p>
     </footer>
 </div></body></html>`;
     }
@@ -629,6 +664,9 @@
         dom.btnNewCheck = document.getElementById('btn-new-check');
         dom.topTitle = document.getElementById('topbar-title');
         dom.topDesc = document.getElementById('topbar-desc');
+
+        const apiLink = document.getElementById('api-docs-link');
+        if (apiLink) apiLink.href = `${API_BASE}/docs`;
 
         wireDropzone(dom.paperDrop, dom.paperInput, setPaper, { multiple: false });
         wireDropzone(dom.refsDrop, dom.refsInput, addRefs, { multiple: true });

@@ -281,12 +281,7 @@ class PlagiarismMatcher:
         if not doc_sents or not src_sents:
             return []
 
-        if len(src_sents) > self.max_source_sentences:
-            warnings.append(
-                f"Reference text is large; paraphrase search limited to the first "
-                f"{self.max_source_sentences} of {len(src_sents)} source sentences."
-            )
-            src_sents = src_sents[: self.max_source_sentences]
+        src_sents = self._budget_source_sentences(doc_sents, src_sents, warnings)
 
         import numpy as np
         from sklearn.metrics.pairwise import cosine_similarity
@@ -329,6 +324,55 @@ class PlagiarismMatcher:
                 "source_context": self._context(src.text, ssent.start, ssent.end),
             })
         return matches
+
+    def _budget_source_sentences(
+        self,
+        doc_sents: List[Unit],
+        src_sents: List[Tuple[int, Unit]],
+        warnings: List[str],
+    ) -> List[Tuple[int, Unit]]:
+        """Keep the embedding budget bounded without silently ignoring later sources.
+
+        Embedding every source sentence is the cost driver, so there is a cap. The old
+        behaviour kept the *first* N sentences in upload order — with many references,
+        the last ones were never compared at all. Instead, rank source sentences by their
+        best lexical (TF-IDF) similarity to *any* document sentence and keep the top N:
+        cheap, model-free, and it spends the budget where a match is plausible across
+        every source. Paraphrases with near-zero word overlap can still be missed by
+        this pre-filter, which is why the warning says so plainly.
+        """
+        cap = self.max_source_sentences
+        if len(src_sents) <= cap:
+            return src_sents
+
+        n_sources = len({s for s, _ in src_sents})
+        try:
+            import numpy as np
+            from sklearn.feature_extraction.text import TfidfVectorizer
+
+            vec = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True, lowercase=True)
+            src_m = vec.fit_transform([u.text for _, u in src_sents])
+            doc_m = vec.transform([u.text for u in doc_sents])
+            # Rows are L2-normalised, so the sparse product is cosine similarity (S x D).
+            best = np.asarray((src_m @ doc_m.T).max(axis=1).todense()).ravel()
+            keep = np.sort(np.argsort(-best, kind="stable")[:cap])
+        except Exception as exc:  # pragma: no cover — defensive; fall back to the old rule
+            logger.warning("relevance budgeting failed (%s); keeping the first %d sentences", exc, cap)
+            warnings.append(
+                f"Reference text is large; paraphrase search limited to the first {cap:,} of "
+                f"{len(src_sents):,} source sentences."
+            )
+            return src_sents[:cap]
+
+        kept = [src_sents[i] for i in keep]
+        kept_sources = len({s for s, _ in kept})
+        warnings.append(
+            f"Reference text is large ({len(src_sents):,} sentences across {n_sources} sources). Paraphrase "
+            f"search focused on the {cap:,} source sentences most lexically similar to your document "
+            f"({kept_sources} of {n_sources} sources represented); paraphrases sharing almost no words "
+            f"with the original may be missed."
+        )
+        return kept
 
     def _get_embedder(self):
         try:

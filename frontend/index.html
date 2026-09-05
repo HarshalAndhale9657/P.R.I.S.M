@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="P.R.I.S.M. Originality Checker — find copied and paraphrased passages in a paper and attribute them to your reference sources.">
+    <!-- Backend location. Leave empty to use the same origin (production, behind the reverse proxy);
+         localhost falls back to :8000 for development. Set explicitly for a split deployment. -->
+    <meta name="prism-api-base" content="">
     <title>P.R.I.S.M. — Originality Checker</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -51,8 +54,8 @@
             <div class="engine-chip">
                 <span class="dot-pulse"></span>
                 <div>
-                    <span class="engine-title">Local engine</span>
-                    <span class="engine-sub">offline · MiniLM + n-gram</span>
+                    <span class="engine-title">Matching engine</span>
+                    <span class="engine-sub">n-gram + sentence embeddings</span>
                 </div>
             </div>
         </div>
@@ -66,7 +69,7 @@
                 <p class="topbar-desc" id="topbar-desc">Find copied &amp; paraphrased passages and their sources</p>
             </div>
             <div class="topbar-actions">
-                <a class="btn btn-ghost" href="http://localhost:8000/docs" target="_blank" rel="noopener">
+                <a class="btn btn-ghost" id="api-docs-link" href="/docs" target="_blank" rel="noopener">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
                     API
                 </a>
@@ -84,7 +87,7 @@
                 <div class="check-hero">
                     <span class="eyebrow">Source-attribution plagiarism</span>
                     <h2 class="hero-title">Check your writing against <span class="grad">your sources</span></h2>
-                    <p class="hero-subtitle">Upload your paper and the references it draws on. P.R.I.S.M. finds copied and paraphrased passages, shows exactly where they are, and links each to its source — all offline, on your machine.</p>
+                    <p class="hero-subtitle">Upload your paper and the references it draws on. P.R.I.S.M. finds copied and paraphrased passages, shows exactly where they are, and links each to its source. Your files are processed on the PRISM server, kept in memory only while the check runs, and never used for anything else.</p>
                 </div>
 
                 <div class="check-grid">
@@ -138,7 +141,7 @@
                     <span class="at-switch" aria-hidden="true"></span>
                     <span class="at-text">
                         <strong>Also search open-access academic databases</strong>
-                        <span>Check against OpenAlex when you don't have the source files (matches paper abstracts). Requires internet.</span>
+                        <span>Check against OpenAlex and arXiv when you don't have the source files (matches paper <em>abstracts</em>, not full text). A few short excerpts of your paper are sent to those services as search queries.</span>
                     </span>
                 </label>
 
@@ -152,7 +155,7 @@
                         <span class="progress-label" id="check-progress-label">Analyzing…</span>
                     </div>
                     <div class="progress-track"><div class="progress-fill indeterminate"></div></div>
-                    <p class="muted" style="text-align:center;">Matching passages against your sources. This can take a few seconds on first run while the local model loads.</p>
+                    <p class="muted" style="text-align:center;">Matching passages against your sources. Long papers or many references can take up to a minute.</p>
                 </div>
 
                 <div class="error-card" id="check-error" style="display:none;">
@@ -176,7 +179,7 @@
 
             <footer id="app-footer">
                 <p>P.R.I.S.M. — Originality Checker</p>
-                <p class="footer-sub">Verbatim (n-gram) &amp; paraphrase (MiniLM) matching · offline · source-attributed</p>
+                <p class="footer-sub">Verbatim (n-gram) &amp; paraphrase (sentence-embedding) matching · source-attributed · a self-check aid, not a verdict</p>
             </footer>
         </main>
     </div>

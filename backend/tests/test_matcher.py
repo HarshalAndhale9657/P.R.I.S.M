@@ -167,3 +167,48 @@ def test_translated_detected_with_language_pair(matcher):
     m = translated[0]
     assert m["source_lang"] and m["doc_lang"] and m["source_lang"] != m["doc_lang"]
     assert r["overall"]["translated_pct"] > 0
+
+
+# ── Source-sentence budgeting (relevance-based, model-free) ──────────────────
+
+from services.plagiarism_matcher import Unit  # noqa: E402
+
+
+def _units(*texts):
+    return [Unit(t, 0, len(t)) for t in texts]
+
+
+def test_budget_keeps_relevant_sentences_from_late_sources():
+    m = PlagiarismMatcher(max_source_sentences=3)
+    doc = _units("The transformer architecture relies entirely on self-attention mechanisms.")
+    filler = [(0, u) for u in _units(
+        "Bananas are rich in potassium and grow in tropical climates around the world.",
+        "The committee will reconvene on Thursday to discuss the annual budget report.",
+        "Granite countertops resist heat but require periodic sealing against stains.",
+        "Migratory birds navigate using the earth's magnetic field and star patterns.",
+        "The recipe calls for two cups of flour and a pinch of salt before baking.",
+    )]
+    relevant = (1, _units("Self-attention mechanisms let the transformer architecture model dependencies.")[0])
+    warnings = []
+    kept = m._budget_source_sentences(doc, filler + [relevant], warnings)
+    assert len(kept) == 3
+    assert relevant in kept, "the lexically relevant sentence from the LAST source must survive the cap"
+    assert warnings and "most lexically similar" in warnings[0] and "2 of 2 sources represented" in warnings[0]
+
+
+def test_budget_is_noop_under_cap():
+    m = PlagiarismMatcher(max_source_sentences=10)
+    src = [(0, u) for u in _units("a b c d e f g.", "h i j k l m n.")]
+    warnings = []
+    assert m._budget_source_sentences(_units("x y z w v u t."), src, warnings) == src
+    assert warnings == []
+
+
+def test_budget_preserves_source_order():
+    m = PlagiarismMatcher(max_source_sentences=2)
+    doc = _units("alpha beta gamma delta epsilon zeta.")
+    src = [(0, _units("alpha beta gamma related sentence here.")[0]),
+           (1, _units("completely unrelated words about weather today.")[0]),
+           (2, _units("delta epsilon zeta also related sentence here.")[0])]
+    kept = m._budget_source_sentences(doc, src, [])
+    assert [s for s, _ in kept] == [0, 2]
