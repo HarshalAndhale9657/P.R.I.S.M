@@ -48,7 +48,8 @@ things the code contradicted. Owner authorised a full implementation pass with m
 | `eval.run_pairs stsb mrpc qqp --gate` | **all three gates PASS**, reproducing the 2026-08-30 baseline exactly (STS-B R=0.901/FPR=0.097 · MRPC R=0.785/FPR=0.442 · QQP R=0.856/FPR=0.257 @0.78) |
 | Browser E2E (`e2e/run.mjs`) against live `/api/v1` | **2/2 offline specs PASS**, 0 console/page errors; **academic spec PASS** (14 OpenAlex+arXiv sources, attributed + linked) |
 | Live backend log | `request_id`/`job_id` on every line; a check took 0.54 s (refs) / 10.4 s (academic, network-bound) |
-| Docker image | see line below |
+| **CI, all five jobs** | **green** on `62d1b2cc` — Backend 130 s · Docker 380 s · Benchmark gate 176 s · Browser E2E 132 s · Frontend 10 s |
+| Docker image | **built and smoke-tested in CI** (run 33991664613, `docker` job 380 s): image builds from the lockfile, container answers `/health/ready` 200 with the baked model, runs as non-root. Could not be built on this dev machine (Docker egress times out on PyPI/apt) — CI is the authority for the image. |
 
 **Honest notes:** the first Docker build failed on `apt-get` because this machine's Docker egress blocks port 80
 — which was a good reason to remove the apt layer entirely (Python health probe; smaller image). The first E2E run
