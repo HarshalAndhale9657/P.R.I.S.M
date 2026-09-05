@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     paraphrase_threshold: float = 0.66      # reporting floor (ADR-0013 / ADR-0017)
     confident_threshold: float = 0.78       # confidence cutoff (ADR-0017)
     max_source_sentences: int = 6000
+    embedding_cache_entries: int = Field(
+        default=50_000,
+        description="Cached sentence embeddings (ADR-0023). ~1.5 KB each at 384 dims, so 50k ≈ 75 MB. "
+                    "Set 0 to disable. A re-check after edits is ~6x faster with this warm.",
+    )
     rerank: bool = Field(default=False, description="Cross-encoder rerank of borderline matches (W4, opt-in).")
     rerank_model: str = "cross-encoder-stsb"
     warmup_models: bool = Field(default=False, description="Load the embedder at startup so /health/ready is honest.")

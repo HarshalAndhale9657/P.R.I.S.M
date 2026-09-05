@@ -40,6 +40,8 @@ PRISM_TAG=<previous-sha> docker compose up -d api
 - **Errors:** set `PRISM_SENTRY_DSN` in `prism.env`.
 - **Logs:** `docker compose logs api` is JSON, one object per line, each with `request_id` and `job_id`.
   A user's `X-Request-ID` (visible in browser dev tools) greps straight to their request.
+- **Embedding cache:** `GET /health` → `embedding_cache.hit_rate`. A low rate with high latency means the cache is
+  too small for the traffic (raise `PRISM_EMBEDDING_CACHE_ENTRIES`, ~1.5 KB/entry) or sources rarely repeat.
 - **Capacity:** `GET /health` → `queue.pending` near `capacity` means checks are being refused with 503;
   raise `PRISM_MAX_PENDING_JOBS` only if RAM allows (`pending × PRISM_MAX_REQUEST_BYTES`).
 

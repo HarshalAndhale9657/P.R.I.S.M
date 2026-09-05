@@ -5,6 +5,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-06 — Embedding cache: re-checks are 6× faster (ADR-0023)
+
+#### Added
+- **`services/embedding_cache.py`** — process-wide LRU of sentence embeddings keyed by `(model_key, sha1(text))`.
+  Source sentences only; duplicates within a call embedded once; vectors stored read-only; bounded in entries
+  (`PRISM_EMBEDDING_CACHE_ENTRIES`, default 50 000 ≈ 75 MB, `0` disables); any failure degrades to a plain embed.
+- Hit rate, entries, capacity and evictions on **`GET /health`** (`embedding_cache`).
+- Tests 151 → 165 (correctness vs uncached, partial overlap, duplicate collapsing, order, model namespacing,
+  LRU eviction, read-only storage, broken-cache fallback, bad-embedder fallback, config/disable).
+
+#### Measured
+- 1 800 source sentences over 2 papers, manuscript edited between runs: first check **39.3 s** → re-check
+  **6.6 s** (**6.0×**, 32.8 s saved). Cold first checks are unchanged.
+
+#### Fixed
+- `PlagiarismMatcher` gains `embedding_model_key` so cached vectors are namespaced per model.
+
 ### 2026-09-06 — W8 flag triage + coach card (ADR-0022)
 
 #### Added

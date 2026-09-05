@@ -387,3 +387,31 @@ internal error leaves matches un-triaged with a warning rather than failing the 
 the result gains `triage_summary` (counts, prioritised action items, method note); both are in the Pydantic
 contract. Next: W9 replaces the *static* `fix` string with per-flag LLM prose, constrained to this same type and
 the shown source, with a matcher post-filter — the rules stay the backbone, the LLM only phrases them.
+
+## ADR-0023 — Cache sentence embeddings by (model, text); the re-check loop is 6× faster
+**Status:** Accepted (2026-09-06)
+**Context:** After open-access full text landed (ADR-0021) a real check took **50 s**, and the W4b measurement
+showed the cost was *not* the PDF downloads. Benchmarked directly on this CPU: **6 000 source sentences take
+77–93 s** to embed (batch 64 fastest; 128/256 worse). Embedding is the product's dominant cost, and the same
+sentences are embedded over and over — most importantly in the **re-check after edits**, which is the core
+product loop (W10: "before/after re-check") and where the manuscript changes but the sources are byte-identical.
+**Decision:** A process-wide LRU of sentence embeddings keyed by **`(model_key, sha1(text))`**.
+1. **Keyed by text, not by source.** The relevance budget (ADR-0020) selects a *different subset* of a source's
+   sentences for each manuscript, so a per-source key would miss on every new document. Text keys also pick up
+   repeated boilerplate and sources shared across manuscripts.
+2. **Source sentences only.** The manuscript's own sentences change every check; caching them would fill the
+   cache with single-use entries and evict the useful ones.
+3. **`model_key` namespaces every entry**, so swapping the bi-encoder (W3/W5) can never reuse stale vectors.
+4. **Bounded in entries, not bytes** (default 50 000 ≈ 75 MB at 384 dims), so the ceiling does not silently move
+   when the model's dimensionality changes. `PRISM_EMBEDDING_CACHE_ENTRIES=0` disables it.
+5. **The cache can never break a check:** any failure in the cache path logs and degrades to a plain embed, and a
+   test asserts that. Vectors are stored read-only so a caller cannot corrupt a shared entry in place.
+6. **Hit rate is exposed on `/health`** — an operator tuning the box needs to see it, not guess.
+**Measured (this machine, 1 800 source sentences over 2 papers, manuscript edited between runs):**
+first check **39.3 s** → re-check **6.6 s** = **6.0×**, 32.8 s saved; 1 800 hits / 0 misses on the second pass.
+A cold first check is unchanged — this buys repeats, and says so.
+**Consequences:** Memory grows to the configured ceiling on a busy box; that is the trade being made deliberately
+and it is visible on `/health`. The remaining first-check cost is still real, so the W6 levers
+(`PRISM_MAX_SOURCE_SENTENCES`, batch size on the actual VPS) stay open. **Found while building this:** the class
+defines `__len__`, so an empty cache is falsy and `cache = cache or get_cache()` silently discarded an injected
+cache — caught by the tests, fixed with `is None`.

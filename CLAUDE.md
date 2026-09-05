@@ -49,6 +49,7 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 - `backend/services/` — `document_parser.py` (checker-specific PDF/text), `plagiarism_matcher.py` (pure matcher),
   `academic_corpus.py` (OpenAlex + arXiv + keyed Semantic Scholar; `ProviderContext`/`Candidate`), `fulltext.py`
   (safe OA-PDF fetcher, ADR-0021), `triage.py` (deterministic remediation rules, ADR-0022),
+  `embedding_cache.py` (per-sentence LRU, ADR-0023 — makes re-checks 6× faster),
   `local_embeddings.py` (bi-encoder singleton). `backend/utils/` — `TTLCache`.
 - `backend/modelhub/` — model registry/cache (`get_embedder`, `get_cross_encoder`).
 - `backend/eval/` — public-dataset harness; `gates.json` holds the per-dataset regression gates (ADR-0020). **No PAN.**

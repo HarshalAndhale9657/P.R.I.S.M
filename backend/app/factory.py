@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.academic_corpus import search as academic_search
+from services.embedding_cache import configure_cache
 from services.fulltext import FullTextFetcher
 from services.plagiarism_matcher import PlagiarismMatcher
 from worker import BoundedExecutor, CheckRunner, InMemoryJobStore
@@ -69,6 +70,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     if settings.sentry_dsn:
         _init_sentry(settings.sentry_dsn, settings.env)
 
+    configure_cache(settings.embedding_cache_entries)
     matcher = PlagiarismMatcher(
         paraphrase_threshold=settings.paraphrase_threshold,
         confident_threshold=settings.confident_threshold,

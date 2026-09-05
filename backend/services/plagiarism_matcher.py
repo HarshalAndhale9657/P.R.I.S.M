@@ -134,9 +134,12 @@ class PlagiarismMatcher:
         confident_threshold: float = 0.78,
         min_sentence_words: int = 6,
         max_source_sentences: int = 6000,
+        embedding_model_key: str = "bi-encoder",
     ) -> None:
         if ngram < 1:
             raise ValueError("ngram must be >= 1")
+        # Namespaces the embedding cache: swapping the model must never reuse old vectors.
+        self.embedding_model_key = embedding_model_key
         self.ngram = ngram
         self.min_verbatim_words = max(min_verbatim_words, ngram)
         self.paraphrase_threshold = paraphrase_threshold
@@ -287,9 +290,15 @@ class PlagiarismMatcher:
         import numpy as np
         from sklearn.metrics.pairwise import cosine_similarity
 
+        from services.embedding_cache import embed_cached
+
         embedder = self._get_embedder()
-        doc_emb = np.asarray(embedder.embed([u.text for u in doc_sents]))
-        src_emb = np.asarray(embedder.embed([u.text for _, u in src_sents]))
+        # Source sentences go through the cache (ADR-0023): a re-check after edits, or any
+        # source seen in an earlier check, then costs nothing. The document's own sentences
+        # change every time, so caching them would only fill the cache with single-use entries.
+        doc_emb = np.asarray(embedder.embed([u.text for u in doc_sents]), dtype=np.float32)
+        src_emb = embed_cached(embedder.embed, [u.text for _, u in src_sents],
+                               model_key=self.embedding_model_key)
         sims = cosine_similarity(doc_emb, src_emb)  # (D, S)
 
         verbatim_ranges = [(m["doc_start"], m["doc_end"]) for m in verbatim]

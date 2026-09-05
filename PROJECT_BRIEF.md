@@ -100,6 +100,7 @@ evidence), downloadable/printable report whose method footer comes from `engine`
 - In-context highlighting, side-by-side comparison, downloadable evidence report with honest method + coverage footer.
 - **Bounded service**: per-file 20 MiB, per-check 60 MiB, pending-queue cap → 503, per-IP rate limit → 429,
   30-minute TTL on results (nothing persisted), request ids, JSON logs, `/health/ready`.
+- **Embedding cache** (ADR-0023) — a re-check after edits is **6× faster** (measured 39.3 s → 6.6 s); hit rate on `/health`.
 - **Measured** on public data with regression gates in CI (§6); synthetic set kept as a smoke tripwire.
 - Production packaging: multi-stage non-root Docker image (CPU torch, model baked), Compose + Caddy (TLS, CSP), runbook.
 
@@ -150,7 +151,7 @@ The cross-encoder rerank (opt-in) improves MRPC (FPR 0.643 → 0.403 at the 0.66
 | `backend/app/` | settings · schemas · middleware · limits · routers (`check`, `health`) · factory |
 | `backend/worker/` | executor (bounded) · store (TTL job store, cache; `JobStore` Protocol = W7 seam) · runner |
 | `backend/pipeline/` | `base` (CheckContext, RawInput, Document, PipelineError) · `stages` · `orchestrator` (timings, `build_check_stages`) |
-| `backend/services/` | `document_parser` · `plagiarism_matcher` · `academic_corpus` · `fulltext` · `triage` · `local_embeddings` |
+| `backend/services/` | `document_parser` · `plagiarism_matcher` · `academic_corpus` · `fulltext` · `triage` · `embedding_cache` · `local_embeddings` |
 | `backend/modelhub/` | model registry (`get_embedder`, `get_cross_encoder`) |
 | `backend/eval/` | public-dataset harness; `gates.json`; `run_pairs --gate`; `data/sample/` smoke set (**no PAN**) |
 | `backend/training/` | W5 cross-encoder fine-tune kit (self-gating; needs a GPU session) |

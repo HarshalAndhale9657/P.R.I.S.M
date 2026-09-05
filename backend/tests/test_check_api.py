@@ -43,6 +43,8 @@ def test_health_reports_snapshot(client):
     assert d["status"] == "ok"
     assert d["queue"]["capacity"] >= 1
     assert "version" in d and d["env"] == "test"
+    # Operators need the embedding-cache hit rate to reason about latency (ADR-0023).
+    assert d["embedding_cache"]["capacity"] >= 0 and "hit_rate" in d["embedding_cache"]
 
 
 def test_root_is_health_alias(client):

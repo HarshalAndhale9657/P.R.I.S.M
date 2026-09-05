@@ -184,6 +184,16 @@ class QueueStats(BaseModel):
     capacity: int
 
 
+class EmbeddingCacheStats(BaseModel):
+    """Operational view of the sentence-embedding cache (ADR-0023)."""
+    entries: int
+    capacity: int
+    hits: int
+    misses: int
+    evictions: int
+    hit_rate: float
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok", "degraded", "starting"]
     version: str
@@ -192,6 +202,7 @@ class HealthResponse(BaseModel):
     rerank_enabled: bool
     queue: QueueStats
     jobs_in_memory: int
+    embedding_cache: Optional[EmbeddingCacheStats] = None
 
 
 class ErrorResponse(BaseModel):

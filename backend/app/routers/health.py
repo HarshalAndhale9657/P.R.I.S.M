@@ -12,8 +12,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from app.schemas import HealthResponse, QueueStats
+from app.schemas import EmbeddingCacheStats, HealthResponse, QueueStats
 from app.settings import APP_VERSION
+from services.embedding_cache import get_cache
 
 router = APIRouter(tags=["health"])
 
@@ -24,6 +25,7 @@ def _snapshot(request: Request) -> HealthResponse:
     status = "ok"
     if st.settings.warmup_models and not model_loaded:
         status = "starting"
+    cache = get_cache()
     return HealthResponse(
         status=status,
         version=APP_VERSION,
@@ -32,6 +34,8 @@ def _snapshot(request: Request) -> HealthResponse:
         rerank_enabled=st.settings.rerank,
         queue=QueueStats(**st.runner.executor.stats()),
         jobs_in_memory=len(st.runner.store),
+        embedding_cache=EmbeddingCacheStats(entries=len(cache), capacity=cache.max_entries,
+                                            **cache.stats().as_dict()),
     )
 
 

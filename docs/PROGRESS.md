@@ -5,6 +5,52 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-06 (cont.) — W8 triage + coach card, and the embedding cache (ADR-0022 · ADR-0023)
+
+**W8 — triage is the product.** Detection alone tells an author *that* a passage matched, which is the anxious,
+non-actionable output PRISM exists to replace. `services/triage.py` classifies every match into one of **8
+remediation types with priorities**, from four auditable signals: quotation marks around the span, citation markers
+in the containing paragraph (numeric / author-year / narrative / superscript), the ADR-0017 confidence band, and how
+many sources share the same verbatim text. **Rules, not a model** — reproducible, explainable to the user, testable
+per rule; an LLM making a judgement that shapes what someone changes in their manuscript would be unaccountable.
+W9 will *phrase* these with gpt-4o-mini; the rules stay the backbone.
+
+Each type ships plain-language *what* + *honest fix* text, and **a CI test asserts that text never suggests
+evasion** ("lower the score", "beat the checker", "humanize") — the ADR-0014 boundary enforced by the build rather
+than by good intentions. Labels describe the text, never the person ("Word-for-word, not cited"), and each card
+lists the signals it used, so a wrong call is visibly wrong. UI: a prioritised **"What to fix"** panel, a badge per
+match row, and a **coach card** that puts the fix above the evidence; the report gained the same. Verified in a real
+browser (2/2 specs, 0 console errors) and visually — the screenshot is in `e2e/shots/`.
+
+**ADR-0023 — the embedding cache, from a measurement rather than a hunch.** W4b's 50 s check prompted a direct
+benchmark: **6 000 sentences take 77–93 s to embed** on this 12-thread CPU (batch 64 fastest; 128 and 256 *worse*).
+Downloads were never the bottleneck. So: a process-wide LRU keyed by **(model, sha1(sentence))** — text, not source
+identity, because the relevance budget picks a different subset per manuscript; source sentences only, because the
+manuscript's own sentences are single-use.
+
+| | |
+|---|---|
+| first check (1 800 source sentences, 2 papers) | **39.3 s** — 0 hits / 1 800 misses |
+| re-check after editing the manuscript | **6.6 s** — 1 800 hits / 0 misses |
+| | **6.0× faster, 32.8 s saved** |
+
+That is exactly the product's core loop (W10's before/after re-check). **A cold first check is unchanged** — this
+buys repeats, and the docs say so. Bounded in *entries* (default 50 000 ≈ 75 MB) so the ceiling does not move when
+the model's dimensionality does; `PRISM_EMBEDDING_CACHE_ENTRIES=0` disables it; any failure in the cache path
+degrades to a plain embed (tested); hit rate is on `/health` because an operator tuning the box should not guess.
+
+**Bug found by the tests, worth remembering:** `EmbeddingCache` defines `__len__`, so an *empty* cache is falsy and
+`cache = cache or get_cache()` silently discarded an injected cache and wrote to the global singleton. Six tests
+failed with zeroed stats and no traceback, because the fail-soft `except` swallowed nothing — there was no
+exception, just the wrong object. Fixed with `is None`. The fail-soft wrapper made a real bug *quieter*, which is
+worth watching for elsewhere.
+
+Tests 130 → **165**. Lint clean. Licence added the same day: **PolyForm Noncommercial 1.0.0** (verbatim SPDX text,
+`NOTICE` with the Required Notice, contributions accepted under the same terms) — owner follow-ups (legal copyright
+holder; consent from three past teammates for ~176 surviving boilerplate lines) are in TODO.
+
+---
+
 ## 2026-09-06 (cont.) — W4b retrieval depth: Semantic Scholar + open-access full text (ADR-0021)
 
 **Built:** `services/fulltext.py` (safe OA-PDF fetcher: https-only, private hosts refused before/after redirects,
