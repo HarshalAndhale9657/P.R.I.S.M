@@ -80,7 +80,8 @@ jobs:
           curl -fsS http://127.0.0.1:8000/health | python3 -m json.tool
           docker exec prism sh -c 'id -u' | grep -qv '^0$' && echo "runs as non-root"
       - name: Image size
-        run: docker image inspect prism-backend:ci --format 'size={{.Size}} bytes' | awk -F= '{printf "image size: %.0f MB\n", $2/1048576}'
+        run: |
+          docker image inspect prism-backend:ci --format '{{.Size}}' | awk '{printf "image size: %.0f MB\n", $1/1048576}'
 
   # ── 3. Browser end-to-end against the real backend + static frontend ───────
   e2e:
