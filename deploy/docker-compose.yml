@@ -25,7 +25,9 @@ services:
       PRISM_LOG_FORMAT: json
     expose:
       - "8000"
-    read_only: true
+    # Hardening to enable once verified on the real box: `read_only: true` + `tmpfs: [/tmp, /models/.locks]`.
+    # Left off by default because the model loader's write behaviour under a read-only root was not
+    # verified in this environment, and an unbootable first deploy is the worse failure.
     tmpfs:
       - /tmp
     mem_limit: 6g
