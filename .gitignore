@@ -41,3 +41,6 @@ research/datasets/pan/
 # Editor / assistant tooling that is not part of the product
 .gemini/
 .claude/
+
+# E2E screenshots (regenerated every run)
+e2e/shots/

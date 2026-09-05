@@ -5,6 +5,63 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-06 — Industry-grade pass: audit → re-architecture → gates in CI (ADR-0018 · 0019 · 0020)
+
+**Trigger:** a full staff-level audit of the codebase against production standards (architecture, code quality,
+security, testing, performance, data, observability, DevOps, docs, API/UX). Verdict: the *core* (matcher, pipeline,
+modelhub, eval harness, ADR discipline) was sound; everything at the *edges* was not — and several documents said
+things the code contradicted. Owner authorised a full implementation pass with my judgement on decisions.
+
+**What the audit found that was embarrassing (all fixed today):**
+- The UI said *"all offline, on your machine"* and *"Local engine · offline"* while uploading manuscripts to a
+  Render server and holding them in RAM indefinitely. The README quoted the P=1.00/FPR=0.00 synthetic number that
+  ADR-0017 bans, and linked a live demo that `SECURITY.md` said must not exist. `SECURITY.md` described bugs fixed
+  weeks earlier as current. `PROJECT_BRIEF`/`TODO`/`CLAUDE.md` were two weeks stale.
+- **45,099 tracked files** (33 MiB) of the PAN-2023 corpus — wrong task, banned by ADR-0016, and not ours to redistribute.
+- The job queue was **unbounded**: each queued check could hold ~520 MB of upload; twenty `curl`s ≈ 10 GB on an 8 GB box.
+- Seven legacy stylometry endpoints ran CPU-bound work synchronously inside `async` handlers, blocking every
+  concurrent request, for an engine measured near-noise and no longer in the product.
+- The legacy PDF parser **dropped every paragraph under 80 characters** — for a plagiarism checker, passages never
+  checked. Its documented `unstructured` pass never ran (dependency absent).
+- The matcher truncated large reference sets to the **first 6000 sentences in upload order** — later uploads were never compared.
+- The Dockerfile was broken in two ways nobody could see because CI never built it (Python 3.11 vs 3.12; spaCy
+  model 3.7.1 vs `spacy>=3.8`). The "real" quality gate (`eval.run_pairs --gate`) was not in CI and, at its
+  provisional thresholds, would have failed every product-relevant dataset.
+
+**Decisions taken (mine, under the owner's blanket authority; each recorded as an ADR):**
+- **Delete the legacy engine** (ADR-0018) rather than flag it: −7,236 lines, seven dependencies, a compiler, and
+  the whole blocking-handler class of bug. It lives in git history.
+- **Re-architect the edges, keep the core** (ADR-0019): `app/` (settings · Pydantic contract · request-id · body
+  guard · rate limit · health · factory) + `worker/` (bounded executor → 503, TTL store + cache, runner) +
+  `ParseStage` with a purpose-built parser. Memory is now `max_pending_jobs × max_request_bytes` — arithmetic.
+- **Gates as data, at the confident cutoff, from the measured baseline** (ADR-0020): `eval/gates.json`, run in CI on
+  STS-B/MRPC/QQP. PAWS reported, not gated. Relevance-based (TF-IDF) source budgeting replaces first-N.
+- **Not decided by me (owner's call, flagged in TODO):** the LICENSE; whether to rewrite history to purge PAN;
+  confirming the old Vercel/Render demo is down.
+
+**Verification (all on this machine, today):**
+| check | result |
+|---|---|
+| `ruff check .` | clean (blocking in CI) |
+| `pytest` | **105 passed** (was 57); coverage 87% → CI floor 80% |
+| `scripts/eval_matcher.py` (smoke) | PASS |
+| `eval.run_pairs stsb mrpc qqp --gate` | **all three gates PASS**, reproducing the 2026-08-30 baseline exactly (STS-B R=0.901/FPR=0.097 · MRPC R=0.785/FPR=0.442 · QQP R=0.856/FPR=0.257 @0.78) |
+| Browser E2E (`e2e/run.mjs`) against live `/api/v1` | **2/2 offline specs PASS**, 0 console/page errors; **academic spec PASS** (14 OpenAlex+arXiv sources, attributed + linked) |
+| Live backend log | `request_id`/`job_id` on every line; a check took 0.54 s (refs) / 10.4 s (academic, network-bound) |
+| Docker image | see line below |
+
+**Honest notes:** the first Docker build failed on `apt-get` because this machine's Docker egress blocks port 80
+— which was a good reason to remove the apt layer entirely (Python health probe; smaller image). The first E2E run
+failed only because Playwright's new version needed its browser binary; the specs themselves were green once installed.
+The benchmark gates are *tripwires at today's measured level*, not targets — the FPR on same-topic negatives is still
+high (MRPC 0.44 at the confident cutoff), which is exactly why the review band exists and why W4b/W5/rerank matter.
+
+**Still open (in priority order):** W4b retrieval depth (Semantic Scholar + OA full text) → W6 first deploy on the
+real VPS via `deploy/README.md` and **measure rerank latency there** → re-derive the confident cutoff once rerank is
+default-on → W5 GPU session (human) → W7 accounts + Postgres `JobStore` behind the Protocol that now exists.
+
+---
+
 ## 2026-08-30 — Core-ML direction locked (ADR-0016) + W1 re-architecture landed
 
 **Decisions (owner Q&A → ADR-0016, amends ADR-0015):** invest in real ML **plagiarism-first**,

@@ -29,14 +29,31 @@ from eval.scorer import PARAPHRASE_THRESHOLD, score
 
 _RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
-# Provisional gates for the paraphrase pillar (tightened once real data lands).
-MIN_RECALL = 0.60
+# FPR cap used for the "best recall at bounded FPR" sweep (reporting only).
 MAX_FPR = 0.15
-MAX_STRATUM_FPR = 0.34
+
+# Regression gates live in eval/gates.json (per dataset, at the CONFIDENT cutoff) so they
+# are reviewed as data, with their measured baselines beside them — see ADR-0020.
+_GATES_PATH = Path(__file__).resolve().parent / "gates.json"
+
+
+def load_gates(path: Path = _GATES_PATH) -> dict:
+    cfg = json.loads(path.read_text(encoding="utf-8"))
+    return {"threshold": float(cfg["threshold"]), "datasets": cfg["datasets"]}
+
+
+def evaluate_gate(name: str, scores, labels, gates: dict):
+    """Return (passed | None, metrics_at_gate_threshold, rule). None = dataset is not gated."""
+    rule = gates["datasets"].get(name)
+    at = M.binary_metrics(scores, labels, gates["threshold"])
+    if rule is None:
+        return None, at, None
+    passed = at.recall >= rule["min_recall"] and at.fpr <= rule["max_fpr"]
+    return passed, at, rule
 
 
 def _run_one(name: str, *, threshold: float, max_fpr: float, gate: bool,
-             scorer: str = "bi", model_key: str = None) -> dict:
+             scorer: str = "bi", model_key: str = None, gates: dict = None) -> dict:
     cases = load_dataset(name)
     scores = score(cases, scorer=scorer, model_key=model_key)
     labels = [c.label for c in cases]
@@ -84,12 +101,15 @@ def _run_one(name: str, *, threshold: float, max_fpr: float, gate: bool,
         for st, v in strat.items():
             print(f"  {st:<24} {v['flagged']}/{v['total']} flagged   FPR={v['fpr']:.2f}")
 
-    worst_stratum = max((v["fpr"] for v in strat.values()), default=0.0)
-    gates_pass = (at_thr.recall >= MIN_RECALL and at_thr.fpr <= MAX_FPR
-                  and worst_stratum <= MAX_STRATUM_FPR)
-    if gate:
-        print(f"\nGates: recall>={MIN_RECALL} FPR<={MAX_FPR} per-stratum<={MAX_STRATUM_FPR}  ->  "
-              f"{'PASS' if gates_pass else 'FAIL'}")
+    gates = gates or load_gates()
+    gates_pass, at_gate, rule = evaluate_gate(name, scores, labels, gates)
+    print(f"\nAt confident cutoff {gates['threshold']:.2f}:  R={at_gate.recall:.3f}  FPR={at_gate.fpr:.3f}")
+    if rule is None:
+        print("Gate: not gated for this dataset (reported only).")
+    else:
+        verdict = "PASS" if gates_pass else "FAIL"
+        print(f"Gate: recall>={rule['min_recall']:.2f}  FPR<={rule['max_fpr']:.2f}   "
+              f"(baseline R={rule['baseline']['recall']:.3f} FPR={rule['baseline']['fpr']:.3f})  ->  {verdict}")
 
     artifact = {
         "dataset": name,
@@ -104,7 +124,13 @@ def _run_one(name: str, *, threshold: float, max_fpr: float, gate: bool,
         "operating_points": [m.as_dict() for m in op_points],
         "separation": sep,
         "brier": brier,
-        "gates_pass": gates_pass,
+        "gate": {
+            "threshold": gates["threshold"],
+            "rule": rule,
+            "at_threshold": at_gate.as_dict(),
+            "passed": gates_pass,          # None when the dataset is not gated
+        },
+        "gates_pass": gates_pass is not False,
     }
     _RESULTS_DIR.mkdir(exist_ok=True)
     suffix = f"_{tag}" if tag else ""    # default bi-encoder keeps the baseline filename
@@ -123,7 +149,9 @@ def main(argv=None) -> int:
     ap.add_argument("--threshold", type=float, default=PARAPHRASE_THRESHOLD,
                     help=f"flag threshold (default = matcher's {PARAPHRASE_THRESHOLD:.2f})")
     ap.add_argument("--max-fpr", type=float, default=MAX_FPR, help="FPR cap for best-recall sweep")
-    ap.add_argument("--gate", action="store_true", help="exit non-zero if gates fail")
+    ap.add_argument("--gate", action="store_true",
+                    help="exit non-zero if any gated dataset fails its eval/gates.json rule")
+    ap.add_argument("--gates", default=str(_GATES_PATH), help="path to the gates config (JSON)")
     ap.add_argument("--scorer", choices=["bi", "cross"], default="bi",
                     help="bi = bi-encoder cosine (W2/W3); cross = cross-encoder rerank (W4)")
     ap.add_argument("--model-key", default=None,
@@ -131,7 +159,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     kw = dict(threshold=args.threshold, max_fpr=args.max_fpr, gate=args.gate,
-              scorer=args.scorer, model_key=args.model_key)
+              scorer=args.scorer, model_key=args.model_key, gates=load_gates(Path(args.gates)))
 
     requested = args.datasets or list(DATASETS.keys())
     ran, any_fail = [], False

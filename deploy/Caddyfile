@@ -1,0 +1,46 @@
+# P.R.I.S.M. edge — TLS, static frontend, API proxy, security headers.
+# PRISM_DOMAIN=localhost gives a self-signed local cert; a real domain gets Let's Encrypt.
+
+{$PRISM_DOMAIN:localhost} {
+	encode zstd gzip
+
+	# Uploads: paper + references. Slightly above the API's own cap so the API can
+	# return its friendlier 413 message instead of Caddy's.
+	request_body {
+		max_size 70MB
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# The frontend loads Inter/JetBrains Mono from Google Fonts and uses inline style attributes
+		# for bar widths; everything else is same-origin.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+
+	@api path /api/* /health /health/* /docs /docs/* /openapi.json
+	handle @api {
+		reverse_proxy api:8000 {
+			# Long checks: allow the upload + queue wait to complete.
+			transport http {
+				read_timeout 120s
+				write_timeout 120s
+			}
+		}
+	}
+
+	handle {
+		root * /srv/frontend
+		file_server
+		# Static assets have no build hash, so keep them revalidating.
+		header Cache-Control "no-cache"
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

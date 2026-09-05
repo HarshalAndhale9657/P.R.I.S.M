@@ -1,681 +1,114 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
-  <img src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"/>
-  <img src="https://img.shields.io/badge/spaCy-3.7-09A3D5?style=for-the-badge&logo=spacy&logoColor=white" alt="spaCy"/>
-  <img src="https://img.shields.io/badge/HDBSCAN-Density_Clustering-FF6F00?style=for-the-badge" alt="HDBSCAN"/>
-  <img src="https://img.shields.io/badge/GPT--4o-Reasoning-412991?style=for-the-badge&logo=openai&logoColor=white" alt="GPT-4o"/>
-  <img src="https://img.shields.io/badge/DevClash-2026-E91E63?style=for-the-badge" alt="DevClash 2026"/>
-</p>
+# P.R.I.S.M. — Originality Checker
 
-<h1 align="center">P.R.I.S.M.</h1>
-<h3 align="center">Plagiarism Recognition via Integrated Stylometric Mapping</h3>
+**Find what is copied, where it is, and which source it came from — honestly.**
 
-<p align="center">
-  <em>A forensic document analysis engine that detects <strong>stitched plagiarism</strong> in academic papers<br/>through mathematical stylometry, density-based clustering, and AI-powered reasoning.</em>
-</p>
+PRISM is a source-attribution originality checker for authors. Upload a manuscript and the references it
+draws on (or search open-access abstracts), and get every verbatim, paraphrased or translated passage
+localized to the character, attributed to its source, and labelled with an explicit confidence band.
+It is a **self-check aid, not a verdict**, and it never claims more than it has measured.
 
-<p align="center">
-  <strong><a href="https://p-r-i-s-m-psi.vercel.app/">🌐 Live Demo</a></strong> •
-  <a href="#the-core-problem">Problem</a> •
-  <a href="#our-approach">Approach</a> •
-  <a href="#system-architecture">Architecture</a> •
-  <a href="#algorithmic-innovations">Algorithms</a> •
-  <a href="#deliverables">Deliverables</a> •
-  <a href="#tech-stack">Tech Stack</a> •
-  <a href="#getting-started">Setup</a> •
-  <a href="#api-reference">API</a>
-</p>
+> **Status (2026-09-06):** the checker is functional and honestly benchmarked; it is **not yet a public service**.
+> No accounts, no persistence, no paid tier — those are weeks 7–12 of [`docs/LAUNCH_PLAN.md`](docs/LAUNCH_PLAN.md).
+> Longer-term direction: an honest *publication-readiness coach* (ADR-0014) that triages each flag and coaches
+> the legitimate fix. **It will never include detection-evasion** (no auto-rewrite-to-lower-similarity, no "AI humanizer").
 
 ---
 
-> ## 🔀 Project update (2026) — now an **Originality Checker**
-> PRISM has **pivoted** from stylometric *authorship* detection to **source-attribution plagiarism detection**:
-> find *what* is copied in a paper, *where* it is, and *from which source*. The live product is the
-> **Originality Checker** (`frontend/index.html` → `POST /api/check`); verbatim + paraphrase + translated
-> matching against your uploaded references and open-access databases (OpenAlex), with a downloadable report.
-> The stylometric engine described below is now **legacy** (kept at `frontend/authorship.html`).
->
-> 👉 Read **[`PROJECT_BRIEF.md`](PROJECT_BRIEF.md)** for current scope and **[`CHANGELOG.md`](CHANGELOG.md)** for what shipped.
-> ⚠️ Performance claims further down describe the *legacy* engine and are **superseded** — its measured detection
-> was near-noise (see [`prism_diagnostic.md`](prism_diagnostic.md)); the new matcher is measured honestly by
-> `backend/scripts/eval_matcher.py` (Precision 1.00 · Recall 0.86 · False-Positive-Rate 0.00 on a controlled set).
+## What it does
 
----
+| Detects | How | Evidence shown |
+|---|---|---|
+| **Verbatim** copying | k-gram anchoring + greedy extension (case/punctuation-insensitive) | exact spans on both sides |
+| **Paraphrase** | sentence-embedding cosine (`paraphrase-multilingual-MiniLM-L12-v2`), optional cross-encoder rerank | side-by-side sentences, similarity, confidence band |
+| **Translated** reuse | the paraphrase path, re-labelled when the language pair differs | language pair (e.g. FR→EN) |
 
-## The Core Problem
+Every semantic match carries `confidence: confident | review`. A `review` match is similar wording that
+independently written text on the same topic can also reach — it is shown as **"Needs review"**, never as
+a confirmed copy ([ADR-0017](docs/DECISIONS.md)). Reports state their coverage plainly: your uploads plus
+OpenAlex/arXiv abstracts — **not** the full web or subscription databases.
 
-Modern academic plagiarism has evolved far beyond copy-paste. Traditional detection tools like Turnitin perform **lexical matching** — they check whether a sentence has appeared in a known corpus. This approach fails catastrophically against a growing pattern called **stitched plagiarism**:
+## How well does it work? (measured, on public data)
 
-> A student assembles a paper by splicing paragraphs from multiple existing publications. Each section is paraphrased, machine-translated, or processed through AI paraphrasers (Quillbot, ChatGPT). No single sentence matches any known source verbatim. The fraud lies not in *what* was written, but in *how it was assembled*.
+The paraphrase scorer is benchmarked on public sentence-pair datasets, never on our own examples. At the
+confident cutoff (0.78), bi-encoder baseline, validation splits:
 
-**Why existing tools fail:**
+| dataset | n | recall | false-positive rate | note |
+|---|---|---|---|---|
+| STS-B | 1,221 | 0.90 | **0.10** | graded similarity, binarised |
+| QQP | 3,000 | 0.86 | **0.26** | duplicate questions |
+| MRPC | 408 | 0.79 | **0.44** | news paraphrase; hard same-topic negatives |
+| PAWS | 2,000 | 1.00 | 0.997 | adversarial word-order swaps — *unsolvable for bi-encoders*; reported, not gated |
 
-| Detection Method | What It Checks | Blind Spot |
-|:---:|:---:|:---:|
-| Turnitin / Moss | Exact string overlap against a corpus | Paraphrased or translated content scores 0% |
-| GPTZero / ZeroGPT | Statistical perplexity for AI-generated text | Fails on human-written stitched content |
-| Self-plagiarism checkers | Cross-referencing an author's own past work | Cannot detect *multi-author* splicing |
+These numbers are **regression gates in CI** (`backend/eval/gates.json`), not marketing. They say the same
+thing the UI says: high-overlap, same-topic text is exactly where a similarity score is least trustworthy,
+which is why borderline matches are labelled for review instead of asserted. A pretrained cross-encoder
+reranker (opt-in, `PRISM_RERANK=1`) cuts MRPC's FPR to 0.40 at the reporting floor; see
+[`docs/PROGRESS.md`](docs/PROGRESS.md) for the full measurement history including the negative results.
 
-**P.R.I.S.M. asks a fundamentally different question:**
-
-> *"Does this document read like it was written by one person?"*
-
-Rather than comparing text against external corpora, P.R.I.S.M. analyzes **internal stylometric consistency** — the subconscious linguistic fingerprint that every author leaves behind. When a student stitches someone else's work into their own, the mathematical signature of the writing shifts at the boundary. P.R.I.S.M. detects, localizes, and explains those shifts.
-
----
-
-## Our Approach
-
-P.R.I.S.M. uses a **Hybrid Dual-Engine Architecture** that separates mathematical proof from AI explanation:
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                MATH provides the SIGNALS                    │
-│            spaCy · HDBSCAN · Yule's K · Burstiness         │
-│                                                             │
-│        Deterministic · Reproducible · Zero API Cost         │
-├─────────────────────────────────────────────────────────────┤
-│                  AI provides the EXPLANATION                │
-│            GPT-4o-mini · GPT-4o · Embeddings                │
-│                                                             │
-│        Natural Language · Explanatory · Contextual          │
-└─────────────────────────────────────────────────────────────┘
+frontend/ (vanilla JS, no build)  ──►  POST /api/v1/check  (202 + job_id)  ──►  GET /api/v1/check/{id}
+                                              │
+                                       app/  (FastAPI: settings · schemas · rate limit · request-id · health)
+                                              │
+                                     worker/ (bounded executor · TTL job store · result cache · runner)
+                                              │
+        pipeline/  parse ─► retrieve ─► match ─► rerank (opt-in) ─► localize ─► [triage ─► coach ─► report]
+                     │          │          │          │
+   services/document_parser  academic_corpus  plagiarism_matcher   modelhub/ (model registry)
+                                                                     eval/    (public-dataset harness + gates)
 ```
 
-**Why this matters:** An AI-only approach is non-deterministic — you cannot accuse a student of academic misconduct because "the AI said so." P.R.I.S.M. ensures that every flag is backed by reproducible mathematical evidence. The AI layer only activates *after* the math has identified an anomaly, and its role is to explain *why* the mathematical shift occurred in human-readable terms.
+- **Bounded by arithmetic, not hope:** worst-case upload memory = `max_pending_jobs × max_request_bytes`;
+  the API answers `503 Retry-After` when the queue is full and `429` when one client submits too often.
+- **Ephemeral by default:** manuscripts live in process memory for `PRISM_JOB_TTL_SECONDS` (30 min) and are gone.
+- **Observable:** `X-Request-ID` in/out, `request_id`/`job_id` on every log line, per-stage `timings_ms`
+  in every result, `/health` + `/health/ready`, optional Sentry.
+- **Pluggable:** every stage is injectable; the eval harness runs the same code the API runs.
 
----
-
-## System Architecture
-
-```
-                              ┌─────────────┐
-                              │  PDF Upload  │
-                              └──────┬───────┘
-                                     │
-                    ╔════════════════╧════════════════╗
-                    ║   STAGE 1: DUAL-PASS PDF PARSER ║
-                    ║─────────────────────────────────║
-                    ║  Pass A ─ unstructured           ║
-                    ║    └─ NarrativeText extraction   ║
-                    ║    └─ Multi-column aware         ║
-                    ║  Pass B ─ PyMuPDF                ║
-                    ║    └─ Bibliography bbox isolation║
-                    ║    └─ Font-size heuristics       ║
-                    ║  Fallback Chain:                 ║
-                    ║    unstructured → PyMuPDF raw    ║
-                    ║    → pdfplumber → 1000-char chunk║
-                    ╚════════════════╤════════════════╝
-                                     │
-              ╔══════════════════════╧══════════════════════╗
-              ║   STAGE 2: STYLOMETRIC FEATURE EXTRACTION   ║
-              ║─────────────────────────────────────────────║
-              ║  spaCy en_core_web_sm (zero API calls):     ║
-              ║    1. avg_sentence_length  — complexity      ║
-              ║    2. avg_word_length      — sophistication  ║
-              ║    3. pronoun_ratio        — tone signature  ║
-              ║    4. preposition_ratio    — syntax habits   ║
-              ║    5. conjunction_ratio    — clause linking  ║
-              ║    6. passive_voice_pct    — formality       ║
-              ║    7. yules_k             — lexical richness ║
-              ║    8. burstiness_score    — AI detection     ║
-              ║  + PCA-reduced OpenAI semantic embeddings    ║
-              ║  Output: N × 11 feature matrix              ║
-              ╚══════════════════════╤══════════════════════╝
-                                     │
-              ╔══════════════════════╧══════════════════════╗
-              ║   STAGE 3: HDBSCAN AUTHORSHIP CLUSTERING    ║
-              ║─────────────────────────────────────────────║
-              ║  StandardScaler → HDBSCAN (EOM selection)   ║
-              ║    └─ Auto-detects author count (no K)      ║
-              ║    └─ Cluster -1 = noise = FLAGGED          ║
-              ║    └─ Boundary detection on transitions     ║
-              ║    └─ Confidence scoring (probability +     ║
-              ║       noise penalty + cluster bonus)        ║
-              ║  Edge cases:                                ║
-              ║    └─ Noise saturation (>90%) → override    ║
-              ║    └─ Zero-variance features → bypass       ║
-              ║    └─ Short papers (<5 ¶) → skip            ║
-              ╚══════════════════════╤══════════════════════╝
-                                     │
-              ╔══════════════════════╧══════════════════════╗
-              ║   STAGE 4: GPT STYLE REASONING              ║
-              ║─────────────────────────────────────────────║
-              ║  GPT-4o-mini (only on flagged boundaries):  ║
-              ║    └─ Per-paragraph style profiling          ║
-              ║    └─ Pairwise boundary explanation          ║
-              ║  Safeguards:                                ║
-              ║    └─ 30s per-call timeout + 120s batch      ║
-              ║    └─ Exponential backoff on rate limits     ║
-              ║    └─ Partial result delivery on failure     ║
-              ╚══════════════════════╤══════════════════════╝
-                                     │
-              ╔══════════════════════╧══════════════════════╗
-              ║   STAGE 5: CITATION FORENSICS               ║
-              ║─────────────────────────────────────────────║
-              ║  Deterministic regex: APA / MLA / Harvard   ║
-              ║    └─ Parenthetical + narrative patterns     ║
-              ║    └─ False positive filtering               ║
-              ║  Temporal Analysis:                         ║
-              ║    └─ Median citation year per paragraph     ║
-              ║    └─ Core vs noise cluster comparison       ║
-              ║    └─ Anomaly if |diff| > 10 years          ║
-              ║  Citation Density Analysis:                 ║
-              ║    └─ Citations per 100 words by cluster     ║
-              ║  Crossref API Hallucination Detection:      ║
-              ║    └─ Verifies reference existence           ║
-              ╚══════════════════════╤══════════════════════╝
-                                     │
-              ╔══════════════════════╧══════════════════════╗
-              ║   STAGE 6: SEMANTIC SOURCE TRACING          ║
-              ║─────────────────────────────────────────────║
-              ║  Dual-database search (anomalies only):     ║
-              ║    └─ arXiv API (exponential backoff)        ║
-              ║    └─ OpenAlex API (free, no auth)          ║
-              ║  Multilingual MiniLM-L12-v2 embeddings:    ║
-              ║    └─ 384-dim vectors, runs on CPU          ║
-              ║    └─ Cosine similarity ≥ 0.50 = match     ║
-              ║  Idea Triplet Extraction (anti-Quillbot):  ║
-              ║    └─ Subject → Verb → Object frames        ║
-              ║    └─ Overlap boosts similarity by 6%/trip  ║
-              ╚══════════════════════╤══════════════════════╝
-                                     │
-              ╔══════════════════════╧══════════════════════╗
-              ║   STAGE 7: FORENSIC REPORT SYNTHESIS        ║
-              ║─────────────────────────────────────────────║
-              ║  GPT-4o synthesizes all evidence streams:    ║
-              ║    └─ HDBSCAN cluster analysis               ║
-              ║    └─ GPT style reasoning summaries          ║
-              ║    └─ Citation temporal anomalies            ║
-              ║    └─ Source paper matches + similarity       ║
-              ║  Output: Structured JSON report             ║
-              ║    └─ Integrity Score (0.0 — 10.0)          ║
-              ║    └─ Verdict: Clean / Suspicious / Flagged ║
-              ║    └─ Executive Summary                      ║
-              ║    └─ Evidence Breakdown by category         ║
-              ║  Fallback: Rule-based scoring engine         ║
-              ║    └─ 7-factor weighted penalty system       ║
-              ║    └─ Works fully offline (no API needed)    ║
-              ╚═════════════════════════════════════════════╝
-```
-
----
-
-## Legacy Benchmark (N=2 — illustrative only, not validated)
-
-> ⚠️ **Superseded / legacy.** The figures in this section come from an **N=2** run of the *old stylometric
-> engine* and overstate real performance — internal audits ([`prism_diagnostic.md`](prism_diagnostic.md),
-> `research/HONEST_AUDIT.md`) measured boundary **F1 ≈ 0.40**. Treat "100% accuracy" and "zero false positives"
-> as **not credible**. The current product is the Originality Checker, measured by `backend/scripts/eval_matcher.py`.
-
-> **Every number below was measured on our own ground-truth test papers — not simulated, not estimated.**
-> Run `python backend/scripts/benchmark.py` to reproduce these results independently.
-
-P.R.I.S.M. was validated using a controlled benchmark comparing **three detection approaches** on the same set of documents: a known single-author paper (`test_genuine.pdf`) and a known multi-source stitched paper (`test_stitched.pdf`). The goal was to sanity-check the hybrid approach on two documents. ⚠️ With only one document per class, this **cannot** establish superiority over any tool — treat it as an illustrative smoke test, not a benchmark.
-
-### Approaches Compared
-
-| # | Method | Architecture | Feature Space | AI Layer |
-|:---:|---|---|---|:---:|
-| 1 | **TF-IDF Baseline** | Lexical cosine similarity between consecutive paragraphs | Bag-of-words (500 terms) | ❌ None |
-| 2 | **Math-Only (HDBSCAN)** | spaCy stylometric features → HDBSCAN density clustering | 8-dimensional structural features | ❌ None |
-| 3 | **Hybrid P.R.I.S.M.** | spaCy + OpenAI embeddings → HDBSCAN → GPT-4o reasoning | 11-dimensional hybrid features (8 structural + 3 semantic) | ✅ GPT-4o |
-
-### Benchmark Results
-
-| Metric | TF-IDF Baseline | Math-Only HDBSCAN | **Hybrid P.R.I.S.M.** |
-|:---|:---:|:---:|:---:|
-| **Stitched Paper Detected** | ❌ Missed | ✅ Detected | ✅ **Detected** |
-| **Genuine Paper (False Positive)** | ❌ False Alarm | ✅ Clean | ✅ **Clean** |
-| **Result on 2-doc toy set** | missed | detected | detected — *n=1 per class; not an accuracy figure* |
-| **Confidence (single run)** | N/A | 0.74 | 0.91 — *uncalibrated, one document* |
-| **Boundaries flagged** | 2 | 4 | 6 — *raw count only; precision unmeasured here* |
-| **Feature Dimensions** | ~500 (sparse) | 8 (dense) | **11 (dense, hybrid)** |
-| **False positives (1 genuine doc)** | yes | no | none on that one doc — *cannot establish a rate from n=1* |
-| **AI paraphrase handling** | ❌ None | ⚠️ Partial | ⚠️ *"Idea Triplets" was never implemented (dead code)* |
-
-### Why the Hybrid Wins
-
-1. **TF-IDF fails** because stitched texts are paraphrased — vocabulary changes defeat lexical matching entirely. Modern plagiarists use Quillbot, ChatGPT rewrites, and cross-language translation to evade detection. TF-IDF sees different words and reports "all clear."
-
-2. **Math-Only catches the pattern** but lacks precision. HDBSCAN correctly identifies stylometric shifts, but without semantic context, it may under-segment subtle boundary regions and cannot explain *why* a shift occurred.
-
-3. **Hybrid P.R.I.S.M. delivers the highest confidence** by fusing:
-   - **Structural stylometry** (8 features: sentence length, Yule's K, passive voice, burstiness, etc.) — captures *how* an author writes
-   - **Semantic embeddings** (3 PCA-reduced dimensions from OpenAI's 1536-dim vectors) — captures *what* an author discusses
-   - **GPT-4o reasoning** — provides human-readable forensic explanations for each detected boundary
-
-   On this two-document toy set the hybrid separated the two papers — a result that did **not** hold on labelled data (measured boundary F1 ≈ 0.40; see [`prism_diagnostic.md`](prism_diagnostic.md)).
-
-### Reproducibility
-
-The benchmark is fully automated and deterministic:
+## Run it locally
 
 ```bash
 cd backend
-python scripts/benchmark.py
+python -m venv venv && venv/Scripts/pip install -r requirements-dev.txt     # Windows; use venv/bin on Unix
+venv/Scripts/uvicorn main:app --host 127.0.0.1 --port 8000                  # http://127.0.0.1:8000/docs
+cd ../frontend && python _serve.py 3000                                     # http://127.0.0.1:3000
 ```
+First check downloads the ~470 MB embedding model once. Configuration: [`backend/.env.example`](backend/.env.example).
 
-This runs all three methods on the same test documents and prints a comparative results table. No external server or API key is required for the TF-IDF and Math-Only methods — the Hybrid method uses the same `OPENAI_API_KEY` configured in `.env`.
+**Tests:** `cd backend && venv/Scripts/pytest` (102 offline tests) · `ruff check .` · browser E2E in [`e2e/`](e2e/)
+· real benchmark `python -m eval.fetch_datasets stsb mrpc && python -m eval.run_pairs stsb mrpc --gate`.
 
----
+**Deploy:** one VPS, Docker Compose + Caddy — [`deploy/README.md`](deploy/README.md).
 
-## Algorithmic Innovations
+## Project map
 
-### 1. Burstiness Score — AI Content Detection
-
-Human writing exhibits natural variance in sentence length ("burstiness"). AI-generated text has a statistically flat sentence-length distribution. P.R.I.S.M. computes the **Coefficient of Variation** of sentence lengths per paragraph:
-
-```
-Burstiness = σ(sentence_lengths) / μ(sentence_lengths)
-```
-
-| Score | Interpretation |
-|:---:|---|
-| **> 0.30** | Normal human variance — natural writing |
-| **< 0.30** | Artificially flat — high probability of AI generation |
-
-When the average burstiness across multi-sentence paragraphs (≥ 2 sentences) falls below **0.30**, the system flags the document with a critical AI generation alert and applies a **6.0-point integrity deduction**.
-
-### 2. Yule's Characteristic K — Length-Resistant Lexical Richness
-
-Unlike the commonly used Type-Token Ratio (which deteriorates as text length increases), Yule's K provides a stable measure of vocabulary diversity:
-
-```
-K = 10000 × (M₂ - M₁) / M₁²
-
-where:
-  M₁ = total word count
-  M₂ = Σ(frequency²) for each unique word
-```
-
-**Low K = rich, diverse vocabulary. High K = repetitive vocabulary.**
-
-This metric is critical because paraphrasing tools change *which* words are used, but the underlying vocabulary diversity pattern (the author's fingerprint) is preserved.
-
-### 3. Idea Triplet Extraction — Defeating AI Paraphrasers
-
-AI paraphrasers (Quillbot, ChatGPT rewrites) swap vocabulary but maintain the **same logical claims**. P.R.I.S.M. extracts Subject → Verb → Object triplets from both the anomalous paragraph and potential source abstracts using spaCy dependency parsing:
-
-```python
-# Example triplets extracted from a paragraph about neural networks:
-{"model_achieve_accuracy", "transformer_outperform_baseline", "attention_reduce_complexity"}
-```
-
-When triplet overlap is detected between a flagged paragraph and a source paper, the cosine similarity score is boosted by **+6% per matching triplet**, compensating for vocabulary-level obfuscation.
-
-### 4. HDBSCAN over K-Means — Why It Matters
-
-| Property | K-Means | HDBSCAN (our choice) |
-|---|:---:|:---:|
-| Requires specifying cluster count (K) | ✅ Must guess | ❌ Auto-detects |
-| Assumes spherical clusters | ✅ | ❌ Arbitrary shapes |
-| Handles noise naturally | ❌ | ✅ Cluster -1 = anomaly |
-| Robust to varying cluster sizes | ❌ | ✅ |
-| Stable with outliers | ❌ | ✅ |
-
-HDBSCAN's native noise label (`-1`) maps directly to P.R.I.S.M.'s concept of "stylistic anomaly" — paragraphs that don't belong to any consistent authorial voice. This is the mathematical foundation behind every plagiarism flag.
-
-### 5. Semantic Embedding Fusion — Hybrid Feature Space
-
-P.R.I.S.M. constructs an **11-dimensional feature space** by combining:
-- **8 deterministic structural features** (spaCy, zero cost)
-- **3 PCA-reduced semantic embeddings** (OpenAI `text-embedding-3-small`, 1536 → 3 dims)
-
-The semantic dimensions are **down-weighted by 80%** in the clustering step to prevent topic-based over-fragmentation — ensuring the algorithm clusters by *writing style*, not by *subject matter*.
-
-### 6. Enterprise-Grade Fallback Chain
-
-The entire system degrades gracefully rather than failing:
-
-```
-PDF Parsing:    unstructured → PyMuPDF → pdfplumber → raw chunking
-AI Reasoning:   GPT-4o → GPT-4o-mini → rule-based scoring engine
-Source Search:  arXiv + OpenAlex → offline (skip gracefully)
-Embeddings:     OpenAI → paraphrase-multilingual-MiniLM-L12-v2 (local)
-```
-
-If OpenAI's API is down, the math layer, clustering, heatmap, and citation forensics **still run completely offline**. The system always produces actionable output.
-
----
-
-## Deliverables
-
-### Functional Deliverables
-
-| # | Deliverable | Status | Description |
-|:---:|---|:---:|---|
-| 1 | **Dual-Pass PDF Parser** | ✅ | Multi-column aware text extraction with 4-tier fallback chain |
-| 2 | **Stylometric Feature Engine** | ✅ | 11-dimensional content-independent feature extraction (8 structural + 3 semantic) |
-| 3 | **HDBSCAN Authorship Clustering** | ✅ | Unsupervised author detection with automatic noise labeling and boundary detection |
-| 4 | **GPT Style Reasoning** | ✅ | Natural language explanations for detected anomalies with timeout/retry safeguards |
-| 5 | **Citation Forensics Engine** | ✅ | Deterministic regex extraction + temporal anomaly detection + Crossref hallucination verification |
-| 6 | **Semantic Source Tracer** | ✅ | Dual-database (arXiv + OpenAlex) search with local embedding similarity and Idea Triplet anti-paraphraser |
-| 7 | **Forensic Report Generator** | ✅ | GPT-4o synthesis with rule-based fallback producing integrity score (0–10) and structured evidence |
-| 8 | **AI Content Detector** | ✅ | Burstiness-based sentence variance analysis to flag AI-generated text |
-| 9 | **Interactive Dashboard** | ✅ | 6-panel SPA: Upload → Heatmap → Charts → Citations → Sources → Report |
-| 10 | **RESTful API** | ✅ | 7 endpoints with auto-generated OpenAPI docs at `/docs` |
-
-### Non-Functional Deliverables
-
-| Requirement | Implementation |
+| | |
 |---|---|
-| **Graceful degradation** | PipelineContext accumulates typed warnings; every stage can fail without crashing downstream |
-| **Edge-case handling** | 15+ codified WarningCodes for empty PDFs, scanned documents, noise saturation, API timeouts, short papers |
-| **Offline capability** | Math layer + clustering + citation forensics work with zero API calls |
-| **Cost optimization** | HDBSCAN gates GPT calls — only anomalous paragraphs (~5%) are sent to the LLM |
-| **Structured warnings** | Frontend receives machine-readable warning codes + human-readable messages for contextual UI alerts |
+| [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) | what PRISM is, what's built, guardrails |
+| [`docs/LAUNCH_PLAN.md`](docs/LAUNCH_PLAN.md) | the 12-week plan to a paid launch (authoritative) |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | ADRs — every real decision and why (20 so far) |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | session log with every measurement, including the ones that went badly |
+| [`ROADMAP.md`](ROADMAP.md) · [`TODO.md`](TODO.md) | what's next |
+| [`CLAUDE.md`](CLAUDE.md) · [`CONTRIBUTING.md`](CONTRIBUTING.md) | how to work on it |
+| [`SECURITY.md`](SECURITY.md) | security posture and reporting |
+| [`research/`](research/) | the pre-pivot stylometric engine's research record (historical) |
 
----
+## Principles (non-negotiable)
 
-## Tech Stack
+1. **Self-check, non-accusatory.** No "guilty" verdicts; an author's originality report.
+2. **Calibrated and willing to say "inconclusive".** A review band beats a false clean or a false accusation.
+3. **No number without a measurement — on public data.** Our own examples are a smoke test, never a claim.
+4. **No detection-evasion, ever.** Coaching shows the source and helps the author fix it honestly.
 
-### Backend — Python / FastAPI
+## History
 
-| Layer | Technology | Role |
-|---|---|---|
-| **Framework** | FastAPI 0.115 | Async endpoints, Pydantic validation, auto-generated OpenAPI docs |
-| **PDF Parsing** | `unstructured` + PyMuPDF + pdfplumber | Dual-pass extraction with 4-tier fallback |
-| **NLP Engine** | spaCy `en_core_web_sm` | Deterministic POS tagging, dependency parsing, sentence segmentation |
-| **Clustering** | HDBSCAN + scikit-learn `StandardScaler` | Density-based unsupervised authorship clustering |
-| **Local Embeddings** | `paraphrase-multilingual-MiniLM-L12-v2` | 384-dim vectors, CPU-optimized, zero API cost |
-| **Semantic Embeddings** | OpenAI `text-embedding-3-small` | 1536-dim paragraph embeddings reduced to 3 via PCA |
-| **AI Reasoning** | OpenAI GPT-4o-mini | Per-paragraph style profiling and boundary explanation |
-| **AI Synthesis** | OpenAI GPT-4o | Final forensic report generation |
-| **Source Search** | `arxiv` + OpenAlex API + `tenacity` | Exponential backoff retry for rate-limited searches |
-| **Citation Verification** | Crossref API | Reference existence validation for hallucination detection |
-| **Data Models** | Pydantic v2 | Typed response models, warning enums, pipeline context |
-
-### Frontend — Vanilla Stack
-
-| Layer | Technology | Role |
-|---|---|---|
-| **UI** | HTML5 / CSS3 / Vanilla JS | Zero build step, zero dependencies, instant deployment |
-| **Typography** | Inter + JetBrains Mono (Google Fonts) | Premium design system with monospace data rendering |
-| **Charts** | Chart.js 4.4 (CDN) | Feature trend lines, function word ratios, cluster distributions |
-| **Design** | Programmatic HSL color generation | Dynamic cluster colors, gradient-based styling |
-
-### Infrastructure
-
-| Component | Platform |
-|---|---|
-| Backend Hosting | Render |
-| Frontend Hosting | Vercel |
-| Version Control | GitHub |
-
----
-
-## Project Structure
-
-```
-P.R.I.S.M/
-├── backend/
-│   ├── main.py                          # FastAPI app — 7 endpoints, pipeline orchestration
-│   ├── models.py                        # Pydantic models, PipelineContext, 15+ WarningCodes
-│   ├── requirements.txt                 # Pinned Python dependencies
-│   ├── .env                             # Environment variables (gitignored)
-│   ├── services/
-│   │   ├── pdf_parser.py                # Dual-pass PDF extraction, 4-tier fallback chain
-│   │   ├── feature_engine.py            # spaCy feature extraction (11 metrics) + semantic embeddings
-│   │   ├── clustering.py                # HDBSCAN clustering, boundary detection, confidence scoring
-│   │   ├── gpt_analyzer.py              # GPT-4o-mini reasoning with timeout/retry/partial delivery
-│   │   ├── citation_forensics.py        # Regex citation extraction, temporal analysis, Crossref verification
-│   │   ├── source_tracer.py             # arXiv + OpenAlex search, MiniLM embeddings, Idea Triplets
-│   │   └── report_generator.py          # GPT-4o synthesis + rule-based fallback scoring engine
-│   └── prompts/
-│       ├── style_profile.py             # Per-paragraph forensic style analysis prompt
-│       ├── style_compare.py             # Pairwise boundary comparison prompt
-│       ├── citation_reasoning.py        # Citation forensics reasoning prompt
-│       └── report_synthesis.py          # Full report generation system prompt
-├── frontend/
-│   ├── index.html                       # Single-page application (6 panels)
-│   ├── css/
-│   │   └── styles.css                   # Complete design system (~35KB)
-│   └── js/
-│       ├── app.js                       # Navigation controller and state management
-│       ├── upload.js                    # Drag-and-drop file upload + progress tracking
-│       ├── heatmap.js                   # Authorship heatmap with cluster color coding
-│       ├── charts.js                    # Chart.js feature trend and distribution charts
-│       ├── citations.js                 # Citation forensics timeline visualization
-│       ├── sources.js                   # Source match cards with similarity scores
-│       └── report.js                    # Forensic report rendering with integrity gauge
-├── tests/
-│   ├── test_genuine.pdf                 # Single-author control paper
-│   ├── test_stitched.pdf                # Multi-source stitched paper (positive case)
-│   └── test_short.pdf                   # Edge case — very short document
-├── .gitignore
-├── .env.example
-└── README.md
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- **Python 3.12+**
-- **OpenAI API Key** with access to `gpt-4o-mini`, `gpt-4o`, and `text-embedding-3-small`
-
-> **Note:** The system works without an API key in degraded mode — all mathematical analysis, clustering, citation forensics, and local source tracing run fully offline. Only the GPT reasoning and final report synthesis require an API key.
-
-### Backend Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/HarshalAndhale9657/P.R.I.S.M.git
-cd P.R.I.S.M/backend
-
-# Create and activate a virtual environment
-python -m venv venv
-venv\Scripts\activate            # Windows
-# source venv/bin/activate       # macOS / Linux
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Download required NLP models
-python -m spacy download en_core_web_sm
-python -m nltk.downloader punkt_tab
-
-# Configure environment
-cp .env.example .env
-# Edit .env and set your OPENAI_API_KEY
-
-# Start the server
-uvicorn main:app --reload --port 8000
-```
-
-The API documentation is auto-generated at **[http://localhost:8000/docs](http://localhost:8000/docs)**.
-
-### Frontend Setup
-
-```bash
-# In a separate terminal
-cd P.R.I.S.M/frontend
-python -m http.server 3000
-```
-
-Open **[http://localhost:3000](http://localhost:3000)** in your browser.
-
----
-
-## API Reference
-
-| Method | Endpoint | Description |
-|:---:|---|---|
-| `GET` | `/` | Health check — returns service status |
-| `POST` | `/api/upload` | Upload PDF, validate, return metadata (filename, size, page count) |
-| `POST` | `/api/parse` | Stage 1 — Dual-pass PDF parsing, returns paragraphs + references |
-| `POST` | `/api/features` | Stages 1–2 — Parse + extract 11-dimensional stylometric features |
-| `POST` | `/api/cluster` | Stages 1–3 — Parse + features + HDBSCAN clustering |
-| `POST` | `/api/reasoning` | Stages 1–4 — Full pipeline through GPT style reasoning |
-| `POST` | `/api/analyze` | **Stages 1–7** — Complete forensic analysis pipeline |
-
-### Example: Full Analysis
-
-```bash
-curl -X POST http://localhost:8000/api/analyze \
-  -F "file=@paper.pdf"
-```
-
-<details>
-<summary><strong>Response Structure (click to expand)</strong></summary>
-
-```json
-{
-  "filename": "paper.pdf",
-  "status": "success",
-  "paragraphs": [ ... ],
-  "clustering": {
-    "estimated_authors": 2,
-    "anomaly_count": 3,
-    "noise_percentage": 0.15,
-    "boundaries": [ ... ],
-    "confidence": 0.87,
-    "cluster_sizes": { "0": 12, "1": 5, "-1": 3 }
-  },
-  "features": {
-    "feature_names": [ "avg_sentence_length", "avg_word_length", ... ],
-    "profiles": [ ... ]
-  },
-  "reasoning": {
-    "available": true,
-    "boundary_explanations": { ... },
-    "anomaly_profiles": { ... }
-  },
-  "citations": {
-    "total_citations_found": 47,
-    "temporal_anomalies": [ ... ],
-    "density_analysis": { ... },
-    "bibliography": { "hallucination_count": 0 }
-  },
-  "sources": [
-    {
-      "similarity_score": 0.87,
-      "source": {
-        "title": "Attention Is All You Need",
-        "origin": "arXiv",
-        "url": "https://arxiv.org/..."
-      }
-    }
-  ],
-  "report": {
-    "integrity_score": 4.2,
-    "verdict": "Suspicious",
-    "executive_summary": "...",
-    "evidence_breakdown": { ... }
-  },
-  "warnings": [ ... ],
-  "warning_count": 2
-}
-```
-
-</details>
-
----
-
-## AI Tools Disclosure
-
-The following AI tools and models are used in this project:
-
-| Tool / Model | Provider | Usage |
-|---|---|---|
-| GPT-4o-mini | OpenAI | Per-paragraph stylometric profiling and pairwise boundary comparison |
-| GPT-4o | OpenAI | Final forensic report synthesis with multi-evidence weighing |
-| text-embedding-3-small | OpenAI | 1536-dim paragraph embeddings for hybrid feature space (PCA → 3 dims) |
-| paraphrase-multilingual-MiniLM-L12-v2 | Hugging Face | Local 384-dim embeddings for source tracing (zero API cost) |
-| spaCy en_core_web_sm | Explosion AI | Deterministic POS tagging, dependency parsing, sentence segmentation |
-| Crossref API | Crossref | Reference existence verification for hallucination detection |
-| arXiv API | arXiv | Academic paper search for semantic source tracing |
-| OpenAlex API | OpenAlex | Supplementary academic paper search (free, no auth required) |
-| Gemini Code Assist | Google | Development assistance during hackathon |
-
----
-
-## How It Works — Step by Step
-
-1. **Upload** a PDF through the dashboard or POST to `/api/analyze`
-2. **Dual-pass parsing** extracts body paragraphs and isolates the bibliography
-3. **spaCy** computes 8 stylometric features per paragraph + 3 semantic embedding dimensions
-4. **HDBSCAN** clusters paragraphs by writing style — anomalies land in Cluster -1
-5. **GPT-4o-mini** explains *why* flagged boundaries exhibit a stylistic shift
-6. **Regex engine** extracts citations, computes temporal anchors, flags chronological anomalies
-7. **Crossref API** verifies that cited references actually exist (hallucination detection)
-8. **Source tracer** searches arXiv + OpenAlex, embeds results with MiniLM, ranks by cosine similarity
-9. **Idea Triplets** defeat AI paraphrasers by comparing logical structure, not vocabulary
-10. **GPT-4o** synthesizes all evidence into a scored, explanatory report (a self-check aid, not misconduct evidence)
-
----
-
-## Research References
-
-P.R.I.S.M.'s hybrid forensic approach is grounded in peer-reviewed research across computational linguistics, unsupervised machine learning, and AI-generated text detection. Every technique implemented in our pipeline traces back to established academic work.
-
-### Stylometry & Authorship Attribution
-
-| # | Paper | Authors | Publication | Relevance to P.R.I.S.M. |
-|:---:|---|---|---|---|
-| 1 | *A Survey of Modern Authorship Attribution Methods* | Efstathios Stamatatos | Journal of the American Society for Information Science and Technology, 60(3), 538–556, 2009 | Foundational survey establishing stylometric features (sentence length, vocabulary richness, POS distributions) as reliable authorship indicators — the theoretical basis of our 11-dimensional feature engine. |
-| 2 | *The Statistical Study of Literary Vocabulary* | G. Udny Yule | Cambridge University Press, 1944 | Introduced **Yule's K** — the vocabulary richness metric we compute per paragraph to detect writing style shifts across cluster boundaries. |
-| 3 | *Computational Constancy Measures of Texts — Yule's K and Rényi's Entropy* | Kumiko Tanaka-Ishii & Shunsuke Aihara | Computational Linguistics, 41(3), 481–502, 2015 | Modern mathematical validation proving Yule's K remains stable across text lengths — justifying its use as a per-paragraph feature in our clustering pipeline. |
-
-### Density-Based Clustering (HDBSCAN)
-
-| # | Paper | Authors | Publication | Relevance to P.R.I.S.M. |
-|:---:|---|---|---|---|
-| 4 | *hdbscan: Hierarchical Density Based Clustering* | Leland McInnes, John Healy & Steve Astels | Journal of Open Source Software, 2(11), 205, 2017. DOI: [10.21105/joss.00205](https://doi.org/10.21105/joss.00205) | The core clustering algorithm powering P.R.I.S.M. — chosen because it requires **zero trainable parameters**, automatically determines the number of authors, and provides per-point membership probabilities used in our confidence scoring. |
-| 5 | *Accelerated Hierarchical Density Based Clustering* | Leland McInnes & John Healy | IEEE International Conference on Data Mining Workshops (ICDMW), 2017 | Performance-optimized HDBSCAN implementation enabling real-time analysis of document feature matrices in our pipeline. |
-| 6 | *Density-Based Clustering Based on Hierarchical Density Estimates* | Ricardo J. G. B. Campello, Davoud Moulavi & Jörg Sander | Pacific-Asia Conference on Knowledge Discovery and Data Mining (PAKDD), 2013 | The original HDBSCAN* algorithm paper — establishes the mutual reachability distance framework and cluster stability extraction method that our clustering engine relies on. |
-
-### AI-Generated Text Detection (Burstiness)
-
-| # | Paper | Authors | Publication | Relevance to P.R.I.S.M. |
-|:---:|---|---|---|---|
-| 7 | *GPTZero: Towards Detection of AI-Generated Text Using Zero-Shot and Statistical Methods* | Edward Tian | Princeton University Senior Thesis, 2023 | Establishes **burstiness** (sentence-length variance) and perplexity as statistical signals distinguishing human from AI writing — directly implemented in our `burstiness_score` feature (Coefficient of Variation). |
-| 8 | *DetectGPT: Zero-Shot Machine-Generated Text Detection Using Probability Curvature* | Eric Mitchell et al. | ICML 2023 | Demonstrates that statistical properties of text (curvature in log-probability space) can reliably detect AI generation without training data — validating our zero-shot, statistics-first approach to AI content flagging. |
-
-### Semantic Similarity & Source Tracing
-
-| # | Paper | Authors | Publication | Relevance to P.R.I.S.M. |
-|:---:|---|---|---|---|
-| 9 | *Sentence-BERT: Sentence Embeddings Using Siamese BERT-Networks* | Nils Reimers & Iryna Gurevych | EMNLP 2019 | Establishes that dense vector embeddings capture semantic meaning beyond surface-level vocabulary — the principle behind our OpenAI embedding-based source tracing, which defeats AI paraphrasers that change words but preserve meaning. |
-| 10 | *A Systematic Review of Natural Language Processing Applied to Plagiarism Detection* | Aleman et al. | ACM Computing Surveys, 2023 | Comprehensive review confirming that hybrid approaches (combining statistical features with semantic embeddings) consistently outperform single-method systems — directly supporting P.R.I.S.M.'s architectural decision to fuse stylometry with AI. |
-
-### How These Papers Map to Our Pipeline
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    P.R.I.S.M. PIPELINE                             │
-├──────────────────┬──────────────────────────────────────────────────┤
-│ Feature Engine   │ Papers [1] [2] [3] — stylometric feature        │
-│ (spaCy)          │ extraction grounded in Yule, Stamatatos          │
-├──────────────────┼──────────────────────────────────────────────────┤
-│ Clustering       │ Papers [4] [5] [6] — HDBSCAN algorithm          │
-│ (HDBSCAN)        │ with zero trainable parameters                   │
-├──────────────────┼──────────────────────────────────────────────────┤
-│ AI Detection     │ Papers [7] [8] — burstiness and statistical     │
-│ (Burstiness)     │ methods for zero-shot AI text detection          │
-├──────────────────┼──────────────────────────────────────────────────┤
-│ Source Tracing   │ Papers [9] [10] — semantic embeddings and       │
-│ (OpenAI + arXiv) │ hybrid NLP plagiarism detection                  │
-└──────────────────┴──────────────────────────────────────────────────┘
-```
-
-> **Note:** Every algorithm in P.R.I.S.M. traces to published research; we combined proven techniques into one pipeline. ⚠️ The legacy benchmark above is **N=2 and superseded** — on labelled data this engine measured near chance (boundary F1 ≈ 0.40). The current product is the Originality Checker; see [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md).
-
----
-
-## Contributors
-
-- **Harshal Andhale** ([@HarshalAndhale9657](https://github.com/HarshalAndhale9657))
-- **Chetana Phalke** ([@chetna196](https://github.com/chetna196))
-- **Vedant Mohanrao Sable** ([@vedantsable56](https://github.com/vedantsable56))
-- **Arya Achalkar** ([@aryaachalkar](https://github.com/aryaachalkar))
-- **Aniket Krishna Ingale** ([@DevOpsDreamer](https://github.com/DevOpsDreamer))
-
----
+PRISM began (April 2026, DevClash hackathon) as a stylometric *authorship* detector. Honest evaluation found
+that engine near-noise (F1 ≈ 0.40, [`research/HONEST_AUDIT.md`](research/HONEST_AUDIT.md)), and the project
+pivoted to source-attribution plagiarism in August 2026 (ADR-0001). The legacy engine was removed in September
+2026 (ADR-0018); it remains in git history.
 
 ## License
 
-This project was built during **DevClash 2026** (April 18–19, 2026). All rights reserved by the authors.
+Not yet chosen — all rights reserved by the contributors until a licence is added. See `TODO.md`.

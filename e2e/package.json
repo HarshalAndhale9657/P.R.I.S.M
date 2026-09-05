@@ -1,0 +1,13 @@
+{
+  "name": "prism-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser end-to-end checks for the P.R.I.S.M. Originality Checker (Playwright).",
+  "scripts": {
+    "test": "node run.mjs",
+    "test:network": "cross-env-shell E2E_NETWORK=1 node run.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

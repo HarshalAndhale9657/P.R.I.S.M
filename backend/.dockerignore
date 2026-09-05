@@ -1,7 +1,21 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.coverage
 .env
+.env.*
+!.env.example
 *.pdf
-debug_*.py
-test_*.py
+*.log
+
+# Not needed at runtime
+tests/
+training/
+scripts/
+eval/data/*
+!eval/data/sample/
+eval/results/
+requirements-dev.txt
+pyproject.toml

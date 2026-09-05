@@ -1,0 +1,7 @@
+In this paper we study machine learning methods for text analysis and their behaviour across a range of practical settings and evaluation regimes.
+
+The transformer architecture relies entirely on self-attention mechanisms to draw global dependencies between input and output sequences.
+
+Clustering techniques based on density can infer how many groups exist in the data without needing a fixed number to be specified in advance.
+
+Our own contribution is a small user study conducted with twenty volunteers over two weeks, measuring how quickly they completed each labelling task.

@@ -260,3 +260,73 @@ frontend follow-up. `similarity_pct` keeps its old meaning (all matches) for API
 want the strict number use `confident_pct`. **Caveat carried forward:** these are *pairwise* calibrations, but the
 matcher takes a **max over many source sentences**, which biases the top score upward (multiple comparisons), so
 0.78 is a **lower bound** for production — revisit after the cross-encoder rerank lands.
+
+## ADR-0018 — Delete the legacy stylometric authorship engine
+**Status:** Accepted (2026-09-06)
+**Context:** After the pivot (ADR-0001/0002) the authorship engine — spaCy stylometry → HDBSCAN clustering →
+GPT reasoning → citation forensics → source tracer → report generator, seven endpoints, `authorship.html` and
+seven frontend modules — was "retired as the spine" but still wired into `main.py`. It instantiated at import,
+ran CPU-bound work synchronously inside `async` handlers (blocking every concurrent request), pulled spaCy /
+HDBSCAN / ruptures / nltk / openai into the image, doubled the attack surface, and its README described an
+architecture (`unstructured` dual-pass parsing) that never actually ran because the dependency was absent.
+Its measured detection quality was near-noise (F1 ≈ 0.40, `research/HONEST_AUDIT.md`).
+**Decision:** Delete it — backend services, prompts, endpoints, scripts, legacy frontend, and its dependencies.
+Keep the research record (`research/`, `research/legacy_prism_diagnostic.md`) as history. Nothing is lost:
+every file remains in git history at `56a77184` and earlier.
+**Consequences:** `requirements.txt` drops to 12 direct dependencies; the image no longer needs a compiler; the
+API surface is exactly `/api/v1/check`, `/api/v1/check/{id}`, `/health`, `/health/ready`. Anyone who wants the
+old engine checks out the tag/commit. The PDF parser it owned is replaced by a checker-specific one (ADR-0019).
+
+## ADR-0019 — Backend re-architecture: `app/` + `worker/` + pipeline-owned parsing; bounded, ephemeral, observable
+**Status:** Accepted (2026-09-06)
+**Context:** `main.py` (872 lines) mixed routing, an in-process job queue with an *unbounded* backlog, document
+extraction and the legacy engine. Every queued check held up to ~520 MB of raw upload in RAM with no aggregate
+cap and no TTL — a one-line memory DoS, and a contradiction of the "ephemeral-by-default" promise. Parsing
+lived outside the pipeline (so the eval harness could never exercise the real PDF path) and used the legacy
+parser's policy: every paragraph under 80 characters was silently dropped — for a plagiarism checker, a
+passage never checked. There was no auth, no rate limit, no response schema, no request correlation, and
+`/` said "ok" before the model existed.
+**Decision:**
+1. **Composition root** `app/factory.py::create_app(settings)`; `main.py` is a two-line shim. All operational
+   knobs in `app/settings.py` (pydantic-settings, `PRISM_*`), nothing else reads the environment.
+2. **Contract:** Pydantic response models for every endpoint (`app/schemas.py`); the API is versioned at
+   `/api/v1`; results carry an `engine` block (version, model, both thresholds, rerank, coverage statement) so
+   reports and UIs describe the method from data, not from copy that goes stale.
+3. **Bounded worker** (`worker/`): `BoundedExecutor` refuses with **503 + Retry-After** when the pending queue
+   is full; `InMemoryJobStore` and `TTLCache` purge by **time** as well as count; an aggregate per-request byte
+   cap plus a `Content-Length` pre-check. Worst-case upload memory = `max_pending_jobs × max_request_bytes`,
+   a number, not a hope. `JobStore` is a Protocol so W7's Postgres store is a new class, not surgery.
+4. **Per-IP rate limiting** on submission (fixed window, in-process; the key becomes the user at W7).
+5. **Parse is a pipeline stage** (`ParseStage`) backed by `services/document_parser.py`: keeps every block with
+   real words, strips repeated running headers/footers and page numbers, **excludes and reports** the reference
+   list, re-joins hyphenated line breaks, enforces page and character caps, handles encrypted/corrupt PDFs.
+6. **Observability:** `X-Request-ID` in/out, `request_id`/`job_id` on every log line via contextvars, optional
+   JSON logs, per-stage `timings_ms` in every result, `/health` (snapshot) and `/health/ready` (503 until the
+   model is warm), optional Sentry.
+7. **Quality gates in CI:** ruff blocking, coverage floor 80%, Docker build + readiness smoke, browser E2E,
+   and the public-dataset benchmark gate (ADR-0020).
+**Consequences:** 102 offline tests (was 57). The matcher, modelhub and eval packages are untouched in spirit —
+this was a refactor of the edges, not the core. Breaking change for any client of the old `/api/check` path.
+**Not done (deliberately):** authentication and persistence (W7), a distributed rate limiter (unnecessary on
+one box), OCR for scanned PDFs.
+
+## ADR-0020 — Honest regression gates on public data, at the confident cutoff; source-sentence budgeting by relevance
+**Status:** Accepted (2026-09-06)
+**Context:** ADR-0017 declared `python -m eval.run_pairs` "the quality gate", but it was not in CI, and its
+provisional thresholds (`FPR ≤ 0.15` at 0.66) would have failed on every product-relevant dataset (measured
+FPR at 0.66: STS-B 0.234, QQP 0.451, MRPC 0.643). A gate nobody runs, set at a level nothing passes, is
+documentation, not a gate. Separately, the matcher truncated large reference sets to the *first* 6000 source
+sentences in upload order — with 25 references the last ones were never compared, and only a warning said so.
+**Decision:**
+1. Gates live in `eval/gates.json` as data, **per dataset**, evaluated at the **confident cutoff (0.78)** — the
+   score the product presents as a confirmed match — and set from the measured 2026-08-30 baseline with a
+   small margin (recall −0.04, FPR +0.02). They are **regression tripwires, not targets**, and the file says so
+   beside each baseline. PAWS is reported but not gated (its distributions coincide; it tests equivalence, not
+   derivation — ADR-0017). CI runs the gate on STS-B, MRPC and QQP (validation splits; QQP sampled to 3000)
+   on every push.
+2. When source sentences exceed the embedding budget, keep the **top-N by TF-IDF similarity to the document
+   across all sources** instead of the first N. Model-free and cheap; the warning states exactly what was
+   searched and that paraphrases sharing almost no words may be missed.
+**Consequences:** A model or threshold change that regresses a public set now fails the build with the number
+that regressed. Tightening a gate is a deliberate act after a measured improvement. The synthetic 32-case set
+remains a smoke tripwire only.

@@ -1,0 +1,3 @@
+We report on a series of experiments with convolutional neural networks (CNN) trained on top of pre-trained word vectors for sentence-level classification tasks.
+
+Separately, our own study recruited twenty volunteers over two weeks for a small labelling exercise that was unrelated to any prior published work.

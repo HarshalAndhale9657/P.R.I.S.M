@@ -1,0 +1,5 @@
+The transformer architecture relies entirely on self-attention mechanisms to draw global dependencies between input and output sequences.
+
+Density-based clustering automatically determines the number of clusters present in a dataset without requiring a preset count parameter.
+
+Empirical evaluation on standard benchmarks shows consistent gains over recurrent baselines across several tasks.

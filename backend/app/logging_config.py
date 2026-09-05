@@ -61,5 +61,7 @@ def configure_logging(level: str = "INFO", fmt: str = "text") -> None:
     handler.setFormatter(_JsonFormatter() if fmt == "json" else logging.Formatter(_TEXT_FORMAT))
     root.addHandler(handler)
     root.setLevel(level)
-    # Uvicorn's access log is noisy and lacks our fields; keep its error log.
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # Uvicorn's access log is noisy and lacks our fields; keep its error log. The HF/httpx
+    # stack logs every model-file HEAD request at INFO during warm-up — not operational signal.
+    for noisy in ("uvicorn.access", "httpx", "httpcore", "huggingface_hub", "urllib3", "filelock"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)

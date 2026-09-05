@@ -1,65 +1,54 @@
 # TODO — near-term backlog
 
-Actionable tasks. Full plan: [`ROADMAP.md`](ROADMAP.md) · rationale: [`docs/DECISIONS.md`](docs/DECISIONS.md).
+Actionable tasks. Full plan: [`docs/LAUNCH_PLAN.md`](docs/LAUNCH_PLAN.md) (authoritative) · rationale: [`docs/DECISIONS.md`](docs/DECISIONS.md).
 Check items off with a date. Newest priorities on top.
 
-> **AUTHORITATIVE PLAN:** [`docs/LAUNCH_PLAN.md`](docs/LAUNCH_PLAN.md) — 12-week solo/bootstrap plan to a paid launch
-> (beachhead = India/UGC PhD authors; honest coach; ₹149 hero SKU; no evasion).
-> **⚙️ REVISED core-ML-first (ADR-0015 + ADR-0016):** weeks 1–5 buy the honest core before SaaS plumbing —
-> **pretrained-first, plagiarism-first, public datasets only, NO PAN.**
-> **Week 1 (start here, offline):** re-architect into a **pluggable pipeline** (`parse → retrieve → match → rerank →
-> ai_risk → triage → coach → report`) + first-class `eval/` harness (pluggable dataset loader) + `models/` layer;
-> existing matcher/corpus become stage impls; keep all 22 tests green. **Week 2:** stand up a **REAL benchmark** from
-> **public paraphrase sets (PAWS/MRPC/STS-B/QQP)** — no PAN — freeze as the CI gate (synthetic 32-case → smoke test).
-> Then: bi-encoder upgrade (W3), pretrained cross-encoder rerank + OA full-text (W4), selective reranker fine-tune on
-> free GPU only if it beats pretrained (W5), deploy (W6). **AI detector deferred** behind this.
+## 🔴 Owner decisions (blocking nothing, but real)
+- [ ] **Choose a LICENSE.** The public repo has none → all rights reserved by each of the 7 historical contributors.
+      A commercial product usually wants proprietary/source-available; applying that to others' contributions
+      needs their consent (most of that code is now deleted, but history remains). Decide, then add `LICENSE`.
+- [ ] **Confirm the old Vercel/Render demo is offline** (its README link was removed 2026-09-06). If it still
+      serves the pre-refactor backend, take it down — it has none of the new controls.
+- [ ] **History rewrite for the PAN corpus?** It is untracked now (2026-09-06) but remains in history (~33 MiB,
+      licence-restricted). A `git filter-repo` purge is clean but rewrites every SHA; do it before anyone else clones.
 
-## 🔴 Now — core ML (ADR-0015 + ADR-0016: pretrained-first, plagiarism-first, public data, NO PAN)
-- [ ] **W1 · Re-architect to a pluggable pipeline** — stage interfaces `parse → retrieve → match → rerank → ai_risk →
-      triage → coach → report`; move `plagiarism_matcher`/`academic_corpus` behind them; add `eval/` (run any stage over
-      a dataset, pluggable dataset loader) + `models/` (download/cache/version). Keep the 22 tests green. _(L)_ **← start here (offline).**
-- [ ] **W2 · Real benchmark = CI gate (public sets, NO PAN)** — loaders for **PAWS, MRPC, STS-B, QQP** (+ **PAWS-X**);
-      run the ACTUAL matcher; report P/R/**FPR per stratum** incl. a high-overlap-not-paraphrase stratum (≈ ESL/boilerplate
-      risk); freeze as the gate. Keep `eval_data.json` (32) only as a fast smoke. _(L)_
-- [ ] **W3 · Bi-encoder upgrade (no training)** — MiniLM → `bge-base`/`gte-base` (ONNX; multilingual for translated);
-      recalibrate on the real benchmark; **ship only if recall ↑ with FPR flat** (esp. high-overlap negatives); torch fallback. _(M)_
-- [ ] **W4 · Cross-encoder rerank (pretrained) + OA full-text** — pretrained cross-encoder over top-k for hard
-      paraphrases (recall 0.77 → ↑); add **Semantic Scholar** + **Unpaywall/arXiv/PMC** full text; re-eval, keep gate green. _(L)_
-- [~] **W5 · Selective cross-encoder fine-tune (go/no-go)** — **kit is ready**: `backend/training/` (script +
-      README + 8 gate tests). Full fine-tune (not LoRA — roberta-base is small; rationale in the README) on a free
-      Colab/Kaggle T4; **the script enforces the gate itself** (FPR must not rise, best-F1 +≥0.01, Brier must not
-      worsen). ⏳ **Needs someone to run one GPU session** — cannot be driven from the coding environment.
-      "Do not ship" is a legitimate outcome; keep `cross-encoder-stsb` and bank the time. _(M)_
-- [ ] **Later · AI-text detector** — deferred behind plagiarism-first (ADR-0016); when built, honesty-gated on RAID/HC3/M4 + real ESL set. _(L)_
+## 🟠 Now — finish the core (ADR-0016; pretrained-first, plagiarism-first, public data, NO PAN)
+- [ ] **W4b · Retrieval depth** — Semantic Scholar (free key) + **Unpaywall/arXiv/PMC OA full text** so academic
+      matches can be verbatim, not only abstract-level. Provider protocol already exists in `academic_corpus.py`. _(M)_
+- [~] **W5 · Selective cross-encoder fine-tune** — kit ready (`backend/training/`, 8 gate tests, self-enforcing
+      ship/no-ship). ⏳ **Needs one free Colab/Kaggle T4 session run by a human.** "Do not ship" is a valid outcome. _(M)_
+- [ ] **W6 · First deploy on the real box** — `deploy/README.md` runbook; then **measure** `timings_ms` on a real
+      20-page PDF with `PRISM_RERANK=true` and decide the rerank default; set `PRISM_CONTACT_EMAIL`; UptimeRobot on
+      `/health/ready`; Sentry DSN. _(S)_
+- [ ] **Re-derive the confident cutoff once rerank is default-on**, accounting for the max-over-sources upward bias
+      (pairwise 0.78 is a lower bound — ADR-0017). Update `eval/gates.json` baselines from the new measurement. _(S)_
+- [ ] `pip-audit` step in CI once the lockfile has settled. _(S)_
 
-## ✅ Now — honesty & safety (done)
-- [x] `README.md` de-hyped (removed overclaims; benchmark relabelled N=2 legacy; pivot banner).
-- [x] `main.py` security baseline: CORS allow-list (`PRISM_ALLOWED_ORIGINS`), paper size cap (413 via
-      `_enforce_size`), generic client errors everywhere (`_server_error` helper; `str(e)` swept from every endpoint).
-- [x] Deleted the 8 dead "v3" modules (verified unreferenced by live code).
-
-## 🟢 Next — robustness & coverage
-- [x] `tests/`: pytest + FastAPI `TestClient` suite (22 tests, offline, CI-gated) — matcher units + async `/api/check` lifecycle/errors.
-- [x] Async job model for `/api/check` (202 + job_id; bounded `ThreadPoolExecutor` worker; `GET /api/check/{job_id}`; content-hash cache).
-      Follow-up: per-provider circuit breaker; Redis/persistent store for multi-worker scale.
-- [x] Added **arXiv** alongside OpenAlex (concurrent + deduped). Crossref dropped (no abstracts); Semantic Scholar needs a key.
-- [x] Expanded eval (`scripts/eval_data.json`, 32 cases): recall-by-type/difficulty + **per-stratum FPR** + gates;
-      recalibrated paraphrase threshold 0.75 → 0.66. (Later: a small real-corpus study.)
-- [ ] 2–3-sentence sliding windows for finer paraphrase localization (targets hard-paraphrase misses). _(now folded into W4 cross-encoder rerank.)_
-- [ ] Calibrated similarity → confidence + abstain band. _(now folded into W3/W5 calibration on the real benchmark.)_
+## 🟢 Next — the product (W7–W12, LAUNCH_PLAN §9)
+- [ ] **W7 · Accounts + persistence** — Supabase JWT verify as a FastAPI dependency; `PostgresJobStore` implementing
+      `worker.store.JobStore`; ownership check on `GET /api/v1/check/{id}`; per-user quota replaces the per-IP limiter. _(L)_
+- [ ] **W8 · TriageStage** — deterministic rules → remediation type (un-quoted quotation · cited · missing citation ·
+      boilerplate · self-reuse · too-close paraphrase); boilerplate/IDF suppression wired to the FPR harness. _(M)_
+- [ ] **W9 · CoachStage** — gpt-4o-mini, JSON, ≤3 calls/check, cached; **matcher post-filter** so coaching can never
+      launder copied text; source always visible; no auto-rewrite (ADR-0014). _(L)_
+- [ ] **W10 · ReportStage** — submission-risk report + re-check. _(M)_
+- [ ] **W11 · Payments + legal** — Razorpay; Privacy/ToS/AUP; CI honesty gate on copy. _(M)_
+- [ ] **W12 · Launch.**
 
 ## 🔵 Later
-- [ ] AI-generated-text signal — **deferred behind plagiarism-first** (ADR-0016); honesty-gated on RAID/HC3/M4 + real ESL set. See core-ML section.
-- [ ] Batch upload + analysis history.
-- [ ] Pydantic response models; structured logging/metrics.
+- [ ] AI-generated-text signal — deferred (ADR-0016); when built, honesty-gated on RAID/HC3/M4 + a real ESL set.
+- [ ] OCR for scanned PDFs (currently rejected with a clear message).
+- [ ] Batch upload + history; PAWS-X for translated evaluation.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
-- [x] Fixed legacy pipeline offline end-to-end (report units, gpt boundaries, cluster warnings/override).
-- [x] Full light-theme UI redesign (sidebar shell, SVG icons, restyled components).
-- [x] Deep product analysis + PROJECT_BRIEF + project scaffolding.
-- [x] **Phase 1** — verbatim + paraphrase vs. uploaded references; highlighted doc + side-by-side.
-- [x] **Phase 2 (core)** — OpenAlex academic corpus (opt-in), origin badges + source links.
-- [x] **Phase 3 (part 1)** — translated detection (cross-lingual + language pair).
-- [x] **Downloadable evidence report** (HTML → Save as PDF).
-- [x] **Evaluation harness** (precision/recall/F1 + FPR) wired into CI as a gate.
+- [x] 2026-09-06 — **Industry-grade pass** (ADR-0018/0019/0020): legacy engine deleted; `app/` + `worker/` +
+      `ParseStage`; Pydantic API contract at `/api/v1`; bounded queue (503) + TTL store + aggregate size cap + per-IP
+      rate limit (429); checker-specific PDF parser (no 80-char floor, headers/footers/reference list handled, page +
+      char caps); relevance-based source budgeting; request ids + JSON logs + per-stage timings + `/health/ready`;
+      multi-stage non-root Docker image with baked model; Compose + Caddy + runbook; lockfile; ruff blocking;
+      coverage floor; Docker + E2E + **public-dataset benchmark gate in CI**; false "offline" UI claims removed;
+      README/SECURITY/BRIEF/CLAUDE synced; PAN corpus + `.gemini/` untracked. Tests 57 → 100+.
+- [x] 2026-08-31 — W4 cross-encoder rerank stage (opt-in) + latency measured; W5 training kit; confidence band in UI + report (ADR-0017).
+- [x] 2026-08-30 — W1 pluggable pipeline + eval harness + modelhub; W2 real baseline on PAWS/MRPC; W3 mpnet (no lift — not shipped); W4b STS-B/QQP added, separation-gap analysis.
+- [x] 2026-08-21..26 — Phases 1–3 (verbatim, OpenAlex/arXiv, translated), downloadable report, async job model, pytest suite, security baseline, README de-hype.

@@ -1,0 +1,65 @@
+# P.R.I.S.M. — single-box production stack (LAUNCH_PLAN §4: one 4 vCPU / 8 GB VPS).
+#
+#   cp prism.env.example prism.env   # then edit
+#   PRISM_DOMAIN=check.example.org docker compose up -d --build
+#   curl -fsS https://check.example.org/health/ready
+#
+# Caddy terminates TLS (automatic Let's Encrypt), serves the static frontend, and
+# proxies /api, /health, /docs to the API container on a private network. The API
+# is never exposed directly.
+name: prism
+
+services:
+  api:
+    build:
+      context: ../backend
+      args:
+        PRISM_BAKE_RERANK: "${PRISM_BAKE_RERANK:-0}"
+    image: prism-backend:${PRISM_TAG:-local}
+    restart: unless-stopped
+    env_file: ./prism.env
+    environment:
+      PRISM_ENV: prod
+      PRISM_TRUST_PROXY: "true"          # only Caddy can reach this container
+      PRISM_WARMUP_MODELS: "true"
+      PRISM_LOG_FORMAT: json
+    expose:
+      - "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 6g
+    cpus: "3.5"
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request as u; sys.exit(0 if u.urlopen('http://127.0.0.1:8000/health/ready', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PRISM_DOMAIN: "${PRISM_DOMAIN:-localhost}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../frontend:/srv/frontend:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  caddy_data:
+  caddy_config:

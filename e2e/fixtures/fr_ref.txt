@@ -1,0 +1,3 @@
+L'architecture du transformateur repose entièrement sur des mécanismes d'auto-attention pour établir des dépendances globales entre les séquences d'entrée et de sortie.
+
+Les modèles récurrents effectuent leur calcul le long des positions des symboles des séquences d'entrée et de sortie.

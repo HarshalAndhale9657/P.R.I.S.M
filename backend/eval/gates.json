@@ -1,0 +1,17 @@
+{
+  "_comment": [
+    "Regression tripwires for the paraphrase pillar on PUBLIC datasets (ADR-0016 / ADR-0017 / ADR-0020).",
+    "They are evaluated at the CONFIDENT cutoff (what the product asserts as a confirmed match), and were set",
+    "from the 2026-08-30 measured baseline (bi-encoder paraphrase-multilingual-MiniLM-L12-v2) with a small",
+    "margin: recall -0.04, FPR +0.02. They exist to stop a model/threshold change from silently regressing;",
+    "they are NOT quality targets and must never be quoted as accuracy. PAWS is reported but not gated: its",
+    "positive/negative score distributions coincide (gap 0.007), so no bi-encoder threshold separates it, and",
+    "it tests semantic equivalence rather than derivation. Tighten a gate only after a change beats it."
+  ],
+  "threshold": 0.78,
+  "datasets": {
+    "stsb": {"min_recall": 0.86, "max_fpr": 0.12, "baseline": {"recall": 0.901, "fpr": 0.097}},
+    "mrpc": {"min_recall": 0.74, "max_fpr": 0.47, "baseline": {"recall": 0.785, "fpr": 0.442}},
+    "qqp":  {"min_recall": 0.81, "max_fpr": 0.28, "baseline": {"recall": 0.856, "fpr": 0.257}}
+  }
+}

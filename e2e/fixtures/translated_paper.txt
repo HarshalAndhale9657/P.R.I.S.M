@@ -1,0 +1,3 @@
+The transformer architecture relies entirely on self-attention mechanisms to establish global dependencies between input and output sequences.
+
+Separately, our own contribution is a small user study conducted with twenty volunteers over two weeks, measuring how quickly they completed each labelling task.

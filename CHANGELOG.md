@@ -5,6 +5,43 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-06 — Industry-grade pass (ADR-0018 · ADR-0019 · ADR-0020)
+
+#### Removed
+- **The legacy stylometric authorship engine** — `feature_engine`, `hdbscan_detector`, `gpt_analyzer`,
+  `citation_forensics`, `source_tracer`, `report_generator`, `pdf_parser`, `models.py`, `prompts/`, the seven
+  legacy endpoints, `authorship.html` + 7 frontend modules, `scripts/benchmark.py`, `scripts/evaluate.py`,
+  legacy smoke scripts. Dependencies dropped: spaCy, HDBSCAN, ruptures, nltk, openai, httpx, tenacity. (ADR-0018)
+- **45,099 tracked files** of the PAN-2023 corpus and `.gemini/` tooling untracked (wrong task; not ours to redistribute).
+- The hard-coded Render API URL and the `localhost:8000/docs` link in the frontend.
+- The false "all offline, on your machine" / "Local engine · offline" claims in the UI and report.
+
+#### Changed — **BREAKING**
+- API moves to **`/api/v1/check`** and **`/api/v1/check/{job_id}`**; `GET /` now returns the health snapshot.
+- `main.py` is a shim over `app.create_app()`; all configuration via `PRISM_*` env (`app/settings.py`).
+- `RetrieveStage` raises a user-safe error when no sources remain (was silently empty).
+- Matcher: large reference sets are budgeted by **TF-IDF relevance across all sources** instead of first-N in upload order.
+- `eval.run_pairs --gate` reads **per-dataset gates at the confident cutoff** from `eval/gates.json` (ADR-0020).
+
+#### Added
+- `app/` — pydantic-settings, **Pydantic response models** (real OpenAPI contract), request-id middleware,
+  `Content-Length` guard, **per-IP rate limiting (429)**, `/health` + `/health/ready`, application factory, JSON logging.
+- `worker/` — **bounded executor (503 + Retry-After)**, **TTL job store + result cache** (ephemeral by default),
+  `CheckRunner`; results carry per-stage `timings_ms` and an `engine` block (version, model, thresholds, rerank, coverage).
+- `services/document_parser.py` — checker-specific PDF/text parser (keeps short paragraphs, strips running
+  headers/footers, excludes + reports the reference list, hyphenation repair, page/char caps, encrypted/corrupt handling).
+- `pipeline.ParseStage`; `build_check_stages()`; `RawInput`.
+- `academic_corpus`: pooled session with retries; contact email sent only when configured.
+- Frontend: API base via `<meta name="prism-api-base">`; polling backoff; actionable 404/429/503 messages;
+  academic-search data-flow disclosure; report method footer generated from `engine`.
+- **Docker**: multi-stage, non-root, CPU-only torch, baked model, Python health probe. **`deploy/`**: Compose + Caddy
+  (TLS, CSP) + `prism.env.example` + runbook. `requirements.lock` (uv, Linux/CPU). `.gitattributes` (LF).
+- **CI**: ruff blocking; pytest with coverage floor 80%; Docker build + readiness smoke; Playwright E2E (specs now
+  in `e2e/`); **public-dataset benchmark gate** (STS-B · MRPC · QQP).
+- Tests: parser, worker (store/cache/executor/runner), rate limiter, academic corpus, schema round-trip,
+  413/429/503 paths, ParseStage — 57 → 100+.
+- Docs: README, SECURITY, PROJECT_BRIEF, CLAUDE, CONTRIBUTING, TODO, ROADMAP rewritten to match the code; ADR-0018/0019/0020.
+
 ### Direction
 - **Pivot decided:** core reframed from *stylometric authorship* ("how many authors?") to
   **source-attribution plagiarism detection** ("what is copied, where, and from which source?").
