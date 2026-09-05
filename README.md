@@ -113,4 +113,7 @@ pivoted to source-attribution plagiarism in August 2026 (ADR-0001). The legacy e
 
 ## License
 
-Not yet chosen — all rights reserved by the contributors until a licence is added. See `TODO.md`.
+**PolyForm Noncommercial 1.0.0** — free for personal, research, teaching and other noncommercial use, with
+attribution ([`LICENSE`](LICENSE), [`NOTICE`](NOTICE)). Commercial use — including offering PRISM or a derivative
+as a hosted or paid service — requires a separate licence from the authors. Contributions are accepted under
+the same terms.

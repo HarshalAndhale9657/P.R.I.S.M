@@ -4,9 +4,11 @@ Actionable tasks. Full plan: [`docs/LAUNCH_PLAN.md`](docs/LAUNCH_PLAN.md) (autho
 Check items off with a date. Newest priorities on top.
 
 ## 🔴 Owner decisions (blocking nothing, but real)
-- [ ] **Choose a LICENSE.** The public repo has none → all rights reserved by each of the 7 historical contributors.
-      A commercial product usually wants proprietary/source-available; applying that to others' contributions
-      needs their consent (most of that code is now deleted, but history remains). Decide, then add `LICENSE`.
+- [ ] **Licence follow-ups (LICENSE added 2026-09-06: PolyForm Noncommercial 1.0.0).** (a) Replace "the P.R.I.S.M.
+      authors" in `NOTICE` with the legal name/entity that will hold the copyright. (b) ~176 surviving boilerplate lines
+      (CSS/HTML/README) were written by three past teammates — send each: *"PRISM is now licensed under PolyForm
+      Noncommercial 1.0.0; are you OK with your past contributions being licensed under it? A yes here is enough."*
+      Record the replies (issue or PROGRESS). If anyone declines, I rewrite those lines.
 - [ ] **Confirm the old Vercel/Render demo is offline** (its README link was removed 2026-09-06). If it still
       serves the pre-refactor backend, take it down — it has none of the new controls.
 

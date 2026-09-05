@@ -57,6 +57,11 @@ cd ..\e2e && npm install && node run.mjs                # browser E2E (needs bot
 - No marketing claim we can't back with a number measured on **public** data.
 - **No detection-evasion features.** Ever.
 
+## License of contributions
+PRISM is released under the **PolyForm Noncommercial License 1.0.0** (`LICENSE`). By opening a pull request you
+agree that your contribution is licensed under those same terms and that the project authors may additionally
+license the combined work commercially. If you cannot agree to that, please say so in the PR instead of merging.
+
 ## PR checklist
 - [ ] Linked to a TODO/ROADMAP item or an issue.
 - [ ] Tests added/updated; `ruff`, `pytest`, and (if the matcher changed) `eval.run_pairs --gate` pass.

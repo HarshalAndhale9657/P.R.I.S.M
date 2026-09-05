@@ -3,6 +3,7 @@ name = "prism-backend"
 version = "0.9.0"
 description = "P.R.I.S.M. — source-attribution originality checker (backend)"
 requires-python = ">=3.12"
+license = { text = "PolyForm-Noncommercial-1.0.0" }
 
 [tool.ruff]
 line-length = 120
