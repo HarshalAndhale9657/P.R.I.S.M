@@ -11,13 +11,15 @@ Check items off with a date. Newest priorities on top.
       serves the pre-refactor backend, take it down — it has none of the new controls.
 
 ## 🟠 Now — finish the core (ADR-0016; pretrained-first, plagiarism-first, public data, NO PAN)
-- [ ] **W4b · Retrieval depth** — Semantic Scholar (free key) + **Unpaywall/arXiv/PMC OA full text** so academic
-      matches can be verbatim, not only abstract-level. Provider protocol already exists in `academic_corpus.py`. _(M)_
 - [~] **W5 · Selective cross-encoder fine-tune** — kit ready (`backend/training/`, 8 gate tests, self-enforcing
       ship/no-ship). ⏳ **Needs one free Colab/Kaggle T4 session run by a human.** "Do not ship" is a valid outcome. _(M)_
 - [ ] **W6 · First deploy on the real box** — `deploy/README.md` runbook; then **measure** `timings_ms` on a real
-      20-page PDF with `PRISM_RERANK=true` and decide the rerank default; set `PRISM_CONTACT_EMAIL`; UptimeRobot on
+      20-page PDF with `PRISM_RERANK=true` and academic full text on, and decide the rerank default; set `PRISM_CONTACT_EMAIL`
+      (+ optional `PRISM_S2_API_KEY`); UptimeRobot on
       `/health/ready`; Sentry DSN. _(S)_
+- [ ] **W6 follow-up · full-text latency** — measured 50 s/check on a laptop with 2 full-text papers (embedding the 6 000-sentence
+      budget ≈ 25 s). On the VPS decide: lower `PRISM_MAX_SOURCE_SENTENCES`, and/or add an **embedding cache keyed by
+      source URL** in `modelhub`/matcher so a popular OA paper is embedded once. Decide from `timings_ms`, not guesses. _(M)_
 - [ ] **Re-derive the confident cutoff once rerank is default-on**, accounting for the max-over-sources upward bias
       (pairwise 0.78 is a lower bound — ADR-0017). Update `eval/gates.json` baselines from the new measurement. _(S)_
 - [ ] `pip-audit` step in CI once the lockfile has settled. _(S)_
@@ -40,6 +42,8 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-06 — **W4b retrieval depth** (ADR-0021): OA full-text fetch (safe, capped, cached) for the most relevant
+      candidates; Semantic Scholar provider (keyed); `kind` = fulltext/abstract surfaced in UI + report coverage. Tests 105 → 129.
 - [x] 2026-09-06 — **PAN corpus purged from git history** (owner's decision; `git filter-repo`; pack 33.65 → 2.77 MiB; all
       SHAs changed; pre-rewrite backup bundle kept outside the repo; PAN data also deleted from disk).
 - [x] 2026-09-06 — **Industry-grade pass** (ADR-0018/0019/0020): legacy engine deleted; `app/` + `worker/` +

@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.academic_corpus import search as academic_search
+from services.fulltext import FullTextFetcher
 from services.plagiarism_matcher import PlagiarismMatcher
 from worker import BoundedExecutor, CheckRunner, InMemoryJobStore
 
@@ -75,13 +76,30 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     )
     store = InMemoryJobStore(max_jobs=settings.max_jobs, ttl_seconds=settings.job_ttl_seconds)
     executor = BoundedExecutor(max_workers=settings.worker_threads, max_pending=settings.max_pending_jobs)
+    fetcher = None
+    if settings.academic_fulltext:
+        fetcher = FullTextFetcher(
+            timeout=settings.academic_fulltext_timeout_seconds,
+            max_bytes=settings.academic_fulltext_max_bytes,
+            max_pdf_pages=settings.max_pdf_pages,
+            max_chars=settings.max_document_chars,
+            user_agent=f"PRISM-OriginalityChecker/{APP_VERSION}"
+                       + (f" mailto:{settings.contact_email}" if settings.contact_email else ""),
+        )
     runner = CheckRunner(
         settings=settings,
         store=store,
         executor=executor,
         matcher=matcher,
-        academic_search=partial(academic_search, timeout=settings.academic_timeout_seconds,
-                                contact_email=settings.contact_email or None),
+        academic_search=partial(
+            academic_search,
+            providers=settings.academic_providers,
+            timeout=settings.academic_timeout_seconds,
+            contact_email=settings.contact_email or None,
+            s2_api_key=settings.s2_api_key or None,
+            fetcher=fetcher,
+            fulltext_max_docs=settings.academic_fulltext_max_docs,
+        ),
     )
 
     @asynccontextmanager

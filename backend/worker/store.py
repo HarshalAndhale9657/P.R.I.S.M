@@ -16,7 +16,7 @@ import time
 import uuid
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generic, Optional, Protocol, TypeVar
+from typing import Any, Dict, Optional, Protocol
 
 
 @dataclass
@@ -91,38 +91,7 @@ class InMemoryJobStore:
             return len(self._jobs)
 
 
-K = TypeVar("K")
-V = TypeVar("V")
+# Re-exported so existing imports keep working; the implementation lives in utils.
+from utils.ttl_cache import TTLCache  # noqa: E402
 
-
-class TTLCache(Generic[K, V]):
-    """Small LRU with per-entry expiry. Used for idempotent re-submits (same content hash)."""
-
-    def __init__(self, *, max_size: int = 64, ttl_seconds: int = 1800) -> None:
-        self.max_size = max_size
-        self.ttl = ttl_seconds
-        self._data: OrderedDict[K, tuple[float, V]] = OrderedDict()
-        self._lock = threading.Lock()
-
-    def get(self, key: K) -> Optional[V]:
-        with self._lock:
-            item = self._data.get(key)
-            if item is None:
-                return None
-            ts, value = item
-            if time.time() - ts > self.ttl:
-                del self._data[key]
-                return None
-            self._data.move_to_end(key)
-            return value
-
-    def put(self, key: K, value: V) -> None:
-        with self._lock:
-            self._data[key] = (time.time(), value)
-            self._data.move_to_end(key)
-            while len(self._data) > self.max_size:
-                self._data.popitem(last=False)
-
-    def __len__(self) -> int:
-        with self._lock:
-            return len(self._data)
+__all__ = ["JobRecord", "JobStore", "InMemoryJobStore", "TTLCache"]

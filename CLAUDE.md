@@ -47,7 +47,8 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 - `backend/pipeline/` — `parse → retrieve → match → rerank(opt-in) → localize` (+ skeleton triage/coach/report).
   Collaborators are **injected**; tests patch `app.state.runner.matcher` / `.academic_search`.
 - `backend/services/` — `document_parser.py` (checker-specific PDF/text), `plagiarism_matcher.py` (pure matcher),
-  `academic_corpus.py` (OpenAlex + arXiv), `local_embeddings.py` (bi-encoder singleton).
+  `academic_corpus.py` (OpenAlex + arXiv + keyed Semantic Scholar; `ProviderContext`/`Candidate`), `fulltext.py`
+  (safe OA-PDF fetcher, ADR-0021), `local_embeddings.py` (bi-encoder singleton). `backend/utils/` — `TTLCache`.
 - `backend/modelhub/` — model registry/cache (`get_embedder`, `get_cross_encoder`).
 - `backend/eval/` — public-dataset harness; `gates.json` holds the per-dataset regression gates (ADR-0020). **No PAN.**
 - `backend/training/` — W5 cross-encoder fine-tune kit (needs a GPU session; self-gating).
@@ -68,6 +69,6 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 - When you change product shape: add an ADR, update CHANGELOG `[Unreleased]`, log the session in `docs/PROGRESS.md`.
 
 ## Current priorities
-See [`TODO.md`](TODO.md). Core-ML W1–W4 done; W5 needs a human GPU session; **next is W4b (Semantic Scholar +
-OA full text) then W6 (first deploy on the real box, measure rerank latency, decide the default)**. An open owner
+See [`TODO.md`](TODO.md). Core-ML W1–W4b done; W5 needs a human GPU session; **next is W6 (first deploy on the
+real box, measure rerank + full-text latency, decide the rerank default)**, then W7 accounts + Postgres job store. An open owner
 decision blocks nothing but matters: **the repository has no LICENSE**.

@@ -32,11 +32,15 @@ class Paragraph(BaseModel):
     end: int
 
 
+SourceKind = Literal["fulltext", "abstract"]
+
+
 class SourceRef(BaseModel):
     id: str
     name: str
     origin: str = "upload"
     url: Optional[str] = None
+    kind: SourceKind = Field(default="fulltext", description="Whether the matched text was the full document or only an abstract.")
 
 
 class Match(BaseModel):
@@ -85,6 +89,7 @@ class PerSource(BaseModel):
     name: str
     origin: str = "upload"
     url: Optional[str] = None
+    kind: SourceKind = "fulltext"
     matched_words: int
     similarity_pct: float
 

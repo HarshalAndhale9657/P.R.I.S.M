@@ -25,7 +25,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "worker", "pipeline", "services", "modelhub", "eval", "training"]
+known-first-party = ["app", "worker", "pipeline", "services", "modelhub", "eval", "training", "utils"]
 
 [tool.pytest.ini_options]
 # Only collect the real test package — never manual scripts.
@@ -37,7 +37,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["app", "worker", "pipeline", "services", "modelhub", "eval"]
+source = ["app", "worker", "pipeline", "services", "modelhub", "eval", "utils"]
 omit = ["*/__init__.py", "eval/fetch_datasets.py", "eval/run_pairs.py"]
 
 [tool.coverage.report]

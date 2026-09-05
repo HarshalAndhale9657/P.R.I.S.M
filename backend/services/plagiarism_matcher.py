@@ -67,8 +67,9 @@ class SourceDoc:
     id: str
     name: str
     text: str
-    origin: str = "upload"          # "upload" | "openalex" | ...
+    origin: str = "upload"          # "upload" | "openalex" | "arxiv" | "semanticscholar"
     url: Optional[str] = None       # link to the source, when known
+    kind: str = "fulltext"          # "fulltext" | "abstract" — what `text` actually is (reports say so)
 
 
 def tokenize(text: str) -> List[Token]:
@@ -457,6 +458,7 @@ class PlagiarismMatcher:
                 "name": s.name,
                 "origin": s.origin,
                 "url": s.url,
+                "kind": s.kind,
                 "matched_words": len(per_source_tokens.get(s.id, set())),
                 "similarity_pct": pct(len(per_source_tokens.get(s.id, set()))),
             }

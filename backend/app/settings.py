@@ -73,6 +73,22 @@ class Settings(BaseSettings):
         default="",
         description="Sent in the User-Agent to OpenAlex (polite pool) and arXiv. Set it in production.",
     )
+    s2_api_key: str = Field(
+        default="",
+        description="Semantic Scholar API key. The provider is enabled only when set (unauthenticated calls get 429).",
+    )
+    academic_fulltext: bool = Field(
+        default=True,
+        description="Download open-access PDFs for the most relevant candidates and match against full text (W4b).",
+    )
+    academic_fulltext_max_docs: int = Field(default=8, description="Max OA PDFs fetched per check.")
+    academic_fulltext_max_bytes: int = 15 * MiB
+    academic_fulltext_timeout_seconds: float = 15.0
+
+    @property
+    def academic_providers(self) -> tuple:
+        base = ("openalex", "arxiv")
+        return base + (("semanticscholar",) if self.s2_api_key else ())
 
     @field_validator("log_level")
     @classmethod

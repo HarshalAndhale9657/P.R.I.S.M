@@ -330,3 +330,31 @@ sentences in upload order — with 25 references the last ones were never compar
 **Consequences:** A model or threshold change that regresses a public set now fails the build with the number
 that regressed. Tightening a gate is a deliberate act after a measured improvement. The synthetic 32-case set
 remains a smoke tripwire only.
+
+## ADR-0021 — Retrieval depth (W4b): Semantic Scholar as a keyed provider; open-access full text via OA links
+**Status:** Accepted (2026-09-06)
+**Context:** Academic sources were abstracts only (OpenAlex inverted index, arXiv summaries), so a copied
+paragraph from a paper could at best appear as a *paraphrase-shaped* match against its abstract; verbatim
+detection against the literature was impossible by construction. LAUNCH_PLAN §5.4 asked for Semantic Scholar
+plus Unpaywall/arXiv/PMC full text. Probing: Semantic Scholar returns **429 without an API key**; OpenAlex
+already exposes Unpaywall-derived OA locations (`best_oa_location.pdf_url`, `open_access.oa_url`); arXiv has a
+PDF for every record.
+**Decision:**
+1. **Semantic Scholar is a third provider, enabled only when `PRISM_S2_API_KEY` is set.** Unauthenticated
+   calls would fail predictably and pollute warnings; a key is free.
+2. **Full text comes from the OA PDF links the providers already return** (arXiv `pdf_url`, OpenAlex
+   `best_oa_location.pdf_url` / `oa_url`, S2 `openAccessPdf.url`). **Unpaywall is not called** — OpenAlex
+   ingests it — and there is no separate PMC client: PMC PDFs arrive through those same OA locations.
+3. `services/fulltext.py` treats every download as hostile input: http(s) only, loopback/private/link-local
+   hosts refused (also after redirects), streamed with a hard byte cap (15 MiB), first bytes must be `%PDF`
+   regardless of Content-Type, parsed by our own parser under its page/char caps, results *and* failures cached
+   (1 h) so a popular paper is fetched once and a dead link is not hammered.
+4. Budget: at most `academic_fulltext_max_docs` (8) downloads per check, chosen by **lexical overlap between
+   the document and each candidate's abstract** (cheap, model-free), fetched concurrently, ≤2 link attempts each.
+5. **Honesty in the data model:** `SourceDoc.kind ∈ {fulltext, abstract}` flows into `sources`, `per_source`,
+   the UI ("abstract only" tag) and the report's coverage statement ("N with full text, M abstract-only").
+   A user can always see whether a source was compared in full or only by its abstract.
+**Consequences:** Verbatim matches against open-access literature are now possible. Each check may download up
+to 8 public PDFs (nothing of the user's is sent — only the provider queries, as before); latency rises by the
+download time, bounded by the 15 s per-fetch timeout and concurrency of 4. Full-text sources can be long, so
+the matcher's relevance-based budgeting (ADR-0020) matters more, not less.

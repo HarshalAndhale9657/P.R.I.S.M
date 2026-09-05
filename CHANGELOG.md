@@ -5,6 +5,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-06 — W4b retrieval depth (ADR-0021)
+
+#### Added
+- **Open-access full text.** When a retrieved candidate carries an OA PDF link (arXiv, OpenAlex
+  `best_oa_location`, Semantic Scholar `openAccessPdf`), `services/fulltext.py` downloads it (https-only,
+  private hosts refused, 15 MiB cap, `%PDF` sniffed, parsed by our parser, cached 1 h) and the matcher runs
+  against the **full text** — verbatim matches against the literature are now possible. Up to 8 per check,
+  chosen by lexical relevance. Settings: `PRISM_ACADEMIC_FULLTEXT*`.
+- **Semantic Scholar** as a third academic provider, enabled only with `PRISM_S2_API_KEY`.
+- `SourceDoc.kind` (`fulltext | abstract`) in `sources` and `per_source`; the UI tags abstract-only sources; the
+  report's coverage statement says "N with full text, M abstract-only".
+- `utils/ttl_cache.py` (shared by the worker and the fetcher). Tests: 105 → 129.
+
+#### Changed
+- Providers take a `ProviderContext` and return `Candidate`s (source + PDF links); duplicates across providers
+  now union their PDF links.
+
 ### 2026-09-06 — Industry-grade pass (ADR-0018 · ADR-0019 · ADR-0020)
 
 #### Removed

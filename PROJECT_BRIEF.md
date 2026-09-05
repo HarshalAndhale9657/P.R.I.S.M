@@ -41,7 +41,7 @@ detection was near-noise (§6). The old engine was deleted in September 2026 (AD
 - **Honesty (ADR-0017/0020):** explicit `confident | review` band; the synthetic 32-case set is a smoke test;
   quality is gated in CI on public data at the confident cutoff.
 - **Detect:** verbatim + paraphrase + translated ✅ · AI-generated risk ⏳ deferred.
-- **Corpora:** user uploads ✅ + **OpenAlex + arXiv** abstracts ✅ · Semantic Scholar + OA full text (W4b) · web layer later (paid).
+- **Corpora:** user uploads ✅ + **OpenAlex + arXiv (+ Semantic Scholar with a key)** ✅ with **open-access full text** fetched where available (ADR-0021) ✅ · web layer later (paid).
 
 ---
 
@@ -65,8 +65,11 @@ frontend/  ──►  POST /api/v1/check (202 + job_id)  ──►  GET /api/v1/
    Keeps every block with real words; strips repeated running headers/footers and page numbers; **excludes and
    reports** the reference list; re-joins hyphenated line breaks; page (300) and char (2M) caps; encrypted/corrupt
    PDFs handled. References that fail to parse are skipped with a warning, never fatal.
-2. **Retrieve** (`services/academic_corpus.py`) — opt-in OpenAlex + arXiv, concurrent, deduped, pooled session with
-   retries; sends ≤8 short excerpts as queries (disclosed in the UI). No sources at all → user-safe error.
+2. **Retrieve** (`services/academic_corpus.py` + `services/fulltext.py`) — opt-in OpenAlex + arXiv (+ Semantic
+   Scholar with `PRISM_S2_API_KEY`), concurrent, deduped, pooled session with retries; sends ≤8 short excerpts as
+   queries (disclosed in the UI). Up to 8 of the most relevant candidates with an OA PDF are **downloaded and
+   matched in full text** (https-only, private hosts refused, 15 MiB cap, `%PDF` sniffed, cached); the rest stay
+   `kind="abstract"` and are labelled so. No sources at all → user-safe error.
 3. **Match** (`services/plagiarism_matcher.py`, pure) — **verbatim** k-gram anchoring + greedy extension (exact
    spans); **paraphrase** sentence-embedding cosine with a reporting floor **0.66** and confidence cutoff **0.78**;
    **translated** = paraphrase path re-labelled on language mismatch. Large reference sets are budgeted by **TF-IDF
@@ -88,7 +91,7 @@ side-by-side comparison, downloadable/printable report whose method footer comes
 ## 4. Features (shipped)
 
 - Passage-level **verbatim / paraphrase / translated** detection with exact spans and language pair.
-- **Source attribution** against uploads + OpenAlex/arXiv abstracts (origin badges + links).
+- **Source attribution** against uploads + OpenAlex/arXiv/Semantic Scholar — **full text where an OA PDF exists**, abstract otherwise, each labelled (origin badges + links).
 - **Confidence band**: `confident` vs `review` ("Needs review" — never shown as confirmed copying).
 - In-context highlighting, side-by-side comparison, downloadable evidence report with honest method + coverage footer.
 - **Bounded service**: per-file 20 MiB, per-check 60 MiB, pending-queue cap → 503, per-IP rate limit → 429,
@@ -143,7 +146,7 @@ The cross-encoder rerank (opt-in) improves MRPC (FPR 0.643 → 0.403 at the 0.66
 | `backend/app/` | settings · schemas · middleware · limits · routers (`check`, `health`) · factory |
 | `backend/worker/` | executor (bounded) · store (TTL job store, cache; `JobStore` Protocol = W7 seam) · runner |
 | `backend/pipeline/` | `base` (CheckContext, RawInput, Document, PipelineError) · `stages` · `orchestrator` (timings, `build_check_stages`) |
-| `backend/services/` | `document_parser` · `plagiarism_matcher` · `academic_corpus` · `local_embeddings` |
+| `backend/services/` | `document_parser` · `plagiarism_matcher` · `academic_corpus` · `fulltext` · `local_embeddings` |
 | `backend/modelhub/` | model registry (`get_embedder`, `get_cross_encoder`) |
 | `backend/eval/` | public-dataset harness; `gates.json`; `run_pairs --gate`; `data/sample/` smoke set (**no PAN**) |
 | `backend/training/` | W5 cross-encoder fine-tune kit (self-gating; needs a GPU session) |

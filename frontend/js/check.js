@@ -128,7 +128,19 @@
     function originTag(origin) {
         if (origin === 'openalex') return '<span class="origin-tag">OpenAlex</span>';
         if (origin === 'arxiv') return '<span class="origin-tag origin-arxiv">arXiv</span>';
+        if (origin === 'semanticscholar') return '<span class="origin-tag origin-s2">Semantic Scholar</span>';
         return '';
+    }
+    // Academic sources are either the paper's full text (OA PDF fetched) or only its abstract.
+    // The distinction matters: an abstract can only ever surface paraphrase-shaped overlap.
+    function sourceKind(sourceId) {
+        const src = state.result && (state.result.sources || []).find(s => s.id === sourceId);
+        return src ? src.kind : 'fulltext';
+    }
+    function kindTag(sourceId) {
+        return sourceKind(sourceId) === 'abstract'
+            ? '<span class="origin-tag origin-kind" title="Compared against this paper&#39;s abstract only — its full text was not available.">abstract only</span>'
+            : '';
     }
 
     function sourceNameHtml(m) {
@@ -375,7 +387,7 @@
     function matchRowHtml(m) {
         return `
             <button class="match-row${isReview(m) ? ' is-review' : ''}" type="button" data-match="${m.id}">
-                <span class="mr-top">${typeBadge(m.match_type)}${reviewBadge(m)}<span class="mr-sim">${pctInt(m.similarity)}%</span>${langPair(m)}${originTag(m.source_origin)}<span class="mr-src" title="${esc(m.source_name)}">${esc(trim(m.source_name, 24))}</span></span>
+                <span class="mr-top">${typeBadge(m.match_type)}${reviewBadge(m)}<span class="mr-sim">${pctInt(m.similarity)}%</span>${langPair(m)}${originTag(m.source_origin)}${kindTag(m.source_id)}<span class="mr-src" title="${esc(m.source_name)}">${esc(trim(m.source_name, 24))}</span></span>
                 <span class="mr-text">${esc(trim(m.doc_excerpt, 96))}</span>
             </button>`;
     }
@@ -441,7 +453,7 @@
                     <div class="cmp-body">${esc(m.doc_excerpt || '')}</div>
                 </div>
                 <div class="cmp-col">
-                    <div class="cmp-head">${typeBadge(m.match_type)}${reviewBadge(m)}${langPair(m)}${originTag(m.source_origin)}${sourceNameHtml(m)}<span class="cmp-sub">${pctInt(m.similarity)}% match</span></div>
+                    <div class="cmp-head">${typeBadge(m.match_type)}${reviewBadge(m)}${langPair(m)}${originTag(m.source_origin)}${kindTag(m.source_id)}${sourceNameHtml(m)}<span class="cmp-sub">${pctInt(m.similarity)}% match</span></div>
                     <div class="cmp-body">${highlightExcerpt(m.source_context || m.source_excerpt || '', m.source_excerpt || '')}</div>
                 </div>
             </div>`;
@@ -460,7 +472,11 @@
     function reportOrigin(origin) {
         if (origin === 'openalex') return ' <span class="oa">OpenAlex</span>';
         if (origin === 'arxiv') return ' <span class="oa oa-arxiv">arXiv</span>';
+        if (origin === 'semanticscholar') return ' <span class="oa oa-s2">Semantic Scholar</span>';
         return '';
+    }
+    function reportKind(kind) {
+        return kind === 'abstract' ? ' <span class="oa oa-kind">abstract only</span>' : '';
     }
 
     function baseName(name) {
@@ -501,7 +517,7 @@
             .m-badge.verbatim{color:#dc2626;background:rgba(220,38,38,.1)} .m-badge.paraphrase{color:#d97706;background:rgba(217,119,6,.1)} .m-badge.translated{color:#0d9488;background:rgba(13,148,136,.1)}
             .m-badge.review{color:#4b5563;background:transparent;border:1px dashed #9ca3af}
             .lp{font-size:10px;color:#0d9488;font-weight:700;margin-right:4px}
-            .m-h a{color:#4f46e5} .oa{font-size:10px;color:#0369a1;background:rgba(14,165,233,.12);padding:1px 6px;border-radius:999px;font-weight:700} .oa.oa-arxiv{color:#b31b1b;background:rgba(179,27,27,.1)}
+            .m-h a{color:#4f46e5} .oa{font-size:10px;color:#0369a1;background:rgba(14,165,233,.12);padding:1px 6px;border-radius:999px;font-weight:700} .oa.oa-arxiv{color:#b31b1b;background:rgba(179,27,27,.1)} .oa.oa-s2{color:#1a5fb4;background:rgba(26,95,180,.1)} .oa.oa-kind{color:#6b7280;background:#f1f3f7;font-weight:600}
             .m-b{display:grid;grid-template-columns:1fr 1fr;gap:10px}
             .m-lab{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;font-weight:700;margin-bottom:3px}
             .m-x{font-size:12px;color:#374151;background:#f1f3f7;border-radius:6px;padding:8px;white-space:pre-wrap;word-break:break-word}
@@ -531,7 +547,7 @@
         const sources = (data.sources || []).map(s => {
             const nm = esc(s.name || '');
             const link = s.url ? `<a href="${esc(s.url)}">${nm}</a>` : nm;
-            const oa = reportOrigin(s.origin);
+            const oa = reportOrigin(s.origin) + reportKind(s.kind);
             return `<li>${link}${oa}</li>`;
         }).join('');
 
@@ -581,8 +597,8 @@
         are reported as <b>“Needs review”</b> — an explicit inconclusive band, because independently written
         text on the same topic can reach that range. This is a self-check aid and <b>not a determination of
         misconduct</b>. Legitimate quotation, common phrasing, shared terminology and citations can also match.
-        Academic-database matches are compared against paper <i>abstracts</i>, not full text. Review every
-        flagged passage in context.</p>
+        Academic sources marked <i>abstract only</i> were compared against their abstract, not their full text;
+        the others were compared against the full open-access PDF. Review every flagged passage in context.</p>
         <p><b>Coverage:</b> ${coverage}</p>
     </footer>
 </div></body></html>`;

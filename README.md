@@ -24,8 +24,10 @@ It is a **self-check aid, not a verdict**, and it never claims more than it has 
 
 Every semantic match carries `confidence: confident | review`. A `review` match is similar wording that
 independently written text on the same topic can also reach — it is shown as **"Needs review"**, never as
-a confirmed copy ([ADR-0017](docs/DECISIONS.md)). Reports state their coverage plainly: your uploads plus
-OpenAlex/arXiv abstracts — **not** the full web or subscription databases.
+a confirmed copy ([ADR-0017](docs/DECISIONS.md)). Academic sources come from OpenAlex, arXiv and (with a key)
+Semantic Scholar; where a candidate has an open-access PDF, PRISM fetches it and matches against the **full
+text**, otherwise against the abstract — and every source is labelled *full text* or *abstract only*. Reports
+state their coverage plainly: **not** the full web or subscription databases.
 
 ## How well does it work? (measured, on public data)
 
@@ -56,7 +58,7 @@ frontend/ (vanilla JS, no build)  ──►  POST /api/v1/check  (202 + job_id) 
                                               │
         pipeline/  parse ─► retrieve ─► match ─► rerank (opt-in) ─► localize ─► [triage ─► coach ─► report]
                      │          │          │          │
-   services/document_parser  academic_corpus  plagiarism_matcher   modelhub/ (model registry)
+   services/document_parser  academic_corpus + fulltext  plagiarism_matcher   modelhub/ (model registry)
                                                                      eval/    (public-dataset harness + gates)
 ```
 

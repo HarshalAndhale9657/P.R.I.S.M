@@ -135,7 +135,14 @@ class CheckRunner:
 
         reranked_any = bool(ctx.artifacts.get("reranked_count"))
         academic_used = bool(ctx.artifacts.get("academic_used", False))
-        coverage = _coverage_statement(n_uploads=len(req.references), academic=academic_used)
+        acad = [x for x in ctx.sources if x.origin != "upload"]
+        coverage = _coverage_statement(
+            n_uploads=len(req.references),
+            academic=academic_used,
+            n_fulltext=sum(1 for x in acad if x.kind == "fulltext"),
+            n_abstract=sum(1 for x in acad if x.kind != "fulltext"),
+            providers=sorted({x.origin for x in acad}),
+        )
         return {
             "filename": ctx.document.name,
             "status": "success",
@@ -146,7 +153,8 @@ class CheckRunner:
             ],
             "page_count": ctx.document.page_count,
             "academic_used": academic_used,
-            "sources": [{"id": x.id, "name": x.name, "origin": x.origin, "url": x.url} for x in ctx.sources],
+            "sources": [{"id": x.id, "name": x.name, "origin": x.origin, "url": x.url, "kind": x.kind}
+                        for x in ctx.sources],
             "overall": ctx.artifacts["overall"],
             "per_source": ctx.artifacts["per_source"],
             "matches": ctx.artifacts["matches"],
@@ -165,12 +173,23 @@ class CheckRunner:
         }
 
 
-def _coverage_statement(*, n_uploads: int, academic: bool) -> str:
+_PROVIDER_LABELS = {"openalex": "OpenAlex", "arxiv": "arXiv", "semanticscholar": "Semantic Scholar"}
+
+
+def _coverage_statement(*, n_uploads: int, academic: bool, n_fulltext: int = 0, n_abstract: int = 0,
+                        providers: Optional[List[str]] = None) -> str:
     parts: List[str] = []
     if n_uploads:
         parts.append(f"{n_uploads} uploaded reference file{'s' if n_uploads != 1 else ''}")
     if academic:
-        parts.append("open-access abstracts from OpenAlex and arXiv")
+        names = ", ".join(_PROVIDER_LABELS.get(p, p) for p in (providers or [])) or "open-access databases"
+        detail = []
+        if n_fulltext:
+            detail.append(f"{n_fulltext} with full text")
+        if n_abstract:
+            detail.append(f"{n_abstract} abstract-only")
+        parts.append(f"{n_fulltext + n_abstract} open-access sources from {names}"
+                     + (f" ({', '.join(detail)})" if detail else ""))
     checked = " and ".join(parts) if parts else "no sources"
     return (f"Checked against {checked}. Not checked: the wider web, subscription journal databases, "
             f"or student-paper repositories — a clean result here is not a guaranteed pass elsewhere.")

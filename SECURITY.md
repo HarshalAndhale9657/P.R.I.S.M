@@ -32,7 +32,11 @@ a public issue for security problems. We aim to acknowledge within a few days.
 When the user enables academic search, **up to 8 short excerpts (≤18 words each) of the manuscript's longest
 sentences** are sent as search queries to OpenAlex and arXiv. This is disclosed on the toggle in the UI and in
 the API docstring. Nothing else leaves the server; no LLM is called. Set `PRISM_CONTACT_EMAIL` in production
-so those services can reach the operator (OpenAlex "polite pool").
+so those services can reach the operator (OpenAlex "polite pool"). With `PRISM_ACADEMIC_FULLTEXT=true` (default)
+the server additionally **downloads up to 8 public open-access PDFs per check** from links those services return
+(`services/fulltext.py`): https-only, loopback/private/link-local hosts refused before and after redirects, 15 MiB
+streaming cap, `%PDF` magic required, parsed under the same page/char caps, cached 1 h. Nothing of the user's is
+included in those requests.
 
 ## Known gaps (tracked for W7+ in `TODO.md`)
 | Gap | Plan |

@@ -654,3 +654,5 @@ a.cmp-src:hover { text-decoration: underline; }
     body { background: #fff; }
     .glass-panel, .source-card, .chart-card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
 }
+.origin-tag.origin-s2 { color: #1a5fb4; background: rgba(26,95,180,0.10); }
+.origin-tag.origin-kind { color: var(--text-tertiary); background: var(--bg-tertiary); font-weight: 600; }

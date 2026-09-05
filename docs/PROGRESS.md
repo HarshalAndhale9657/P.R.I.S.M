@@ -5,6 +5,33 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-06 (cont.) — W4b retrieval depth: Semantic Scholar + open-access full text (ADR-0021)
+
+**Built:** `services/fulltext.py` (safe OA-PDF fetcher: https-only, private hosts refused before/after redirects,
+15 MiB streaming cap, `%PDF` sniff, our parser's caps, 1 h cache of hits *and* misses) and the corpus refactor:
+providers take a `ProviderContext` and return `Candidate`s (source + PDF links, unioned across providers on dedup);
+a keyed **Semantic Scholar** provider (skipped without `PRISM_S2_API_KEY` — unauthenticated is 429); up to 8 OA
+candidates per check chosen by lexical overlap with the document are downloaded concurrently and matched in **full
+text**. `SourceDoc.kind ∈ {fulltext, abstract}` flows to `sources`/`per_source`, the UI ("abstract only" tag) and the
+report's coverage sentence. Thread pools now propagate contextvars so fetch/provider log lines carry the job id.
+Tests 105 → **130**.
+
+**Live run (academic E2E spec, real OpenAlex + arXiv, this machine):**
+| | |
+|---|---|
+| candidates | 14 (2 queries) → **2 upgraded to full text** |
+| safety paths hit by real data | Wiley + Cochrane **403** (paywalled "OA" links) · arXiv `0901.0512v4` **39.6 MB declared > 15 MiB cap** · `hdl.handle.net` landing page **not a PDF** (`<!DOCTYP`) · Springer **read timeout 15 s** |
+| wall time | **50.4 s** (was 10.4 s abstract-only): retrieval + fetches ≈ 16 s, then ≈ 28 s matching — two full papers push the source-sentence budget to its 6 000 cap, and embedding 6 000 sentences costs ≈ 25 s on this CPU |
+| spec | PASS (match found, attributed, linked; 0 page errors) |
+
+**Honest reading of the latency:** the feature works and refuses exactly what it should, but full text moves a check
+from "seconds" to "most of a minute" on a laptop CPU, and the shared-vCPU VPS will be slower. The cost is bounded by
+`max_source_sentences` (the embed cap), *not* by how many PDFs we fetch — so the levers are that cap and an
+embedding cache keyed by source URL (a popular paper embedded once). Both are W6 decisions to be made from
+measurements on the real box, not here. Defaults left at 8 docs / 6 000 sentences; both are settings.
+
+---
+
 ## 2026-09-06 — Industry-grade pass: audit → re-architecture → gates in CI (ADR-0018 · 0019 · 0020)
 
 **Trigger:** a full staff-level audit of the codebase against production standards (architecture, code quality,
