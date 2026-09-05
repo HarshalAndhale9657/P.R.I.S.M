@@ -63,6 +63,8 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 - Venv at `backend/venv`; Windows shell. LF line endings are enforced by `.gitattributes`.
 - Matcher thresholds (ADR-0017): reporting floor `paraphrase_threshold=0.66`, confidence cutoff
   `confident_threshold=0.78`; verbatim is always confident. `overall` carries `confident_pct/review_pct/review_count`.
+- The confidence cutoff **scales with corpus size** (ADR-0024): `base + 0.06·log10(N/500)`, capped at 0.92. Always
+  quote `engine.confident_threshold` (applied), never the configured base — `eval/run_corpus.py` is the measurement.
 - Cross-encoder rerank (W4) is **opt-in** (`PRISM_RERANK=true`, image built with `PRISM_BAKE_RERANK=1`) until
   latency is measured on the real VPS.
 - The job store is **in-process**: exactly one uvicorn worker / one replica until the Postgres store lands (W7).

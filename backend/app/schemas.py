@@ -139,7 +139,10 @@ class EngineInfo(BaseModel):
     version: str
     bi_encoder: str
     paraphrase_threshold: float
-    confident_threshold: float
+    confident_threshold: float = Field(description="The confidence cutoff actually applied to this check.")
+    confident_threshold_base: Optional[float] = Field(
+        default=None, description="The configured base cutoff before corpus-size scaling (ADR-0024).")
+    corpus_sentences: int = Field(default=0, description="Source sentences each passage was scored against.")
     reranked: bool
     rerank_model: Optional[str] = None
     coverage: str = Field(

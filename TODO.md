@@ -23,8 +23,9 @@ Check items off with a date. Newest priorities on top.
       first check still embeds everything (6 000 sentences ≈ 77–93 s on this CPU; batch 64 fastest). On the VPS decide
       from `timings_ms` + the `/health` hit rate: lower `PRISM_MAX_SOURCE_SENTENCES`, pin a batch size measured there,
       and/or pre-warm the cache for popular OA sources. _(M)_
-- [ ] **Re-derive the confident cutoff once rerank is default-on**, accounting for the max-over-sources upward bias
-      (pairwise 0.78 is a lower bound — ADR-0017). Update `eval/gates.json` baselines from the new measurement. _(S)_
+- [ ] **Re-measure corpus scaling against the FULL matcher** once rerank is default-on (ADR-0024 measured the
+      paraphrase pillar in isolation, and its distractors are *unrelated* while production sources are retrieved by
+      similarity — so the real effect is likely larger). Then refit `k` / `pivot` and refresh `eval/gates.json`. _(M)_
 - [ ] `pip-audit` step in CI once the lockfile has settled. _(S)_
 
 ## 🟢 Next — the product (W7–W12, LAUNCH_PLAN §9)
@@ -44,6 +45,9 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-06 — **Corpus-scale calibration** (ADR-0024): measured the max-over-N effect (top score for
+      unrelated text drifts ≈0.16/decade; p95 = 0.88 at 3 000 sentences, above the old 0.78 cutoff) and made the
+      confidence cutoff scale with corpus size. Only ever moves matches to `review`, never to clean.
 - [x] 2026-09-06 — **Embedding cache** (ADR-0023): keyed by (model, sentence); measured **6.0× faster re-check**
       (39.3 s → 6.6 s); bounded, disableable, fails soft, hit rate on `/health`. Tests 151 → 165.
 - [x] 2026-09-06 — **W8 flag triage + coach card** (ADR-0022): 8 deterministic remediation types with priorities and

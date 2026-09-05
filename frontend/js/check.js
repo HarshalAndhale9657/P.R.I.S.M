@@ -618,6 +618,14 @@
         const tFloor = Number.isFinite(eng.paraphrase_threshold) ? eng.paraphrase_threshold.toFixed(2) : '0.66';
         const engineLine = esc(`P.R.I.S.M. ${eng.version || ''} · n-gram + ${eng.bi_encoder || 'sentence embeddings'}` +
             (eng.reranked ? ` · cross-encoder rerank (${eng.rerank_model || ''})` : ''));
+        // When the corpus is large the confidence bar is raised (ADR-0024) — say so, rather
+        // than quietly printing a different number than the docs describe.
+        const scaled = Number.isFinite(eng.confident_threshold_base) && eng.confident_threshold > eng.confident_threshold_base;
+        const scaleNote = scaled
+            ? ` Because this check compared every passage against <b>${(eng.corpus_sentences || 0).toLocaleString()}</b>
+               source sentences, the bar for "confident" was raised from ${eng.confident_threshold_base.toFixed(2)}
+               to ${tConf} — with more sentences to compare against, a high score happens more easily by chance.`
+            : '';
         const coverage = esc(eng.coverage || 'Checked against your uploaded references' +
             (data.academic_used ? ' and open-access abstracts from OpenAlex/arXiv' : '') +
             ' — not the full web or subscription journal databases.');
@@ -681,7 +689,7 @@
         text on the same topic can reach that range. This is a self-check aid and <b>not a determination of
         misconduct</b>. Legitimate quotation, common phrasing, shared terminology and citations can also match.
         Academic sources marked <i>abstract only</i> were compared against their abstract, not their full text;
-        the others were compared against the full open-access PDF. Review every flagged passage in context.</p>
+        the others were compared against the full open-access PDF.${scaleNote} Review every flagged passage in context.</p>
         <p><b>Coverage:</b> ${coverage}</p>
     </footer>
 </div></body></html>`;

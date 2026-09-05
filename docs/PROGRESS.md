@@ -5,6 +5,48 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-06 (cont.) — The number that changes a default: corpus-scale calibration (ADR-0024)
+
+**The gap.** Every number PRISM has published is **pairwise** — one candidate against one source sentence. The
+matcher takes the **max over every source sentence**, which is N chances to score high. ADR-0017 wrote down the
+suspicion ("0.78 is a lower bound") and then nobody measured it. With W4b full text putting real checks at
+2 000–6 000 source sentences, it stopped being academic.
+
+**The measurement** (`eval/corpus_scale.py`, `python -m eval.run_corpus qqp stsb`): build a distractor corpus of N
+sentences; query with sentences whose paraphrase is **absent**, so every flag is a false positive by construction;
+sweep N. 250 negative / 250 positive queries.
+
+| corpus | mean top score, no true match | p95 | FPR @0.78 (QQP) |
+|---|---|---|---|
+| 100 | 0.343 | 0.505 | 0.000 |
+| 500 | 0.463 | 0.661 | 0.032 |
+| 1 000 | 0.508 | 0.763 | 0.048 |
+| 3 000 | 0.575 | 0.882 | 0.108 |
+| ~5 000 | 0.606 | 0.903 | — |
+
+**Drift ≈ 0.16 per decade of corpus size, and QQP and STS-B agree independently** (STS-B: 0.372 → 0.549 over the
+same span). At 3 000 sentences the **p95 of "best match for unrelated text" is 0.88 — above our 0.78 confident
+cutoff**, i.e. 5% of completely unrelated text would be labelled *confident*. The threshold holding FPR ≤5% moves
+0.66 → 0.90 across the sweep. A single fixed cutoff cannot serve both a 3-reference check and a 6 000-sentence
+academic corpus.
+
+**Shipped:** `confident(N) = clamp(base + 0.06·log10(N/500), base, 0.92)`. `k=0.06` is **deliberately far below the
+measured drift** — this counteracts part of the effect rather than pretending to model it, because the probe is
+the paraphrase pillar alone on two datasets. Risk direction is the safe one: it can only move a match
+`confident → review`; the reporting floor is untouched and nothing is hidden, so the failure mode is "we asked you
+to check something we were unsure of", never a false clean. It is visible rather than silent — the result carries
+the applied cutoff, the base, and `corpus_sentences`; a warning states the raise; the report footer explains why
+in plain language. Rerank re-decides the band against the *same* applied cutoff.
+
+**Caveat that makes this conservative:** the probe's distractors are *unrelated* sentences, while production
+sources were **retrieved by similarity** and are topically close. The real effect is therefore likely **larger**,
+not smaller. Re-measure against the full matcher once rerank is default-on — that is now the TODO, replacing the
+vaguer "re-derive the cutoff" item.
+
+Tests 165 → **180**. Lint clean.
+
+---
+
 ## 2026-09-06 (cont.) — W8 triage + coach card, and the embedding cache (ADR-0022 · ADR-0023)
 
 **W8 — triage is the product.** Detection alone tells an author *that* a passage matched, which is the anxious,

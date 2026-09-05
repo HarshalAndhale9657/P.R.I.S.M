@@ -24,7 +24,9 @@ It is a **self-check aid, not a verdict**, and it never claims more than it has 
 
 Every semantic match carries `confidence: confident | review`. A `review` match is similar wording that
 independently written text on the same topic can also reach — it is shown as **"Needs review"**, never as
-a confirmed copy ([ADR-0017](docs/DECISIONS.md)). Academic sources come from OpenAlex, arXiv and (with a key)
+a confirmed copy ([ADR-0017](docs/DECISIONS.md)). The bar for "confident" **rises with the size of the corpus**
+being searched ([ADR-0024](docs/DECISIONS.md)) — measured: the best match for *unrelated* text drifts up ≈0.16 per
+decade of corpus size, so a fixed cutoff would over-assert against a large academic corpus. Academic sources come from OpenAlex, arXiv and (with a key)
 Semantic Scholar; where a candidate has an open-access PDF, PRISM fetches it and matches against the **full
 text**, otherwise against the abstract — and every source is labelled *full text* or *abstract only*. Reports
 state their coverage plainly: **not** the full web or subscription databases.

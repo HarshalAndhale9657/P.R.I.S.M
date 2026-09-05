@@ -166,7 +166,11 @@ class CheckRunner:
                 "version": APP_VERSION,
                 "bi_encoder": describe("bi-encoder").name,
                 "paraphrase_threshold": self.matcher.paraphrase_threshold,
-                "confident_threshold": self.matcher.confident_threshold,
+                # The cutoff actually applied — it scales with corpus size (ADR-0024).
+                "confident_threshold": (ctx.artifacts.get("confident_threshold_used")
+                                        or self.matcher.confident_threshold),
+                "confident_threshold_base": self.matcher.confident_threshold,
+                "corpus_sentences": ctx.artifacts.get("corpus_sentences", 0),
                 "reranked": reranked_any,
                 "rerank_model": s.rerank_model if reranked_any else None,
                 "coverage": coverage,

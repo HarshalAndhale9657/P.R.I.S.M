@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     # ── Matching ────────────────────────────────────────────────────────────
     paraphrase_threshold: float = 0.66      # reporting floor (ADR-0013 / ADR-0017)
     confident_threshold: float = 0.78       # confidence cutoff (ADR-0017)
+    confidence_scaling: bool = Field(
+        default=True,
+        description="Raise the confidence cutoff as the source corpus grows (ADR-0024). The matcher takes a max "
+                    "over every source sentence, so a fixed cutoff over-asserts at scale. Off = fixed cutoff.",
+    )
+    confidence_scale_k: float = Field(default=0.06, description="Cutoff increase per decade of corpus size.")
+    confidence_scale_pivot: int = Field(default=500, description="Corpus size at which the base cutoff applies.")
+    confidence_ceiling: float = Field(default=0.92, description="The scaled cutoff never exceeds this.")
     max_source_sentences: int = 6000
     embedding_cache_entries: int = Field(
         default=50_000,

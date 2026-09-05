@@ -75,6 +75,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         paraphrase_threshold=settings.paraphrase_threshold,
         confident_threshold=settings.confident_threshold,
         max_source_sentences=settings.max_source_sentences,
+        confidence_scaling=settings.confidence_scaling,
+        confidence_scale_k=settings.confidence_scale_k,
+        confidence_scale_pivot=settings.confidence_scale_pivot,
+        confidence_ceiling=settings.confidence_ceiling,
     )
     store = InMemoryJobStore(max_jobs=settings.max_jobs, ttl_seconds=settings.job_ttl_seconds)
     executor = BoundedExecutor(max_workers=settings.worker_threads, max_pending=settings.max_pending_jobs)

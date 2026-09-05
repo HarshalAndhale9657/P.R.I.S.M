@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-06 — Corpus-scale calibration (ADR-0024)
+
+#### Added
+- **`eval/corpus_scale.py` + `eval/run_corpus.py`** — measure the multiple-comparisons effect the matcher lives
+  with: FPR/recall vs corpus size, top-score drift for queries with no true match, and the lowest threshold that
+  holds a given FPR budget at each size. `python -m eval.run_corpus qqp stsb`.
+- **Corpus-size-aware confidence cutoff** — `confident(N) = clamp(base + 0.06·log10(N/500), base, 0.92)`,
+  configurable via `PRISM_CONFIDENCE_*` and disableable. Results expose `confident_threshold` (applied),
+  `confident_threshold_base` and `corpus_sentences`; a warning and the report footer explain the raise.
+
+#### Measured
+- Top score for text with **no** true match drifts ≈**0.16 per decade** of corpus size (QQP and STS-B agree).
+  At 3 000 source sentences the p95 is **0.88** — above the old fixed 0.78 cutoff, i.e. 5% of unrelated text
+  would have been labelled "confident".
+
+#### Changed
+- `RerankStage` re-decides the confidence band against the cutoff the matcher actually applied, not the base.
+
 ### 2026-09-06 — Embedding cache: re-checks are 6× faster (ADR-0023)
 
 #### Added

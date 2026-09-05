@@ -135,23 +135,66 @@ class PlagiarismMatcher:
         min_sentence_words: int = 6,
         max_source_sentences: int = 6000,
         embedding_model_key: str = "bi-encoder",
+        confidence_scaling: bool = True,
+        confidence_scale_k: float = 0.06,
+        confidence_scale_pivot: int = 500,
+        confidence_ceiling: float = 0.92,
     ) -> None:
         if ngram < 1:
             raise ValueError("ngram must be >= 1")
         # Namespaces the embedding cache: swapping the model must never reuse old vectors.
         self.embedding_model_key = embedding_model_key
+        self.confidence_scaling = confidence_scaling
+        self.confidence_scale_k = confidence_scale_k
+        self.confidence_scale_pivot = max(1, confidence_scale_pivot)
+        self.confidence_ceiling = confidence_ceiling
         self.ngram = ngram
         self.min_verbatim_words = max(min_verbatim_words, ngram)
         self.paraphrase_threshold = paraphrase_threshold
         self.confident_threshold = max(confident_threshold, paraphrase_threshold)
         self.min_sentence_words = min_sentence_words
         self.max_source_sentences = max_source_sentences
+        # Set per check so the API can report the cutoff that was actually applied.
+        self._last_confident_cutoff: float = confident_threshold
+        self._last_corpus_sentences: int = 0
+
+    def confident_threshold_for(self, n_source_sentences: int) -> float:
+        """The confidence cutoff to use against a corpus of this size (ADR-0024).
+
+        The matcher takes the **maximum** similarity over every source sentence, so a
+        larger corpus is more chances to score high and the top score for text with *no*
+        true match drifts upward. Measured on public data (`eval/results/corpus_*.json`):
+        the mean top score for a no-match query rises ~0.16 per decade of corpus size on
+        both QQP and STS-B independently, and at 3 000 sentences the 95th percentile of
+        that score is ~0.88 — above the pairwise-calibrated 0.78 cutoff. A single fixed
+        cutoff therefore means something different for a 3-reference check than for a
+        6 000-sentence academic corpus.
+
+        So the cutoff rises with corpus size: `base + k·log10(N / pivot)`, clamped to
+        `[base, ceiling]`. `k = 0.06` is **deliberately well below** the measured drift —
+        this counteracts part of the effect rather than modelling it exactly, because the
+        measurement is of the paraphrase pillar in isolation (no verbatim, rerank or
+        relevance budgeting) on two datasets. It is a calibrated hedge, not a law.
+
+        Direction of risk: raising the cutoff can only move a match from `confident` to
+        `review`. Nothing is hidden — the reporting floor is unchanged and every match is
+        still shown — so the failure mode is "we asked you to check something ourselves
+        were unsure of", never a false clean (ADR-0017).
+        """
+        base = self.confident_threshold
+        if not self.confidence_scaling or n_source_sentences <= self.confidence_scale_pivot:
+            return base
+        import math
+        scaled = base + self.confidence_scale_k * math.log10(n_source_sentences / self.confidence_scale_pivot)
+        return round(min(max(scaled, base), self.confidence_ceiling), 4)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def check(self, doc_text: str, sources: Sequence[SourceDoc]) -> Dict[str, Any]:
         """Run verbatim + paraphrase matching and return a JSON-serializable report."""
         warnings: List[str] = []
+        self._last_confident_cutoff = self.confident_threshold
+        self._last_corpus_sentences = 0
         doc_text = doc_text or ""
         doc_tokens = tokenize(doc_text)
         total_words = len(doc_tokens)
@@ -192,6 +235,10 @@ class PlagiarismMatcher:
             "matches": matches,
             "warnings": warnings,
             "paraphrase_enabled": paraphrase_enabled,
+            # The cutoff that was actually applied (ADR-0024) — it scales with corpus size,
+            # so the report must quote this, never the configured base.
+            "confident_threshold_used": self._last_confident_cutoff,
+            "corpus_sentences": self._last_corpus_sentences,
         }
 
     # ── Verbatim ──────────────────────────────────────────────────────────────
@@ -286,6 +333,17 @@ class PlagiarismMatcher:
             return []
 
         src_sents = self._budget_source_sentences(doc_sents, src_sents, warnings)
+        # The confidence bar depends on how many sentences we take the max over (ADR-0024).
+        confident_cutoff = self.confident_threshold_for(len(src_sents))
+        self._last_confident_cutoff = confident_cutoff
+        self._last_corpus_sentences = len(src_sents)
+        if confident_cutoff > self.confident_threshold:
+            warnings.append(
+                f"Compared against {len(src_sents):,} source sentences. Because every passage is scored against "
+                f"all of them, the bar for calling a match \"confident\" was raised from "
+                f"{self.confident_threshold:.2f} to {confident_cutoff:.2f}; borderline matches are labelled "
+                f"\"needs review\" instead of being asserted."
+            )
 
         import numpy as np
         from sklearn.metrics.pairwise import cosine_similarity
@@ -318,7 +376,7 @@ class PlagiarismMatcher:
             matches.append({
                 "match_type": "translated" if is_translated else "paraphrase",
                 "similarity": round(score, 4),
-                "confidence": "confident" if score >= self.confident_threshold else "review",
+                "confidence": "confident" if score >= confident_cutoff else "review",
                 "words": len(_WORD_RE.findall(dsent.text)),
                 "doc_start": dsent.start,
                 "doc_end": dsent.end,
@@ -528,6 +586,8 @@ class PlagiarismMatcher:
             "matches": [],
             "warnings": warnings,
             "paraphrase_enabled": paraphrase_enabled,
+            "confident_threshold_used": None,
+            "corpus_sentences": 0,
         }
 
 

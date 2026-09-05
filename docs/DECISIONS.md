@@ -415,3 +415,43 @@ and it is visible on `/health`. The remaining first-check cost is still real, so
 (`PRISM_MAX_SOURCE_SENTENCES`, batch size on the actual VPS) stay open. **Found while building this:** the class
 defines `__len__`, so an empty cache is falsy and `cache = cache or get_cache()` silently discarded an injected
 cache — caught by the tests, fixed with `is None`.
+
+## ADR-0024 — Measure the max-over-sources effect, and scale the confidence cutoff with corpus size
+**Status:** Accepted (2026-09-06)
+**Context:** Every number PRISM has ever published is **pairwise** — one candidate sentence against one source
+sentence. The matcher does not work that way: for each document sentence it takes the **maximum similarity over
+every source sentence**. With N sources that is N chances to score high, so the top score drifts upward with N.
+ADR-0017 flagged this and called 0.78 a "lower bound", but the effect was never measured. `eval/corpus_scale.py`
++ `eval/run_corpus.py` measure it: build a distractor corpus of N sentences, ask how often a query sentence whose
+paraphrase is **absent** still gets flagged (that flag rate *is* the FPR), and sweep N.
+**Measured** (250 negative / 250 positive queries, bi-encoder; `eval/results/corpus_*.json`):
+
+| corpus | mean top score, no true match (QQP) | p95 | FPR @0.78 |
+|---|---|---|---|
+| 100 | 0.343 | 0.505 | 0.000 |
+| 1 000 | 0.508 | 0.763 | 0.048 |
+| 3 000 | 0.575 | 0.882 | 0.108 |
+| ~5 000 | 0.606 | 0.903 | — |
+
+The drift is ≈**0.16 per decade of corpus size**, reproduced independently on QQP and STS-B. At 3 000 sentences
+the 95th percentile of "best match for unrelated text" is **0.88 — above the 0.78 confident cutoff**. The
+threshold that holds FPR ≤5% moves from 0.66 (N=100) to 0.90 (N=3 000) on QQP. A single fixed cutoff therefore
+means something materially different for a 3-reference check than for a 6 000-sentence academic corpus — and W4b
+full text puts real checks squarely in the latter range.
+**Decision:** The confidence cutoff scales with the number of source sentences actually compared:
+`confident(N) = clamp(base + k·log10(N / pivot), base, ceiling)` with `k=0.06`, `pivot=500`, `ceiling=0.92`
+(`PRISM_CONFIDENCE_*`, `PRISM_CONFIDENCE_SCALING=false` restores a fixed cutoff).
+* **`k = 0.06` is deliberately well below the measured drift.** This counteracts part of the effect rather than
+  modelling it; the measurement is of the paraphrase pillar in isolation (no verbatim, rerank or relevance
+  budgeting) on two datasets. A calibrated hedge, not a law.
+* **The risk direction is safe.** Raising the cutoff can only move a match `confident → review`. The reporting
+  floor is unchanged and every match is still shown, so the failure mode is "we asked you to check something we
+  were unsure of" — never a false clean (ADR-0017's standing guardrail).
+* **It is visible, not silent.** The result carries `confident_threshold` (applied), `confident_threshold_base`
+  and `corpus_sentences`; a warning states the raise; the report footer explains *why* in plain language.
+* The rerank stage re-decides the band against the **same** applied cutoff, so the two can never disagree.
+**Consequences:** Large-corpus checks now yield more `review` and fewer `confident` labels — intended. The
+measurement also makes the retrieval-quality argument concrete: the honest way to recover that recall is a better
+reranker (W5) or tighter retrieval, not a lower bar. **Caveat carried forward:** the probe's distractors are
+*unrelated* sentences, whereas production sources were *retrieved by similarity* and are topically close — so the
+real-world effect is likely **larger**, not smaller. Re-measure against the full matcher once rerank is default-on.

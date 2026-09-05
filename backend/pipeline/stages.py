@@ -121,6 +121,10 @@ class MatchStage:
         ctx.artifacts["per_source"] = result["per_source"]
         ctx.artifacts["matches"] = result["matches"]
         ctx.artifacts["paraphrase_enabled"] = result.get("paraphrase_enabled")
+        # The confidence cutoff scales with corpus size (ADR-0024); carry the one actually
+        # applied so the rerank stage and the report agree with the matcher.
+        ctx.artifacts["confident_threshold_used"] = result.get("confident_threshold_used")
+        ctx.artifacts["corpus_sentences"] = result.get("corpus_sentences", 0)
         ctx.extend_warnings(result.get("warnings"))
         return ctx
 
@@ -205,11 +209,12 @@ class RerankStage:
                      "similarity scores are from the sentence embedder only.")
             return ctx
 
+        cutoff = ctx.artifacts.get("confident_threshold_used") or self.confident_threshold
         for m, s in zip(cand, raw):
             score = max(0.0, min(1.0, float(s)))
             m["rerank_score"] = round(score, 4)
             m["reranked"] = True
-            m["confidence"] = "confident" if score >= self.confident_threshold else "review"
+            m["confidence"] = "confident" if score >= cutoff else "review"
 
         from services.plagiarism_matcher import confidence_breakdown, tokenize
         overall = ctx.artifacts.get("overall")

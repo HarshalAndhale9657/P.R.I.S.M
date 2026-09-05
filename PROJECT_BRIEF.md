@@ -96,7 +96,9 @@ evidence), downloadable/printable report whose method footer comes from `engine`
 
 - Passage-level **verbatim / paraphrase / translated** detection with exact spans and language pair.
 - **Source attribution** against uploads + OpenAlex/arXiv/Semantic Scholar — **full text where an OA PDF exists**, abstract otherwise, each labelled (origin badges + links).
-- **Confidence band**: `confident` vs `review` ("Needs review" — never shown as confirmed copying).
+- **Confidence band**: `confident` vs `review` ("Needs review" — never shown as confirmed copying). The bar for
+  "confident" **scales with corpus size** (ADR-0024): scoring against 6 000 source sentences is more chances to score
+  high than against 300, so the cutoff rises and borderline matches are labelled for review instead of asserted.
 - In-context highlighting, side-by-side comparison, downloadable evidence report with honest method + coverage footer.
 - **Bounded service**: per-file 20 MiB, per-check 60 MiB, pending-queue cap → 503, per-IP rate limit → 429,
   30-minute TTL on results (nothing persisted), request ids, JSON logs, `/health/ready`.

@@ -212,3 +212,42 @@ def test_budget_preserves_source_order():
            (2, _units("delta epsilon zeta also related sentence here.")[0])]
     kept = m._budget_source_sentences(doc, src, [])
     assert [s for s, _ in kept] == [0, 2]
+
+
+# ── Corpus-size-aware confidence cutoff (ADR-0024) ───────────────────────────
+
+def test_cutoff_is_the_base_at_or_below_the_pivot():
+    m = PlagiarismMatcher(confident_threshold=0.78, confidence_scale_pivot=500)
+    assert m.confident_threshold_for(0) == 0.78
+    assert m.confident_threshold_for(500) == 0.78
+
+
+def test_cutoff_rises_with_corpus_size_and_is_capped():
+    m = PlagiarismMatcher(confident_threshold=0.78, confidence_scale_k=0.06,
+                          confidence_scale_pivot=500, confidence_ceiling=0.92)
+    at_5k = m.confident_threshold_for(5000)
+    assert m.confident_threshold_for(500) == 0.78 < m.confident_threshold_for(1500) < at_5k
+    assert at_5k == pytest.approx(0.78 + 0.06, abs=1e-3)     # one decade above the pivot
+    assert m.confident_threshold_for(10_000_000) <= 0.92     # ceiling holds
+
+
+def test_cutoff_scaling_can_be_disabled():
+    m = PlagiarismMatcher(confident_threshold=0.78, confidence_scaling=False)
+    assert m.confident_threshold_for(100_000) == 0.78
+
+
+def test_scaling_only_moves_matches_towards_review_never_to_clean():
+    """The safety property: a bigger corpus may downgrade confidence, never hide a match."""
+    scaled = PlagiarismMatcher(confidence_scaling=True)
+    fixed = PlagiarismMatcher(confidence_scaling=False)
+    assert scaled.paraphrase_threshold == fixed.paraphrase_threshold   # reporting floor untouched
+    assert scaled.confident_threshold_for(6000) >= fixed.confident_threshold_for(6000)
+
+
+@requires_model
+def test_check_reports_the_cutoff_it_actually_applied():
+    m = PlagiarismMatcher()
+    r = m.check("Some document text that is long enough to be a sentence for matching.",
+                [SourceDoc("s0", "Src", "An unrelated reference sentence with sufficient length here.")])
+    assert r["confident_threshold_used"] == m.confident_threshold      # tiny corpus -> base
+    assert r["corpus_sentences"] >= 1
