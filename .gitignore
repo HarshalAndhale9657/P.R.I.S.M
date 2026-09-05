@@ -32,3 +32,12 @@ backend/eval/data/*/
 Thumbs.db
 .idea/
 .vscode/
+
+# PAN-2023 style-change corpus: wrong task for PRISM (ADR-0016) and not ours to redistribute.
+# Kept on disk for the legacy research record only — never tracked.
+pan23-multi-author-analysis/
+research/datasets/pan/
+
+# Editor / assistant tooling that is not part of the product
+.gemini/
+.claude/
