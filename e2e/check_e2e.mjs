@@ -52,11 +52,21 @@ try {
 
     await page.screenshot({ path: path.join(OUT, 'check-results.png'), fullPage: true });
 
+    // W8 triage (ADR-0022): the prioritised panel, a type badge per match, and the coach card.
+    const panel = await page.locator('.triage-panel .ti').count();
+    const triBadges = await page.locator('.match-row .mtag-triage').count();
+    check(panel >= 1, `"What to fix" panel lists prioritised action items (${panel})`);
+    check(triBadges >= 1, `matches carry a triage type badge (${triBadges})`);
+
     // Click first highlight → comparison renders
     await page.locator('#doc-view mark.hl').first().click();
     await page.waitForTimeout(400);
     const cmp = await page.locator('#match-detail .cmp').count();
     check(cmp === 1, 'clicking a highlight shows the side-by-side comparison');
+    const coach = await page.locator('#match-detail .coach').count();
+    const fixText = coach ? (await page.locator('#match-detail .coach-fix').innerText()).trim() : '';
+    check(coach === 1, 'the coach card shows the honest fix above the comparison');
+    check(/honest fix/i.test(fixText) && fixText.length > 40, `coach card states a concrete fix ("${fixText.slice(0, 60)}…")`);
     await page.screenshot({ path: path.join(OUT, 'check-compare.png') });
 
     // Download the evidence report
@@ -69,6 +79,8 @@ try {
     check(/^originality-report-.*\.html$/.test(fname), `report downloads with a sensible filename (${fname})`);
     check(html.includes('Originality Report') && html.includes('Matches') && html.includes('Method'),
           'downloaded report contains score, matches and limitations');
+    check(html.includes('What to fix') && html.includes('Honest fix:'),
+          'downloaded report carries the triage summary and per-match fixes');
 
     // New check resets to upload view
     await page.click('#btn-new-check');

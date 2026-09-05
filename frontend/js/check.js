@@ -173,6 +173,65 @@
             : '';
     }
 
+
+    // ─── W8 triage (ADR-0022) ───
+    // Each match carries a deterministic remediation type: what it is and the honest fix.
+    // Priority 1–2 = fix before submitting, 3 = judgement call, 4–5 = usually nothing to do.
+    function triageOf(m) { return (m && m.triage) || null; }
+    function triageClass(t) {
+        if (!t) return '';
+        if (t.priority <= 2) return 'tri-act';
+        if (t.priority === 3) return 'tri-check';
+        return 'tri-ok';
+    }
+    function triageBadge(m) {
+        const t = triageOf(m);
+        if (!t) return '';
+        return `<span class="mtag mtag-triage ${triageClass(t)}" title="${esc(t.what)}">${esc(t.label)}</span>`;
+    }
+    /** The coach card: what this is, and the legitimate fix. Never a rewrite, never a verdict. */
+    function coachCard(m) {
+        const t = triageOf(m);
+        if (!t) return '';
+        const sig = t.signals || {};
+        const bits = [];
+        bits.push(sig.quoted ? 'in quotation marks' : 'not in quotation marks');
+        bits.push(sig.cited
+            ? `citation found nearby (${(sig.citation_markers || []).slice(0, 3).map(esc).join(', ') || 'yes'})`
+            : 'no citation found nearby');
+        if (sig.shared_by_sources > 1) bits.push(`appears in ${sig.shared_by_sources} of your sources`);
+        return `
+            <div class="coach ${triageClass(t)}">
+                <div class="coach-head">
+                    <span class="coach-label">${esc(t.label)}</span>
+                    <span class="coach-prio">${t.priority <= 2 ? 'Fix before submitting' : (t.priority === 3 ? 'Your call' : 'Usually fine')}</span>
+                </div>
+                <p class="coach-what">${esc(t.what)}</p>
+                <p class="coach-fix"><strong>Honest fix:</strong> ${esc(t.fix)}</p>
+                ${t.note ? `<p class="coach-note">${esc(t.note)}</p>` : ''}
+                <p class="coach-sig">Detected from: ${bits.map(esc).join(' · ')}.</p>
+            </div>`;
+    }
+    /** Prioritised "what to do" panel above the results. */
+    function triagePanel(summary) {
+        if (!summary || !summary.action_items || !summary.action_items.length) return '';
+        const rows = summary.action_items.map(a => `
+            <li class="ti ${a.priority <= 2 ? 'tri-act' : 'tri-check'}">
+                <span class="ti-n">${a.count}</span>
+                <span class="ti-l">${esc(a.label)}</span>
+                <span class="ti-p">${a.priority <= 2 ? 'fix before submitting' : 'review'}</span>
+            </li>`).join('');
+        return `
+            <div class="triage-panel">
+                <div class="tp-head">
+                    <h3>What to fix</h3>
+                    <span class="tp-sub">${summary.needs_action} passage${summary.needs_action === 1 ? '' : 's'} to address before submitting</span>
+                </div>
+                <ul class="ti-list">${rows}</ul>
+                <p class="tp-method">${esc(summary.method)}</p>
+            </div>`;
+    }
+
     // ─── Drag & drop wiring ───
     function wireDropzone(zone, input, onFiles, opts = {}) {
         ['dragenter', 'dragover'].forEach(ev =>
@@ -359,7 +418,7 @@
                 </button>
                 <button class="btn btn-ghost" id="btn-print-report" type="button">Print / Save PDF</button>
             </div>`;
-        dom.resultsContent.innerHTML = toolbar + summary + disclaimer + warnings + layout;
+        dom.resultsContent.innerHTML = toolbar + summary + triagePanel(data.triage_summary) + disclaimer + warnings + layout;
 
         const dl = document.getElementById('btn-download-report');
         const pr = document.getElementById('btn-print-report');
@@ -387,7 +446,7 @@
     function matchRowHtml(m) {
         return `
             <button class="match-row${isReview(m) ? ' is-review' : ''}" type="button" data-match="${m.id}">
-                <span class="mr-top">${typeBadge(m.match_type)}${reviewBadge(m)}<span class="mr-sim">${pctInt(m.similarity)}%</span>${langPair(m)}${originTag(m.source_origin)}${kindTag(m.source_id)}<span class="mr-src" title="${esc(m.source_name)}">${esc(trim(m.source_name, 24))}</span></span>
+                <span class="mr-top">${typeBadge(m.match_type)}${triageBadge(m)}${reviewBadge(m)}<span class="mr-sim">${pctInt(m.similarity)}%</span>${langPair(m)}${originTag(m.source_origin)}${kindTag(m.source_id)}<span class="mr-src" title="${esc(m.source_name)}">${esc(trim(m.source_name, 24))}</span></span>
                 <span class="mr-text">${esc(trim(m.doc_excerpt, 96))}</span>
             </button>`;
     }
@@ -446,6 +505,7 @@
                treating it as reuse.</p>`
             : '';
         return `
+            ${coachCard(m)}
             ${reviewCallout}
             <div class="cmp">
                 <div class="cmp-col">
@@ -521,10 +581,28 @@
             .m-b{display:grid;grid-template-columns:1fr 1fr;gap:10px}
             .m-lab{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;font-weight:700;margin-bottom:3px}
             .m-x{font-size:12px;color:#374151;background:#f1f3f7;border-radius:6px;padding:8px;white-space:pre-wrap;word-break:break-word}
+            .m-badge.tri{color:#374151;background:#eef1f6}
+            .m-badge.tri.tri-act{color:#b45309;background:rgba(217,119,6,.12)}
+            .m-badge.tri.tri-check{color:#4b5563;background:#f1f3f7}
+            .m-badge.tri.tri-ok{color:#047857;background:rgba(5,150,105,.10)}
+            .m-fix{font-size:12px;color:#374151;background:#f8fafc;border-left:3px solid #cbd5e1;padding:7px 10px;border-radius:0 6px 6px 0;margin:-2px 0 8px}
+            .tri-list{font-size:13px;padding-left:0;list-style:none;margin:0 0 6px}
+            .tri-list li{padding:6px 10px;border:1px solid #e7e9ef;border-radius:8px;margin-bottom:6px;background:#fff}
+            .tri-list li b{font-family:'JetBrains Mono',monospace;margin-right:8px}
+            .tri-note{font-size:11px;color:#6b7280;font-style:italic}
             .rep-foot{margin-top:30px;border-top:1px solid #e7e9ef;padding-top:14px;color:#6b7280;font-size:12px}
             .none{color:#6b7280}
             @media print{body{background:#fff}.wrap{padding:0}.m,.doc,.rep-score{break-inside:avoid}}
         `;
+    }
+
+    function reportTriage(summary) {
+        if (!summary || !summary.action_items || !summary.action_items.length) return '';
+        const rows = summary.action_items.map(a =>
+            `<li><b>${a.count}×</b> ${esc(a.label)} — ${a.priority <= 2 ? 'fix before submitting' : 'review and decide'}</li>`).join('');
+        return `<h2>What to fix (${summary.needs_action} to address)</h2>
+                <ul class="tri-list">${rows}</ul>
+                <p class="tri-note">${esc(summary.method)}</p>`;
     }
 
     function generateReportHtml(data) {
@@ -562,9 +640,13 @@
             const oa = reportOrigin(m.source_origin);
             const para = m.paragraph_index != null ? ` · ¶${m.paragraph_index + 1}` : '';
             const rev = isReview(m) ? `<span class="m-badge review">Needs review</span>` : '';
+            const t = m.triage;
+            const tri = t ? `<span class="m-badge tri ${t.priority <= 2 ? 'tri-act' : (t.priority === 3 ? 'tri-check' : 'tri-ok')}">${esc(t.label)}</span>` : '';
+            const fix = t ? `<div class="m-fix"><b>Honest fix:</b> ${esc(t.fix)}${t.note ? ' ' + esc(t.note) : ''}</div>` : '';
             return `
                 <div class="m${isReview(m) ? ' m-review' : ''}">
-                    <div class="m-h"><span class="m-badge ${m.match_type}">${label}</span>${rev}${lp}${pctInt(m.similarity)}% — ${src}${oa}${para}</div>
+                    <div class="m-h"><span class="m-badge ${m.match_type}">${label}</span>${tri}${rev}${lp}${pctInt(m.similarity)}% — ${src}${oa}${para}</div>
+                    ${fix}
                     ${isReview(m) ? `<div class="m-note">Below the confidence cutoff — similar wording that can also arise independently. Not a confirmed copy; verify in context.</div>` : ''}
                     <div class="m-b">
                         <div><div class="m-lab">Your paper</div><div class="m-x">${esc(m.doc_excerpt || '')}</div></div>
@@ -585,6 +667,7 @@
         <div class="sub">Verbatim ${(ov.verbatim_pct || 0).toFixed(1)}% · Paraphrase ${(ov.paraphrase_pct || 0).toFixed(1)}%${(ov.translated_pct || 0) > 0 ? ` · Translated ${(ov.translated_pct || 0).toFixed(1)}%` : ''} · ${ov.match_count || 0} matches · ${ov.source_count || 0} sources · ${ov.matched_words || 0}/${ov.total_words || 0} words</div>
         ${(ov.review_count || 0) > 0 ? `<div class="sub rev">${ov.review_count} match${ov.review_count === 1 ? '' : 'es'} (${(ov.review_pct || 0).toFixed(1)}% of the document) fall below the confidence cutoff and are marked <b>Needs review</b> — not counted as confirmed copying.</div>` : ''}
     </section>
+    ${reportTriage(data.triage_summary)}
     ${sources ? `<h2>Sources checked</h2><ul class="src">${sources}</ul>` : ''}
     <h2>Document</h2>
     <div class="legend"><span class="sw v"></span>Verbatim<span class="sw p"></span>Paraphrase${hasTranslated ? '<span class="sw t"></span>Translated' : ''}${(ov.review_count || 0) > 0 ? '<span class="sw r"></span>Needs review (inconclusive)' : ''}</div>

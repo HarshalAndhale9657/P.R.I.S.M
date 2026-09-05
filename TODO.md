@@ -19,9 +19,10 @@ Check items off with a date. Newest priorities on top.
       20-page PDF with `PRISM_RERANK=true` and academic full text on, and decide the rerank default; set `PRISM_CONTACT_EMAIL`
       (+ optional `PRISM_S2_API_KEY`); UptimeRobot on
       `/health/ready`; Sentry DSN. _(S)_
-- [ ] **W6 follow-up · full-text latency** — measured 50 s/check on a laptop with 2 full-text papers (embedding the 6 000-sentence
-      budget ≈ 25 s). On the VPS decide: lower `PRISM_MAX_SOURCE_SENTENCES`, and/or add an **embedding cache keyed by
-      source URL** in `modelhub`/matcher so a popular OA paper is embedded once. Decide from `timings_ms`, not guesses. _(M)_
+- [ ] **W6 follow-up · embedding latency** — benchmarked on this CPU: **6 000 sentences = 77–93 s** (batch 64 fastest;
+      128/256 worse). That, not downloading, is the full-text cost. On the VPS decide from `timings_ms`: an **embedding
+      cache keyed by source URL** (a popular OA paper embedded once) and/or a lower `PRISM_MAX_SOURCE_SENTENCES`;
+      re-check the batch size there before pinning one. _(M)_
 - [ ] **Re-derive the confident cutoff once rerank is default-on**, accounting for the max-over-sources upward bias
       (pairwise 0.78 is a lower bound — ADR-0017). Update `eval/gates.json` baselines from the new measurement. _(S)_
 - [ ] `pip-audit` step in CI once the lockfile has settled. _(S)_
@@ -29,10 +30,9 @@ Check items off with a date. Newest priorities on top.
 ## 🟢 Next — the product (W7–W12, LAUNCH_PLAN §9)
 - [ ] **W7 · Accounts + persistence** — Supabase JWT verify as a FastAPI dependency; `PostgresJobStore` implementing
       `worker.store.JobStore`; ownership check on `GET /api/v1/check/{id}`; per-user quota replaces the per-IP limiter. _(L)_
-- [ ] **W8 · TriageStage** — deterministic rules → remediation type (un-quoted quotation · cited · missing citation ·
-      boilerplate · self-reuse · too-close paraphrase); boilerplate/IDF suppression wired to the FPR harness. _(M)_
-- [ ] **W9 · CoachStage** — gpt-4o-mini, JSON, ≤3 calls/check, cached; **matcher post-filter** so coaching can never
-      launder copied text; source always visible; no auto-rewrite (ADR-0014). _(L)_
+- [ ] **W9 · CoachStage** — replace the *static* per-type `fix` string with gpt-4o-mini prose grounded in the triage
+      type + the shown source: JSON, ≤3 calls/check, cached, per-account $ ceiling; **matcher post-filter** so coaching
+      can never launder copied text; source always visible; no auto-rewrite (ADR-0014). Rules stay the backbone. _(L)_
 - [ ] **W10 · ReportStage** — submission-risk report + re-check. _(M)_
 - [ ] **W11 · Payments + legal** — Razorpay; Privacy/ToS/AUP; CI honesty gate on copy. _(M)_
 - [ ] **W12 · Launch.**
@@ -44,6 +44,8 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-06 — **W8 flag triage + coach card** (ADR-0022): 8 deterministic remediation types with priorities and
+      honest-fix guidance; "What to fix" panel, per-match badges, coach card, report section. Tests 130 → 151.
 - [x] 2026-09-06 — **W4b retrieval depth** (ADR-0021): OA full-text fetch (safe, capped, cached) for the most relevant
       candidates; Semantic Scholar provider (keyed); `kind` = fulltext/abstract surfaced in UI + report coverage. Tests 105 → 129.
 - [x] 2026-09-06 — **PAN corpus purged from git history** (owner's decision; `git filter-repo`; pack 33.65 → 2.77 MiB; all

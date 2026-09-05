@@ -31,15 +31,21 @@ Legend: `[x]` done · `[~]` in progress · `[ ]` todo · _(S/M/L/XL)_ effort.
 - [x] CI: ruff blocking · coverage floor · Docker build + readiness smoke · Playwright E2E · **public-dataset benchmark gate**.
 - [x] False "offline" UI claims removed; README/SECURITY/BRIEF/CLAUDE synced with reality.
 
-## 🟠 NOW — finish the core, then go live (W4b → W6)
-- [ ] **W4b · Retrieval depth** — Semantic Scholar + Unpaywall/arXiv/PMC OA **full text** (verbatim against real text, not abstracts). _(M)_
+- [x] **W4b · Retrieval depth** (ADR-0021) — Semantic Scholar (keyed) + **open-access full text** fetched safely from the
+      providers' OA links, so academic matches can be verbatim; every source labelled *full text* / *abstract only*.
+- [x] **W8 · Flag triage + coach card** (ADR-0022) — brought forward because it is the product's core (LAUNCH_PLAN §13).
+
+## 🟠 NOW — go live, then finish the core
+- [ ] **W6 · First deploy** — run `deploy/README.md` on the real VPS; measure `timings_ms` there (rerank + full text);
+      decide the rerank default and the embedding-cost lever; UptimeRobot on `/health/ready`; Sentry. _(S)_
 - [~] **W5 · Selective cross-encoder fine-tune** — kit ready; needs one human-run GPU session; ship only if it beats pretrained on the gates. _(M)_
-- [ ] **W6 · First deploy** — run the runbook on the real VPS; measure rerank latency on a 20-page PDF; decide the default; UptimeRobot + Sentry. _(S)_
 - [ ] Re-derive the confident cutoff once rerank is default-on (max-over-sources bias); refresh `gates.json` baselines. _(S)_
+- [ ] Embedding cost: 6 000 sentences ≈ 77–93 s on CPU → cache embeddings by source URL, and/or lower the budget. _(M)_
 
 ## 🟢 NEXT — the product (W7–W12)
 - [ ] **W7** Accounts (Supabase JWT) + `PostgresJobStore` + ownership on job reads + per-user quotas + ephemeral storage policy. _(L)_
-- [ ] **W8** **TriageStage** — deterministic remediation types; boilerplate/IDF suppression wired to the FPR harness. _(M)_
+- [x] **W8** **TriageStage** — 8 deterministic remediation types + priorities + honest-fix guidance; "What to fix" panel,
+      coach card, report section (ADR-0022). _(done 2026-09-06)_
 - [ ] **W9** **CoachStage** — gpt-4o-mini honest-fix coaching, cached, matcher post-filter, source always visible, no auto-rewrite. _(L)_
 - [ ] **W10** **ReportStage** — submission-risk report + re-check. _(M)_
 - [ ] **W11** Razorpay + Privacy/ToS/AUP + CI honesty gate on copy. _(M)_

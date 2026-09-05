@@ -358,3 +358,32 @@ PDF for every record.
 to 8 public PDFs (nothing of the user's is sent — only the provider queries, as before); latency rises by the
 download time, bounded by the 15 s per-fetch timeout and concurrency of 4. Full-text sources can be long, so
 the matcher's relevance-based budgeting (ADR-0020) matters more, not less.
+
+## ADR-0022 — Flag triage: deterministic remediation types, and the coach card as the primary view
+**Status:** Accepted (2026-09-06)
+**Context:** Detection alone tells an author *that* a passage matched, which is exactly the anxiety-producing,
+non-actionable output the product exists to replace (LAUNCH_PLAN §13: "triage + honest coaching IS the product").
+The pipeline had a `TriageStage` skeleton since W1. The question was what it may use as evidence.
+**Decision:**
+1. **Rules, not a model.** Triage is computed from four auditable signals — quotation marks immediately around the
+   span, citation markers in the containing paragraph (numeric `[12]`, author-year `(Smith et al., 2020)`,
+   narrative `Smith (2020)`, superscript), the ADR-0017 confidence band, and how many distinct sources contain the
+   same verbatim text — producing one of eight types with a priority (1 = fix before submitting … 5 = attributed,
+   nothing to do). Deterministic means reproducible, explainable to a user, and testable per rule; an LLM here
+   would be unaccountable for a judgement that shapes what the author changes in their manuscript.
+2. **Every type ships with plain-language `what` + `fix` text**, and a **CI-enforced test asserts none of that text
+   suggests evasion** (no "lower the score", "beat the checker", "humanize"). The fix is always quote+cite, add a
+   reference, or restate in your own words *keeping* the citation (ADR-0014).
+3. **The coach card is the primary detail view** — what this is, the honest fix, and the signals it was derived
+   from — shown *above* the side-by-side evidence, with a prioritised "What to fix" panel above the results and the
+   same content in the downloadable report.
+4. **Labels describe the text, never the person:** "Word-for-word, not cited", not "Copied/plagiarised". Every
+   card lists the signals it used, so a wrong call is visibly wrong rather than mysterious.
+5. **Limits are stated in the product, not just the code:** citation detection is pattern-based and only looks at
+   the containing paragraph (a citation elsewhere in the paper is not seen), and self-reuse cannot be detected
+   without the author's prior work. That sentence ships in the UI panel and the report.
+**Consequences:** `TriageStage` is live after `LocalizeStage` (it needs paragraph context) and fails soft — an
+internal error leaves matches un-triaged with a warning rather than failing the check. Each match gains `triage`;
+the result gains `triage_summary` (counts, prioritised action items, method note); both are in the Pydantic
+contract. Next: W9 replaces the *static* `fix` string with per-flag LLM prose, constrained to this same type and
+the shown source, with a matcher post-filter — the rules stay the backbone, the LLM only phrases them.

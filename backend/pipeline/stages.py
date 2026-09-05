@@ -1,9 +1,9 @@
 """
 P.R.I.S.M. — Pipeline stage implementations
 ===========================================
-Live stages: ParseStage, RetrieveStage, MatchStage, RerankStage (opt-in), LocalizeStage.
-Skeleton stages (W8–W10): TriageStage, CoachStage, ReportStage — declared so the
-architecture is visible and the wiring is stable, pass-through today.
+Live stages: ParseStage, RetrieveStage, MatchStage, RerankStage (opt-in), LocalizeStage, TriageStage.
+Skeleton stages (W9–W10): CoachStage, ReportStage — declared so the architecture is
+visible and the wiring is stable, pass-through today.
 
 Dependencies (matcher, academic-search fn) are INJECTED, never imported from the
 app layer, so there is no circular import and tests substitute fakes freely.
@@ -227,9 +227,28 @@ class _SkeletonStage:
         return ctx
 
 
-class TriageStage(_SkeletonStage):
-    """W8: classify each match by remediation type (quote/cite/boilerplate/self-reuse/...)."""
+class TriageStage:
+    """W8 — classify each match by the honest fix it needs (ADR-0022).
+
+    Deterministic rules over quotation marks, nearby citation markers, the confidence
+    band and cross-source repetition (services.triage). Annotates each match with
+    `triage` and stores `triage_summary` (counts, prioritised action items, method note).
+    Runs after LocalizeStage so paragraph context is available. Never raises: a failure
+    leaves matches un-triaged with a warning rather than sinking the check.
+    """
     name = "triage"
+
+    def run(self, ctx: CheckContext) -> CheckContext:
+        from services.triage import triage_matches
+
+        doc = ctx.require_document()
+        matches = ctx.artifacts.get("matches") or []
+        try:
+            ctx.artifacts["triage_summary"] = triage_matches(doc.text, doc.paragraphs, matches, ctx.sources)
+        except Exception:
+            logger.exception("[pipeline.triage] failed; matches left un-triaged")
+            ctx.warn("Flag triage was skipped because of an internal error; matches are shown without remediation types.")
+        return ctx
 
 
 class CoachStage(_SkeletonStage):

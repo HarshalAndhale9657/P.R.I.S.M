@@ -160,6 +160,7 @@ class CheckRunner:
             "matches": ctx.artifacts["matches"],
             "paraphrase_enabled": ctx.artifacts.get("paraphrase_enabled"),
             "warnings": ctx.warnings,
+            "triage_summary": ctx.artifacts.get("triage_summary"),
             "timings_ms": ctx.artifacts.get("timings_ms", {}),
             "engine": {
                 "version": APP_VERSION,

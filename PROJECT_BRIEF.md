@@ -77,13 +77,17 @@ frontend/  ──►  POST /api/v1/check (202 + job_id)  ──►  GET /api/v1/
 4. **Rerank** (opt-in, `PRISM_RERANK`) — pretrained cross-encoder re-decides the confidence band of borderline
    matches (cosine 0.60–0.92, ≤200 pairs, strongest first). Displayed similarity stays the bi-encoder's.
 5. **Localize** — map spans to paragraph index + page.
-6. **Assemble** — `overall` (similarity/verbatim/paraphrase/translated/**confident/review** %), `per_source`,
+6. **Triage** (`services/triage.py`, ADR-0022) — deterministic rules over quotation marks, citation markers in the
+   containing paragraph, the confidence band and cross-source repetition → one of 8 remediation types with a
+   priority and plain-language *what* + *honest fix*. No model; a CI test forbids evasion wording.
+7. **Assemble** — `overall` (similarity/verbatim/paraphrase/translated/**confident/review** %), `per_source`,
    `matches`, `warnings`, per-stage `timings_ms`, and an **`engine`** block (version, model, both thresholds,
    rerank, coverage statement) that drives the report's method footer.
 
 **Frontend** (`index.html` + `js/check.js`, no build): dual upload, academic toggle (with data-flow disclosure),
-banded score, breakdown bars, highlighted document (review band rendered dashed/muted), ranked match list,
-side-by-side comparison, downloadable/printable report whose method footer comes from `engine`. API base from
+banded score, breakdown bars, a prioritised **"What to fix"** panel, highlighted document (review band rendered
+dashed/muted), ranked match list with triage badges, a **coach card** (the honest fix, then the side-by-side
+evidence), downloadable/printable report whose method footer comes from `engine`. API base from
 `<meta name="prism-api-base">` → same origin → `localhost:8000`.
 
 ---
@@ -146,7 +150,7 @@ The cross-encoder rerank (opt-in) improves MRPC (FPR 0.643 → 0.403 at the 0.66
 | `backend/app/` | settings · schemas · middleware · limits · routers (`check`, `health`) · factory |
 | `backend/worker/` | executor (bounded) · store (TTL job store, cache; `JobStore` Protocol = W7 seam) · runner |
 | `backend/pipeline/` | `base` (CheckContext, RawInput, Document, PipelineError) · `stages` · `orchestrator` (timings, `build_check_stages`) |
-| `backend/services/` | `document_parser` · `plagiarism_matcher` · `academic_corpus` · `fulltext` · `local_embeddings` |
+| `backend/services/` | `document_parser` · `plagiarism_matcher` · `academic_corpus` · `fulltext` · `triage` · `local_embeddings` |
 | `backend/modelhub/` | model registry (`get_embedder`, `get_cross_encoder`) |
 | `backend/eval/` | public-dataset harness; `gates.json`; `run_pairs --gate`; `data/sample/` smoke set (**no PAN**) |
 | `backend/training/` | W5 cross-encoder fine-tune kit (self-gating; needs a GPU session) |

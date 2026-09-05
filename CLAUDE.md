@@ -44,11 +44,12 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   (request-id, body-size guard), `limits.py` (rate limiter), `routers/check.py`, `routers/health.py`, `factory.py`.
 - `backend/worker/` — `executor.py` (bounded queue → 503), `store.py` (TTL job store + result cache; `JobStore`
   Protocol is the W7 Postgres seam), `runner.py` (job lifecycle; assembles the result incl. `engine` block).
-- `backend/pipeline/` — `parse → retrieve → match → rerank(opt-in) → localize` (+ skeleton triage/coach/report).
+- `backend/pipeline/` — `parse → retrieve → match → rerank(opt-in) → localize → triage` (+ skeleton coach/report).
   Collaborators are **injected**; tests patch `app.state.runner.matcher` / `.academic_search`.
 - `backend/services/` — `document_parser.py` (checker-specific PDF/text), `plagiarism_matcher.py` (pure matcher),
   `academic_corpus.py` (OpenAlex + arXiv + keyed Semantic Scholar; `ProviderContext`/`Candidate`), `fulltext.py`
-  (safe OA-PDF fetcher, ADR-0021), `local_embeddings.py` (bi-encoder singleton). `backend/utils/` — `TTLCache`.
+  (safe OA-PDF fetcher, ADR-0021), `triage.py` (deterministic remediation rules, ADR-0022),
+  `local_embeddings.py` (bi-encoder singleton). `backend/utils/` — `TTLCache`.
 - `backend/modelhub/` — model registry/cache (`get_embedder`, `get_cross_encoder`).
 - `backend/eval/` — public-dataset harness; `gates.json` holds the per-dataset regression gates (ADR-0020). **No PAN.**
 - `backend/training/` — W5 cross-encoder fine-tune kit (needs a GPU session; self-gating).
@@ -65,6 +66,7 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   latency is measured on the real VPS.
 - The job store is **in-process**: exactly one uvicorn worker / one replica until the Postgres store lands (W7).
 - Every result's `engine` block drives the report's method footer — never hard-code thresholds in copy.
+- Triage guidance must never suggest evasion; `tests/test_triage.py::test_guidance_never_suggests_evasion` enforces it.
 - Frontend: vanilla JS, `esc()` everything before `innerHTML`, CSS variables only, don't rename IDs the JS reads.
 - When you change product shape: add an ADR, update CHANGELOG `[Unreleased]`, log the session in `docs/PROGRESS.md`.
 

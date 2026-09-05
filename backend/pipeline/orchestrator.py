@@ -48,13 +48,13 @@ def build_check_stages(
     max_pdf_pages: int = 300,
     max_document_chars: int = 2_000_000,
 ) -> List[Stage]:
-    """The live originality-check pipeline: parse -> retrieve -> match -> rerank -> localize.
+    """The live originality-check pipeline: parse -> retrieve -> match -> rerank -> localize -> triage.
 
     `rerank` runs a cross-encoder over borderline semantic matches. It measurably
     cuts false positives (MRPC FPR 0.643 -> 0.403) but costs one model forward
     pass per borderline pair on CPU, so it is opt-in (settings.rerank).
     """
-    from .stages import LocalizeStage, MatchStage, ParseStage, RerankStage, RetrieveStage
+    from .stages import LocalizeStage, MatchStage, ParseStage, RerankStage, RetrieveStage, TriageStage
 
     return [
         ParseStage(max_pdf_pages=max_pdf_pages, max_chars=max_document_chars),
@@ -66,6 +66,7 @@ def build_check_stages(
             confident_threshold=getattr(matcher, "confident_threshold", 0.78),
         ),
         LocalizeStage(),
+        TriageStage(),
     ]
 
 

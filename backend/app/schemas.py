@@ -43,6 +43,45 @@ class SourceRef(BaseModel):
     kind: SourceKind = Field(default="fulltext", description="Whether the matched text was the full document or only an abstract.")
 
 
+TriageType = Literal[
+    "verbatim_uncited", "paraphrase_uncited", "verbatim_cited_unquoted", "quoted_uncited",
+    "paraphrase_cited", "needs_review", "common_phrase", "quoted_cited",
+]
+
+
+class TriageSignals(BaseModel):
+    quoted: bool
+    cited: bool
+    citation_markers: List[str] = Field(default_factory=list)
+    shared_by_sources: int = 1
+    stopword_ratio: float = 0.0
+
+
+class Triage(BaseModel):
+    """Deterministic remediation typing for one match (ADR-0022). Coaching, never a verdict."""
+    type: TriageType
+    priority: int = Field(ge=1, le=5, description="1 = act first … 5 = nothing to fix")
+    label: str
+    what: str
+    fix: str
+    note: Optional[str] = None
+    signals: TriageSignals
+
+
+class TriageActionItem(BaseModel):
+    type: TriageType
+    priority: int
+    label: str
+    count: int
+
+
+class TriageSummary(BaseModel):
+    counts: Dict[str, int]
+    action_items: List[TriageActionItem]
+    needs_action: int = Field(description="Matches at priority 1–2: fix before submitting.")
+    method: str
+
+
 class Match(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -68,6 +107,7 @@ class Match(BaseModel):
     page: Optional[int] = None
     rerank_score: Optional[float] = None
     reranked: Optional[bool] = None
+    triage: Optional[Triage] = None
 
 
 class Overall(BaseModel):
@@ -120,6 +160,7 @@ class CheckResult(BaseModel):
     matches: List[Match]
     paraphrase_enabled: Optional[bool] = None
     warnings: List[str] = Field(default_factory=list)
+    triage_summary: Optional[TriageSummary] = None
     timings_ms: Dict[str, float] = Field(default_factory=dict)
     engine: EngineInfo
 

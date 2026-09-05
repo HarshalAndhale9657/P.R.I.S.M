@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-06 — W8 flag triage + coach card (ADR-0022)
+
+#### Added
+- **`services/triage.py`** — deterministic remediation typing from auditable signals (quotation marks, citation
+  markers in the containing paragraph, confidence band, cross-source repetition) into 8 types with priorities:
+  `verbatim_uncited`, `paraphrase_uncited` (P1) · `verbatim_cited_unquoted`, `quoted_uncited` (P2) ·
+  `paraphrase_cited`, `needs_review` (P3) · `common_phrase` (P4) · `quoted_cited` (P5). Each carries plain-language
+  *what* + *honest fix* text; a test asserts that text never suggests detection-evasion.
+- **`TriageStage`** is live (after localize, fails soft). Matches gain `triage`; results gain `triage_summary`
+  (counts, prioritised action items, method/limits note). Both in the Pydantic contract.
+- **UI:** a "What to fix" panel above the results, a triage badge on every match row, and a **coach card** in the
+  detail pane — the fix first, the side-by-side evidence below, with the signals it was derived from.
+- **Report:** a "What to fix" section and a per-match "Honest fix" line.
+- Tests 130 → 151 (citation patterns incl. non-citations, quote detection, every rule, whole-document summary,
+  translated note, anti-evasion assertion); E2E asserts the panel, badges, coach card and report content.
+
 ### 2026-09-06 — W4b retrieval depth (ADR-0021)
 
 #### Added

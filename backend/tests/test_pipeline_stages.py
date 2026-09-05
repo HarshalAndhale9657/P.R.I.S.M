@@ -119,12 +119,13 @@ def test_run_pipeline_threads_context_and_reraises():
         paragraphs=[{"index": 0, "page": 1, "start": 0, "end": 50, "text": "t"}],
     )
     stages = default_check_stages(fake, lambda t: ([], []), use_academic=False)
-    assert [s.name for s in stages] == ["parse", "retrieve", "match", "rerank", "localize"]
+    assert [s.name for s in stages] == ["parse", "retrieve", "match", "rerank", "localize", "triage"]
     # rerank is opt-in: off unless explicitly enabled (or PRISM_RERANK=1)
     assert next(s for s in stages if s.name == "rerank").enabled is False
     out = run_pipeline(ctx, stages)
     assert out.artifacts["matches"][0]["paragraph_index"] == 0
-    assert set(out.artifacts["timings_ms"]) == {"parse", "retrieve", "match", "rerank", "localize"}
+    assert set(out.artifacts["timings_ms"]) == {"parse", "retrieve", "match", "rerank", "localize", "triage"}
+    assert out.artifacts["triage_summary"]["counts"]            # every match got a type
 
     class Boom:
         name = "boom"

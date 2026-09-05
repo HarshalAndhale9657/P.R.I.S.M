@@ -110,6 +110,9 @@ def test_check_success_contract(client, sample_paper, sample_ref):
     assert m.confidence == "confident"
     assert m.doc_end > m.doc_start
     assert m.paragraph_index == 1        # second paragraph of the paper
+    # W8 triage: the copied sentence has no quotes and no citation -> act first.
+    assert m.triage is not None and m.triage.type == "verbatim_uncited" and m.triage.priority == 1
+    assert parsed.triage_summary and parsed.triage_summary.needs_action >= 1
 
 
 # ── Error handling (validated synchronously at submit) ────────────────────────

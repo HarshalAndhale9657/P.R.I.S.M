@@ -656,3 +656,36 @@ a.cmp-src:hover { text-decoration: underline; }
 }
 .origin-tag.origin-s2 { color: #1a5fb4; background: rgba(26,95,180,0.10); }
 .origin-tag.origin-kind { color: var(--text-tertiary); background: var(--bg-tertiary); font-weight: 600; }
+
+/* ═══════════ W8 TRIAGE (ADR-0022) ═══════════ */
+/* Priority colours are advisory, never accusatory: amber = act, neutral = judgement, green = fine. */
+.mtag-triage { background: var(--bg-tertiary); color: var(--text-secondary); }
+.mtag-triage.tri-act { color: #b45309; background: rgba(217,119,6,0.12); }
+.mtag-triage.tri-check { color: var(--text-secondary); background: var(--bg-tertiary); }
+.mtag-triage.tri-ok { color: var(--success); background: rgba(5,150,105,0.10); }
+
+.triage-panel { margin: 18px 0 4px; padding: 16px 18px; background: var(--bg-card); border: 1px solid var(--border-primary); border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); }
+.tp-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.tp-head h3 { font-size: var(--font-size-base); font-weight: 700; color: var(--text-primary); margin: 0; }
+.tp-sub { font-size: var(--font-size-xs); color: var(--text-tertiary); font-weight: 600; }
+.ti-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.ti { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--border-primary); border-radius: var(--radius-md); background: var(--bg-primary); }
+.ti.tri-act { border-color: rgba(217,119,6,0.30); background: rgba(217,119,6,0.04); }
+.ti-n { font-family: var(--font-mono); font-weight: 800; font-size: var(--font-size-sm); min-width: 22px; color: var(--text-primary); }
+.ti-l { flex: 1; font-size: var(--font-size-sm); color: var(--text-primary); font-weight: 600; }
+.ti-p { font-size: var(--font-size-xs); color: var(--text-tertiary); font-weight: 600; }
+.tp-method { margin: 10px 0 0; font-size: var(--font-size-xs); color: var(--text-tertiary); font-style: italic; line-height: 1.5; }
+
+/* The coach card: the honest fix, shown above the side-by-side evidence. */
+.coach { border: 1px solid var(--border-primary); border-left: 3px solid var(--text-tertiary); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 12px; background: var(--bg-card); }
+.coach.tri-act { border-left-color: #d97706; background: rgba(217,119,6,0.04); }
+.coach.tri-check { border-left-color: var(--text-tertiary); }
+.coach.tri-ok { border-left-color: var(--success); background: rgba(5,150,105,0.04); }
+.coach-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.coach-label { font-size: var(--font-size-sm); font-weight: 700; color: var(--text-primary); }
+.coach-prio { font-size: var(--font-size-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); }
+.coach.tri-act .coach-prio { color: #b45309; }
+.coach-what { font-size: var(--font-size-sm); color: var(--text-secondary); line-height: 1.6; margin: 0 0 6px; }
+.coach-fix { font-size: var(--font-size-sm); color: var(--text-primary); line-height: 1.6; margin: 0; }
+.coach-note { font-size: var(--font-size-xs); color: var(--text-secondary); margin: 6px 0 0; font-style: italic; }
+.coach-sig { font-size: var(--font-size-xs); color: var(--text-tertiary); margin: 8px 0 0; }
