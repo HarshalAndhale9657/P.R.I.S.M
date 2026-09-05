@@ -57,6 +57,12 @@ failed only because Playwright's new version needed its browser binary; the spec
 The benchmark gates are *tripwires at today's measured level*, not targets — the FPR on same-topic negatives is still
 high (MRPC 0.44 at the confident cutoff), which is exactly why the review band exists and why W4b/W5/rerank matter.
 
+**History rewrite (owner decision, same day):** purged `pan23-multi-author-analysis/`, `research/datasets/pan/` and
+`.gemini/` from *all* history with `git filter-repo` (pack 33.65 MiB → 2.77 MiB; 75 commits — two that only touched
+those paths became empty and were dropped). Every SHA changed; ADR-0018's reference was updated. A full pre-rewrite
+backup bundle is kept outside the repo (`D:\PRISM-UI\prism-pre-filter-20260906.bundle`). Anyone with an older clone
+must re-clone; GitHub drops the unreachable objects on its next gc (support can force it). PAN data also deleted from disk.
+
 **Still open (in priority order):** W4b retrieval depth (Semantic Scholar + OA full text) → W6 first deploy on the
 real VPS via `deploy/README.md` and **measure rerank latency there** → re-derive the confident cutoff once rerank is
 default-on → W5 GPU session (human) → W7 accounts + Postgres `JobStore` behind the Protocol that now exists.

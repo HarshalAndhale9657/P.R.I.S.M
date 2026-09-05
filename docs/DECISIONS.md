@@ -272,7 +272,7 @@ architecture (`unstructured` dual-pass parsing) that never actually ran because 
 Its measured detection quality was near-noise (F1 ≈ 0.40, `research/HONEST_AUDIT.md`).
 **Decision:** Delete it — backend services, prompts, endpoints, scripts, legacy frontend, and its dependencies.
 Keep the research record (`research/`, `research/legacy_prism_diagnostic.md`) as history. Nothing is lost:
-every file remains in git history at `56a77184` and earlier.
+every file remains in git history at `b095257` and earlier (SHAs changed on 2026-09-06 when the PAN corpus was purged from history — see PROGRESS).
 **Consequences:** `requirements.txt` drops to 12 direct dependencies; the image no longer needs a compiler; the
 API surface is exactly `/api/v1/check`, `/api/v1/check/{id}`, `/health`, `/health/ready`. Anyone who wants the
 old engine checks out the tag/commit. The PDF parser it owned is replaced by a checker-specific one (ADR-0019).

@@ -9,8 +9,6 @@ Check items off with a date. Newest priorities on top.
       needs their consent (most of that code is now deleted, but history remains). Decide, then add `LICENSE`.
 - [ ] **Confirm the old Vercel/Render demo is offline** (its README link was removed 2026-09-06). If it still
       serves the pre-refactor backend, take it down — it has none of the new controls.
-- [ ] **History rewrite for the PAN corpus?** It is untracked now (2026-09-06) but remains in history (~33 MiB,
-      licence-restricted). A `git filter-repo` purge is clean but rewrites every SHA; do it before anyone else clones.
 
 ## 🟠 Now — finish the core (ADR-0016; pretrained-first, plagiarism-first, public data, NO PAN)
 - [ ] **W4b · Retrieval depth** — Semantic Scholar (free key) + **Unpaywall/arXiv/PMC OA full text** so academic
@@ -42,6 +40,8 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-06 — **PAN corpus purged from git history** (owner's decision; `git filter-repo`; pack 33.65 → 2.77 MiB; all
+      SHAs changed; pre-rewrite backup bundle kept outside the repo; PAN data also deleted from disk).
 - [x] 2026-09-06 — **Industry-grade pass** (ADR-0018/0019/0020): legacy engine deleted; `app/` + `worker/` +
       `ParseStage`; Pydantic API contract at `/api/v1`; bounded queue (503) + TTL store + aggregate size cap + per-IP
       rate limit (429); checker-specific PDF parser (no 80-char floor, headers/footers/reference list handled, page +
