@@ -20,23 +20,48 @@ other providers still contribute; it never raises into the caller.
 
 from __future__ import annotations
 
-import re
-import logging
 import dataclasses
+import logging
+import re
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Tuple
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-from services.plagiarism_matcher import SourceDoc
+from services.plagiarism_matcher import _WORD_RE, SourceDoc
 
 logger = logging.getLogger(__name__)
 
-_HEADERS = {"User-Agent": "PRISM-OriginalityChecker/0.1 (mailto:prism@example.org)"}
-_WORD_RE = re.compile(r"\w+(?:['’]\w+)*", re.UNICODE)
 _MIN_ABSTRACT = 60  # need enough text to match against
 
 DEFAULT_PROVIDERS = ("openalex", "arxiv")
+
+# One pooled session with bounded retries for transient upstream failures. OpenAlex asks
+# polite-pool users to identify themselves with a contact address; we only send one if
+# the operator configured it (settings.contact_email) — never a placeholder.
+_SESSION: Optional[requests.Session] = None
+_SESSION_LOCK = threading.Lock()
+
+
+def _session() -> requests.Session:
+    global _SESSION
+    if _SESSION is None:
+        with _SESSION_LOCK:
+            if _SESSION is None:
+                s = requests.Session()
+                retry = Retry(total=2, backoff_factor=0.5, status_forcelist=(429, 500, 502, 503, 504),
+                              allowed_methods=frozenset({"GET"}), raise_on_status=False)
+                s.mount("https://", HTTPAdapter(max_retries=retry, pool_maxsize=8))
+                _SESSION = s
+    return _SESSION
+
+
+def _user_agent(contact_email: Optional[str]) -> str:
+    ua = "PRISM-OriginalityChecker/0.9 (+https://github.com/HarshalAndhale9657/P.R.I.S.M)"
+    return f"{ua} mailto:{contact_email}" if contact_email else ua
 
 # ── OpenAlex ──────────────────────────────────────────────────────────────────
 _OPENALEX_URL = "https://api.openalex.org/works"
@@ -54,16 +79,18 @@ def _abstract_from_inverted(inv: Optional[dict]) -> str:
     return " ".join(w for _, w in positions)
 
 
-def _search_openalex(queries, per_query, timeout, max_sources):
+def _search_openalex(queries, per_query, timeout, max_sources, contact_email=None):
     sources, warnings, failures = [], [], 0
+    headers = {"User-Agent": _user_agent(contact_email)}
+    params_extra = {"mailto": contact_email} if contact_email else {}
     for query in queries:
         if len(sources) >= max_sources:
             break
         try:
-            resp = requests.get(
+            resp = _session().get(
                 _OPENALEX_URL,
-                params={"search": query, "per-page": per_query, "select": _OPENALEX_SELECT},
-                headers=_HEADERS, timeout=timeout,
+                params={"search": query, "per-page": per_query, "select": _OPENALEX_SELECT, **params_extra},
+                headers=headers, timeout=timeout,
             )
             if resp.status_code != 200:
                 failures += 1
@@ -88,7 +115,7 @@ def _search_openalex(queries, per_query, timeout, max_sources):
 _ARXIV_MAX_QUERIES = 4  # arXiv is slower per call; cap the number of searches
 
 
-def _search_arxiv(queries, per_query, timeout, max_sources):
+def _search_arxiv(queries, per_query, timeout, max_sources, contact_email=None):
     sources, warnings = [], []
     try:
         import arxiv
@@ -162,10 +189,15 @@ def search(
     per_query: int = 5,
     max_sources: int = 30,
     timeout: float = 10.0,
+    contact_email: Optional[str] = None,
 ) -> Tuple[List[SourceDoc], List[str]]:
     """
     Retrieve candidate academic sources for a document from the enabled providers
     (run concurrently). Returns (sources, warnings). Never raises.
+
+    Privacy note (surfaced in the UI): up to `max_queries` short excerpts of the
+    document (its longest sentences, truncated to ~18 words) are sent to the
+    providers as search queries. Nothing else leaves the server.
     """
     queries = build_queries(doc_text, max_queries=max_queries)
     if not queries:
@@ -180,7 +212,7 @@ def search(
 
     with ThreadPoolExecutor(max_workers=len(enabled), thread_name_prefix="prism-corpus") as ex:
         futures = {
-            ex.submit(_PROVIDERS[p], queries, per_query, timeout, max_sources): p
+            ex.submit(_PROVIDERS[p], queries, per_query, timeout, max_sources, contact_email): p
             for p in enabled
         }
         for fut in as_completed(futures):

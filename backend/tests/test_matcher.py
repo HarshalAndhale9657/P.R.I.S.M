@@ -1,8 +1,8 @@
 """Unit tests for the PlagiarismMatcher (pure, offline)."""
 import pytest
+from conftest import requires_model
 
 from services.plagiarism_matcher import PlagiarismMatcher, SourceDoc
-from conftest import requires_model
 
 SRC_TRANSFORMER = (
     "The transformer architecture relies entirely on self-attention mechanisms "

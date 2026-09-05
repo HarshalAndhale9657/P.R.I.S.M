@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (import + offline smoke)
+    name: Backend (lint + tests + smoke)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -23,40 +23,24 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: backend/requirements*.txt
 
-      - name: Install dependencies
+      - name: Install dependencies (CPU torch)
         run: |
           python -m pip install -U pip
-          pip install -r requirements.txt
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-dev.txt
 
-      - name: Download NLP models
-        run: |
-          python -m spacy download en_core_web_sm
-          python -m nltk.downloader punkt punkt_tab
-
-      - name: Lint (advisory)
-        continue-on-error: true
-        run: |
-          pip install ruff
-          ruff check . || true
+      - name: Lint (ruff — blocking)
+        run: ruff check .
 
       - name: Import smoke (fails the build if the app can't import)
-        run: python -c "import main; print('import ok:', main.app.title)"
+        run: python -c "import main; print('import ok:', main.app.title, main.app.version)"
 
-      - name: Offline pipeline smoke test
-        run: python _smoketest.py
+      - name: Unit + API tests (pytest, with coverage)
+        run: pytest --cov --cov-report=term-missing:skip-covered --cov-fail-under=80
 
-      - name: Originality matcher smoke test
-        run: python _smoketest_check.py
-
-      - name: Matcher evaluation (precision/recall + false-positive-rate gate)
+      - name: Matcher smoke (synthetic 32-case set — a tripwire, NOT a quality gate; see ADR-0017)
         run: python scripts/eval_matcher.py
-
-      - name: Unit + API tests (pytest + FastAPI TestClient)
-        run: |
-          pip install -r requirements-dev.txt
-          pytest
 
   frontend:
     name: Frontend (JS syntax check)

@@ -1,16 +1,19 @@
 """Shared pytest fixtures for the PRISM backend test suite.
 
-Tests are offline and deterministic: `/api/check` is exercised WITHOUT academic
-search (no network). Model-dependent (paraphrase/translated) assertions skip
-gracefully when sentence-transformers isn't installed.
-"""
-import sys
-import pathlib
+Tests are offline and deterministic: `/api/v1/check` is exercised WITHOUT
+academic search (no network). Model-dependent (paraphrase/translated)
+assertions skip gracefully when sentence-transformers isn't installed.
 
-# Make `import main` / `from services...` work regardless of pytest's rootdir.
+The app under test is built by the factory with explicit `Settings`, never from
+process environment — so a developer's `.env` can't change test behaviour.
+"""
+import pathlib
+import sys
+
+# Make `import app` / `from services...` work regardless of pytest's rootdir.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-import pytest
+import pytest  # noqa: E402
 
 
 def _model_available() -> bool:
@@ -42,12 +45,26 @@ REF_TEXT = (
 )
 
 
+def make_settings(**overrides):
+    """Test settings: no .env, no warm-up, generous rate limit, small queue."""
+    from app.settings import Settings
+    base = dict(env="test", warmup_models=False, rate_limit_submissions=1000,
+                worker_threads=2, max_pending_jobs=8, log_level="WARNING")
+    base.update(overrides)
+    return Settings(_env_file=None, **base)
+
+
+def make_client(**overrides):
+    """A TestClient over a freshly built app (lifespan active)."""
+    from fastapi.testclient import TestClient
+
+    from app import create_app
+    return TestClient(create_app(make_settings(**overrides)))
+
+
 @pytest.fixture(scope="session")
 def client():
-    """A FastAPI TestClient over the real app (built once for the session)."""
-    import main
-    from fastapi.testclient import TestClient
-    with TestClient(main.app) as c:
+    with make_client() as c:
         yield c
 
 

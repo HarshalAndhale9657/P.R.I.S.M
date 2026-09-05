@@ -4,7 +4,6 @@ import pytest
 from eval import metrics as M
 from eval.pairs import DATASETS, DatasetNotAvailable, load_dataset
 
-
 # ── metrics ───────────────────────────────────────────────────────────────────
 
 def test_confusion_and_binary_metrics_perfect():

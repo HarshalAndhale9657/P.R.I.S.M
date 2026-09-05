@@ -65,14 +65,21 @@ def test_retrieve_on_extends_sources():
     assert "acad-warning" in ctx.warnings
 
 
-def test_retrieve_degrades_on_error():
-    ctx = _ctx()
+def test_retrieve_degrades_on_error_when_uploads_exist():
+    ctx = _ctx(sources=[SourceDoc("s0", "Upload", "uploaded reference text")])
     def boom(_text):
         raise RuntimeError("network down")
     ctx = RetrieveStage(boom, use_academic=True).run(ctx)
     assert ctx.artifacts["academic_used"] is False
     assert any("academic" in w.lower() for w in ctx.warnings)
-    assert ctx.sources == []                 # never raised
+    assert len(ctx.sources) == 1             # the upload still gets checked
+
+
+def test_retrieve_with_no_sources_at_all_is_user_safe_error():
+    ctx = _ctx()
+    with pytest.raises(PipelineError) as exc:
+        RetrieveStage(lambda t: ([], []), use_academic=True).run(ctx)
+    assert "no usable sources" in str(exc.value).lower()
 
 
 # ── LocalizeStage ─────────────────────────────────────────────────────────────
@@ -112,11 +119,12 @@ def test_run_pipeline_threads_context_and_reraises():
         paragraphs=[{"index": 0, "page": 1, "start": 0, "end": 50, "text": "t"}],
     )
     stages = default_check_stages(fake, lambda t: ([], []), use_academic=False)
-    assert [s.name for s in stages] == ["retrieve", "match", "rerank", "localize"]
+    assert [s.name for s in stages] == ["parse", "retrieve", "match", "rerank", "localize"]
     # rerank is opt-in: off unless explicitly enabled (or PRISM_RERANK=1)
     assert next(s for s in stages if s.name == "rerank").enabled is False
     out = run_pipeline(ctx, stages)
     assert out.artifacts["matches"][0]["paragraph_index"] == 0
+    assert set(out.artifacts["timings_ms"]) == {"parse", "retrieve", "match", "rerank", "localize"}
 
     class Boom:
         name = "boom"
@@ -226,3 +234,41 @@ def test_rerank_recomputes_confidence_aggregates(monkeypatch):
     out = RerankStage(enabled=True).run(ctx)
     ov = out.artifacts["overall"]
     assert ov["confident_pct"] > 0 and ov["review_pct"] == 0.0 and ov["review_count"] == 0
+
+
+# ── ParseStage (ADR-0019) ─────────────────────────────────────────────────────
+
+from pipeline import RawInput  # noqa: E402
+from pipeline.stages import ParseStage  # noqa: E402
+
+
+def test_parse_stage_builds_document_and_sources_from_raw_inputs():
+    ctx = CheckContext(
+        raw_document=RawInput("paper.txt", b"Alpha paragraph here.\n\nBeta paragraph there."),
+        raw_sources=[RawInput("ok.txt", b"A readable reference."), RawInput("blank.txt", b"   ")],
+    )
+    ctx = ParseStage().run(ctx)
+    assert ctx.document.name == "paper.txt" and len(ctx.document.paragraphs) == 2
+    assert [s.name for s in ctx.sources] == ["ok.txt"]
+    assert any("blank.txt" in w for w in ctx.warnings)
+    assert ctx.raw_sources == []              # bytes dropped after parsing
+
+
+def test_parse_stage_rejects_unreadable_manuscript():
+    ctx = CheckContext(raw_document=RawInput("scan.pdf", b"%PDF-1.4 nonsense"))
+    with pytest.raises(PipelineError) as exc:
+        ParseStage().run(ctx)
+    assert "no readable text" in str(exc.value).lower()
+
+
+def test_parse_stage_reports_limit_as_user_safe_error():
+    ctx = CheckContext(raw_document=RawInput("big.txt", b"word " * 500))
+    with pytest.raises(PipelineError) as exc:
+        ParseStage(max_chars=100).run(ctx)
+    assert "limit" in str(exc.value).lower()
+
+
+def test_parse_stage_is_noop_when_document_preset():
+    ctx = _ctx(text="already parsed")
+    out = ParseStage().run(ctx)
+    assert out.document.text == "already parsed"

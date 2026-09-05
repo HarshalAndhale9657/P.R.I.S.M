@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Protocol, runtime_checkable
+from typing import Dict, List, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 

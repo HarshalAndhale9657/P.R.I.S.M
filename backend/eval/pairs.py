@@ -103,7 +103,7 @@ def _fetch_hint(name: str) -> str:
 
 def load_jsonl(path: Path, dataset: str = "") -> List[PairCase]:
     cases: List[PairCase] = []
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         for lineno, line in enumerate(fh, 1):
             line = line.strip()
             if not line:

@@ -1,0 +1,45 @@
+[project]
+name = "prism-backend"
+version = "0.9.0"
+description = "P.R.I.S.M. — source-attribution originality checker (backend)"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["venv", ".venv", "eval/data", "eval/results"]
+
+[tool.ruff.lint]
+# E/W pycodestyle, F pyflakes, I isort, B bugbear, UP pyupgrade, SIM simplify.
+select = ["E", "W", "F", "I", "B", "UP", "SIM"]
+ignore = [
+    "E501",   # line length is advisory here; long docstrings/tables are common
+    "B008",   # FastAPI's `File(...)` / `Form(...)` defaults are the idiom
+    "UP007", "UP045",  # keep Optional[X] for readability in dataclasses / pydantic
+    "UP035",  # typing.List etc. still used consistently across the codebase
+    "UP006",
+    "SIM108", # ternaries are not always clearer
+    "SIM105", # explicit try/except/pass reads fine for one-liners
+    "B905",   # zip(strict=) is noise on same-length comprehensions
+    "UP046",  # PEP 695 type-parameter syntax: not adopting yet
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "worker", "pipeline", "services", "modelhub", "eval", "training"]
+
+[tool.pytest.ini_options]
+# Only collect the real test package — never manual scripts.
+testpaths = ["tests"]
+addopts = "-q --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+[tool.coverage.run]
+source = ["app", "worker", "pipeline", "services", "modelhub", "eval"]
+omit = ["*/__init__.py", "eval/fetch_datasets.py", "eval/run_pairs.py"]
+
+[tool.coverage.report]
+skip_covered = false
+show_missing = true

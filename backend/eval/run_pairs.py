@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from eval import metrics as M
-from eval.pairs import DatasetNotAvailable, DATASETS, load_dataset
+from eval.pairs import DATASETS, DatasetNotAvailable, load_dataset
 from eval.scorer import PARAPHRASE_THRESHOLD, score
 
 _RESULTS_DIR = Path(__file__).resolve().parent / "results"

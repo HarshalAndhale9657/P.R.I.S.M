@@ -1,34 +1,24 @@
+# P.R.I.S.M. — runtime dependencies (the Originality Checker only; legacy engine removed, ADR-0018).
+# Exact pins for reproducible installs; `requirements.lock` is the fully-resolved transitive set.
+
+# Web
 fastapi==0.115.0
+pydantic-settings==2.15.0
 uvicorn[standard]==0.30.0
 python-multipart==0.0.9
+python-dotenv==1.0.1
 
-# PDF Parsing
-PyMuPDF==1.24.0
-pdfplumber==0.11.0
+# PDF / text extraction
+PyMuPDF==1.28.2
+pdfplumber==0.11.10
 
-# NLP & Clustering
-# spacy>=3.8 required for Python 3.12 wheels (3.7.0 has none -> CI build fails). 3.8.x verified locally.
-spacy>=3.8.0,<3.9
-hdbscan>=0.8.33
-scikit-learn==1.5.0
+# Matching (verbatim + paraphrase + translated)
 numpy==1.26.4
-ruptures>=1.1.8
-
-# AI Reasoning Layer
-openai>=1.50.0,<2.0.0
-httpx>=0.25.0,<0.28.0
-
-# Citation & Source
-nltk==3.9.1
-arxiv==2.1.3
-tenacity==8.5.0
-requests
-
-# Local semantic matching (offline paraphrase / translated detection)
-# Heavy (pulls torch); paraphrase matching degrades gracefully if unavailable.
-sentence-transformers>=2.7.0
-# Language identification for labelling cross-lingual (translated) matches.
+scikit-learn==1.9.0
+# Heavy (pulls torch). Paraphrase matching degrades gracefully to verbatim-only if unavailable.
+sentence-transformers==6.0.0
 langdetect==1.0.9
 
-# Utils
-python-dotenv==1.0.1
+# Academic corpus (OpenAlex + arXiv)
+requests==2.32.5
+arxiv==2.1.3

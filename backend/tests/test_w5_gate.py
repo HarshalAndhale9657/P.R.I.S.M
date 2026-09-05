@@ -7,8 +7,6 @@ worth testing independently of the training run.
 import importlib.util
 from pathlib import Path
 
-import pytest
-
 _SCRIPT = Path(__file__).resolve().parents[1] / "training" / "finetune_cross_encoder.py"
 
 

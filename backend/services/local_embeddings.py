@@ -10,8 +10,9 @@ Fully offline — no API calls required.
 
 import logging
 import threading
-import numpy as np
 from typing import List, Optional
+
+import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 logger = logging.getLogger(__name__)

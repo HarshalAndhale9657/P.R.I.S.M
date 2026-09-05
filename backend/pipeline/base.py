@@ -1,22 +1,18 @@
 """
-P.R.I.S.M. — Pipeline core (ADR-0015 / ADR-0016 re-architecture)
-================================================================
+P.R.I.S.M. — Pipeline core (ADR-0015 / ADR-0016 / ADR-0019)
+===========================================================
 Clean, pluggable stages so each step of an originality check can be swapped and
 evaluated independently:
 
-    parse -> retrieve -> match -> rerank -> ai_risk -> triage -> coach -> report
+    parse -> retrieve -> match -> rerank -> localize -> [triage -> coach -> report]
 
-W1 implements the seams plus the three *live* stages (retrieve, match, localize).
-rerank / ai_risk / triage / coach / report are declared as skeleton stages to be
-filled in later weeks (W3-W9) — they are pass-throughs today so behaviour is
-unchanged. The existing matcher (`services.plagiarism_matcher`) and academic
-corpus (`services.academic_corpus`) are *injected* into the stages, so the
-monkeypatch seams the tests rely on (`main.plagiarism_matcher.check`,
-`main.academic_search`) still hold when `main._compute_check` runs the pipeline.
+Live: parse, retrieve, match, rerank (opt-in), localize. The bracketed stages are
+declared skeletons for W8–W10.
 
 Pure data-in / data-out: a stage takes a `CheckContext` and returns it, mutating
-`ctx.artifacts` / `ctx.sources` / `ctx.warnings`. No FastAPI dependency, so the
-whole pipeline is trivially unit-testable and reusable by the eval harness.
+`ctx.document` / `ctx.sources` / `ctx.artifacts` / `ctx.warnings`. No FastAPI
+dependency, so the whole pipeline is unit-testable and reusable by the eval
+harness. Collaborators (matcher, academic search) are *injected*.
 """
 from __future__ import annotations
 
@@ -24,20 +20,24 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
-# Reuse the matcher's canonical source type across the pipeline (DRY — the matcher,
-# main.py and the corpus all already speak SourceDoc).
+# The matcher's canonical source type is shared across the pipeline (DRY).
 from services.plagiarism_matcher import SourceDoc
 
 logger = logging.getLogger(__name__)
 
 
 class PipelineError(Exception):
-    """A user-safe error raised by a stage; the app maps it to a job error.
+    """A user-safe error raised by a stage; the runner surfaces its message verbatim.
 
-    Distinct from unexpected exceptions: PipelineError messages are safe to show
-    to a user (e.g. "No readable text found"), whereas other exceptions are
-    logged server-side and surfaced generically.
+    Anything else raised inside a stage is logged server-side and shown generically.
     """
+
+
+@dataclass(frozen=True)
+class RawInput:
+    """An uploaded file before parsing."""
+    name: str
+    data: bytes
 
 
 @dataclass
@@ -46,6 +46,7 @@ class Document:
     name: str
     text: str
     paragraphs: List[Dict[str, Any]] = field(default_factory=list)  # {index, page, start, end, text}
+    page_count: Optional[int] = None
 
 
 @dataclass
@@ -53,11 +54,14 @@ class CheckContext:
     """Everything a stage may read or write, threaded through the pipeline.
 
     `artifacts` accumulates stage outputs under stable keys:
-      overall, per_source, matches, paraphrase_enabled  (match)
-      academic_used                                      (retrieve)
-      ai_risk, triage, coaching, report                  (later stages)
+      overall, per_source, matches, paraphrase_enabled   (match)
+      academic_used                                       (retrieve)
+      reranked_count                                      (rerank)
+      timings_ms                                          (orchestrator)
     """
-    document: Document
+    document: Optional[Document] = None
+    raw_document: Optional[RawInput] = None
+    raw_sources: List[RawInput] = field(default_factory=list)
     sources: List[SourceDoc] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
@@ -70,6 +74,11 @@ class CheckContext:
     def extend_warnings(self, messages: Optional[List[str]]) -> None:
         for m in messages or []:
             self.warn(m)
+
+    def require_document(self) -> Document:
+        if self.document is None:
+            raise PipelineError("No document to check.")
+        return self.document
 
 
 @runtime_checkable

@@ -1,23 +1,22 @@
 """
 P.R.I.S.M. — Pipeline stage implementations
 ===========================================
-Live stages (W1): RetrieveStage, MatchStage, LocalizeStage.
-Skeleton stages (filled W3-W9): RerankStage, AiRiskStage, TriageStage,
-CoachStage, ReportStage — declared so the architecture is visible and the wiring
-is stable, but pass-through today (zero behaviour change).
+Live stages: ParseStage, RetrieveStage, MatchStage, RerankStage (opt-in), LocalizeStage.
+Skeleton stages (W8–W10): TriageStage, CoachStage, ReportStage — declared so the
+architecture is visible and the wiring is stable, pass-through today.
 
-Dependencies (matcher, academic-search fn) are INJECTED, never imported from
-`main`, so there is no circular import and the tests can still monkeypatch
-`main.plagiarism_matcher.check` / `main.academic_search` — `main._compute_check`
-passes the current module globals in at call time.
+Dependencies (matcher, academic-search fn) are INJECTED, never imported from the
+app layer, so there is no circular import and tests substitute fakes freely.
 """
 from __future__ import annotations
 
 import logging
 from bisect import bisect_right
-from typing import Any, Callable, List, Protocol, Sequence, Tuple
+from typing import Callable, List, Protocol, Sequence, Tuple
 
-from .base import CheckContext, SourceDoc, Stage
+from services.document_parser import ParseLimitExceeded, parse_document
+
+from .base import CheckContext, Document, PipelineError, SourceDoc
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +30,58 @@ class Matcher(Protocol):
 SearchFn = Callable[[str], Tuple[List[SourceDoc], List[str]]]
 
 
-# ── Live stages ──────────────────────────────────────────────────────────────
+# ── Parse ─────────────────────────────────────────────────────────────────────
+class ParseStage:
+    """Turn raw uploads into `ctx.document` and uploaded `ctx.sources`.
+
+    Raises PipelineError (user-safe) when the manuscript has no readable text or
+    exceeds a size limit. A reference that cannot be read is *skipped with a
+    warning*, never fatal — one bad PDF should not sink the whole check.
+    """
+    name = "parse"
+
+    def __init__(self, *, max_pdf_pages: int = 300, max_chars: int = 2_000_000) -> None:
+        self.max_pdf_pages = max_pdf_pages
+        self.max_chars = max_chars
+
+    def run(self, ctx: CheckContext) -> CheckContext:
+        if ctx.document is None:
+            if ctx.raw_document is None:
+                raise PipelineError("No document was provided.")
+            try:
+                parsed = parse_document(ctx.raw_document.name, ctx.raw_document.data,
+                                        max_pdf_pages=self.max_pdf_pages, max_chars=self.max_chars)
+            except ParseLimitExceeded as exc:
+                raise PipelineError(str(exc)) from exc
+            ctx.extend_warnings(parsed.warnings)
+            if not parsed.text.strip():
+                raise PipelineError(
+                    "No readable text found in the document (it may be scanned or image-only)."
+                )
+            ctx.document = Document(name=ctx.raw_document.name, text=parsed.text,
+                                    paragraphs=parsed.paragraphs, page_count=parsed.page_count)
+
+        for i, raw in enumerate(ctx.raw_sources):
+            try:
+                parsed = parse_document(raw.name, raw.data,
+                                        max_pdf_pages=self.max_pdf_pages, max_chars=self.max_chars)
+            except ParseLimitExceeded as exc:
+                ctx.warn(f"Skipped '{raw.name}': {exc}")
+                continue
+            if parsed.text.strip():
+                ctx.sources.append(SourceDoc(id=f"src-{i}", name=raw.name, text=parsed.text))
+            else:
+                ctx.warn(f"Skipped '{raw.name}': no readable text extracted.")
+        ctx.raw_sources = []  # parsed; drop the bytes so the context is lighter downstream
+        return ctx
+
+
+# ── Retrieve ──────────────────────────────────────────────────────────────────
 class RetrieveStage:
     """Gather candidate academic sources (opt-in) and append them to the context.
 
-    Uploaded references are already in `ctx.sources` (added by the caller). When
-    `use_academic` is set, this calls the injected search fn and merges results.
-    Never raises: retrieval failure degrades to a warning.
+    Never raises: retrieval failure degrades to a warning. After this stage, if
+    there are still no sources at all, that is a user-safe error.
     """
     name = "retrieve"
 
@@ -47,19 +91,23 @@ class RetrieveStage:
 
     def run(self, ctx: CheckContext) -> CheckContext:
         ctx.artifacts.setdefault("academic_used", False)
-        if not self._use_academic:
-            return ctx
-        try:
-            acad_sources, acad_warnings = self._search(ctx.document.text)
-            ctx.sources.extend(acad_sources)
-            ctx.extend_warnings(acad_warnings)
-            ctx.artifacts["academic_used"] = len(acad_sources) > 0
-        except Exception:
-            logger.exception("[pipeline.retrieve] academic search failed")
-            ctx.warn("Academic-database search failed unexpectedly; continued with uploaded references.")
+        if self._use_academic:
+            try:
+                acad_sources, acad_warnings = self._search(ctx.require_document().text)
+                ctx.sources.extend(acad_sources)
+                ctx.extend_warnings(acad_warnings)
+                ctx.artifacts["academic_used"] = len(acad_sources) > 0
+            except Exception:
+                logger.exception("[pipeline.retrieve] academic search failed")
+                ctx.warn("Academic-database search failed unexpectedly; continued with uploaded references.")
+        if not ctx.sources:
+            raise PipelineError(
+                "No usable sources to compare against (no readable references and no academic matches found)."
+            )
         return ctx
 
 
+# ── Match ─────────────────────────────────────────────────────────────────────
 class MatchStage:
     """Run the (injected) plagiarism matcher and store its report in artifacts."""
     name = "match"
@@ -68,7 +116,7 @@ class MatchStage:
         self._matcher = matcher
 
     def run(self, ctx: CheckContext) -> CheckContext:
-        result = self._matcher.check(ctx.document.text, ctx.sources)
+        result = self._matcher.check(ctx.require_document().text, ctx.sources)
         ctx.artifacts["overall"] = result["overall"]
         ctx.artifacts["per_source"] = result["per_source"]
         ctx.artifacts["matches"] = result["matches"]
@@ -77,12 +125,13 @@ class MatchStage:
         return ctx
 
 
+# ── Localize ──────────────────────────────────────────────────────────────────
 class LocalizeStage:
     """Map each match's document span to its paragraph index + page."""
     name = "localize"
 
     def run(self, ctx: CheckContext) -> CheckContext:
-        paragraphs = ctx.document.paragraphs
+        paragraphs = ctx.require_document().paragraphs
         matches = ctx.artifacts.get("matches", [])
         para_starts = [p["start"] for p in paragraphs]
         for m in matches:
@@ -96,48 +145,29 @@ class LocalizeStage:
         return ctx
 
 
-# ── Skeleton stages (declared now, implemented in later weeks) ───────────────
-class _SkeletonStage:
-    """A pass-through stage placeholder. Subclasses set `name`. Implemented later."""
-    name = "skeleton"
-
-    def run(self, ctx: CheckContext) -> CheckContext:  # pragma: no cover - trivial
-        return ctx
-
-
+# ── Rerank (W4, opt-in) ───────────────────────────────────────────────────────
 class RerankStage:
-    """W4 — cross-encoder rerank of *borderline* semantic matches.
+    """Cross-encoder rerank of *borderline* semantic matches.
 
     A bi-encoder embeds each sentence independently, so it cannot see how the two
     sentences relate; a cross-encoder reads the pair jointly. Measured on public
-    data, this cut MRPC false positives **0.643 -> 0.403** at t=0.66 and lifted
-    recall@FPR<=0.15 from 0.44 to 0.61 (docs/PROGRESS.md).
+    data this cut MRPC false positives 0.643 -> 0.403 at t=0.66 (docs/PROGRESS.md).
 
-    Cost control — a cross-encoder is one forward pass per pair, on CPU in
-    production, so we rerank only where it can change the answer:
-      * verbatim matches are exact overlap -> never reranked;
-      * scores below `lo` or above `hi` are not borderline -> left alone;
-      * at most `max_pairs`, highest-similarity first.
+    Cost control — one forward pass per pair, on CPU — so we rerank only where it
+    can change the answer: verbatim is exact overlap (never reranked); scores
+    outside [lo, hi] are not borderline; at most `max_pairs`, highest-similarity
+    first, so when the cap bites the budget is spent verifying the *strongest*
+    claims (the ones labelled "confident", where a wrong call is a false accusation).
 
-    The bi-encoder `similarity` is preserved (it is what the UI shows and what the
-    percentages are built from); the cross-encoder result is recorded as
-    `rerank_score` and used to re-decide `confidence` (ADR-0017's band). Confidence
-    aggregates are then recomputed so they never go stale.
-
+    The bi-encoder `similarity` is preserved (it is what the UI shows); the
+    cross-encoder result is recorded as `rerank_score` and re-decides `confidence`.
     Fails soft: if the model is unavailable the stage warns and leaves matches as-is.
     """
     name = "rerank"
 
-    def __init__(
-        self,
-        *,
-        enabled: bool = False,
-        model_key: str = "cross-encoder-stsb",
-        lo: float = 0.60,
-        hi: float = 0.92,
-        max_pairs: int = 200,
-        confident_threshold: float = 0.78,
-    ) -> None:
+    def __init__(self, *, enabled: bool = False, model_key: str = "cross-encoder-stsb",
+                 lo: float = 0.60, hi: float = 0.92, max_pairs: int = 200,
+                 confident_threshold: float = 0.78) -> None:
         self.enabled = enabled
         self.model_key = model_key
         self.lo = lo
@@ -153,11 +183,6 @@ class RerankStage:
             and (m.get("doc_excerpt") or "").strip()
             and (m.get("source_excerpt") or "").strip()
         ]
-        # Highest-similarity first: when the cap bites, we spend the budget verifying
-        # the STRONGEST claims. Those are the ones currently labelled "confident", so a
-        # wrong call there is a false accusation — the failure mode we care most about.
-        # (Lower-scoring pairs are already labelled "review", so a missed promotion is
-        # a far cheaper error than a missed demotion.)
         cand.sort(key=lambda m: float(m.get("similarity", 0.0)), reverse=True)
         return cand[: self.max_pairs]
 
@@ -184,31 +209,31 @@ class RerankStage:
             score = max(0.0, min(1.0, float(s)))
             m["rerank_score"] = round(score, 4)
             m["reranked"] = True
-            # The cross-encoder decides the band; the displayed similarity stays
-            # the bi-encoder cosine so the number the user sees keeps its meaning.
             m["confidence"] = "confident" if score >= self.confident_threshold else "review"
 
-        # Recompute confidence coverage — the band changed for some matches.
         from services.plagiarism_matcher import confidence_breakdown, tokenize
         overall = ctx.artifacts.get("overall")
         if isinstance(overall, dict):
-            overall.update(confidence_breakdown(tokenize(ctx.document.text), matches))
+            overall.update(confidence_breakdown(tokenize(ctx.require_document().text), matches))
         ctx.artifacts["reranked_count"] = len(cand)
         return ctx
 
 
-class AiRiskStage(_SkeletonStage):
-    """Later: honesty-gated AI-generated-text risk band (deferred per ADR-0016)."""
-    name = "ai_risk"
+# ── Skeleton stages (declared now, implemented W8–W10) ────────────────────────
+class _SkeletonStage:
+    name = "skeleton"
+
+    def run(self, ctx: CheckContext) -> CheckContext:  # pragma: no cover - trivial
+        return ctx
 
 
 class TriageStage(_SkeletonStage):
-    """W8: classify each match by remediation type (quote/cite/boilerplate/...)."""
+    """W8: classify each match by remediation type (quote/cite/boilerplate/self-reuse/...)."""
     name = "triage"
 
 
 class CoachStage(_SkeletonStage):
-    """W9: per-flag honest-fix coaching (source-visible, never rewrite-to-evade)."""
+    """W9: per-flag honest-fix coaching (source-visible, never rewrite-to-evade — ADR-0014)."""
     name = "coach"
 
 

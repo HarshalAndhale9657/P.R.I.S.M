@@ -19,8 +19,8 @@ multilingual model (Phase 3).
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 import unicodedata
 from bisect import bisect_left
 from dataclasses import dataclass
@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 
 # Optional language identification (for labelling cross-lingual / translated matches).
 try:
-    from langdetect import detect as _ld_detect, DetectorFactory as _LDFactory
+    from langdetect import DetectorFactory as _LDFactory
+    from langdetect import detect as _ld_detect
     _LDFactory.seed = 0  # deterministic
     _LANGDETECT = True
 except Exception:  # pragma: no cover

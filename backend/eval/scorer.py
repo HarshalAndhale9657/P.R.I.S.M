@@ -13,10 +13,10 @@ from __future__ import annotations
 
 from typing import List, Sequence
 
-from .pairs import PairCase
-
 # Keep in lock-step with the matcher's live paraphrase cutoff.
 from services.plagiarism_matcher import PlagiarismMatcher
+
+from .pairs import PairCase
 
 PARAPHRASE_THRESHOLD: float = PlagiarismMatcher().paraphrase_threshold  # 0.66 today
 
@@ -26,6 +26,7 @@ def score_pairs(pairs: Sequence[PairCase], *, model_key: str = "bi-encoder") -> 
     if not pairs:
         return []
     import numpy as np
+
     from modelhub import get_embedder
 
     embedder = get_embedder(model_key)
