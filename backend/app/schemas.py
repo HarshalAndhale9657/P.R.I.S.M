@@ -210,7 +210,8 @@ class HealthResponse(BaseModel):
     model_loaded: bool
     rerank_enabled: bool
     queue: QueueStats
-    jobs_in_memory: int
+    jobs_in_memory: int = Field(description="Jobs currently held by the store (name kept for compatibility).")
+    store: Literal["memory", "postgres"] = Field(default="memory", description="Where job state lives (ADR-0029).")
     embedding_cache: Optional[EmbeddingCacheStats] = None
 
 

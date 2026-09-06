@@ -41,8 +41,10 @@ Check items off with a date. Newest priorities on top.
       dates; both need the same measure-first treatment, and "not worth it" is a valid answer. _(M)_
 
 ## 🟢 Next — the product (W7–W12, LAUNCH_PLAN §9)
-- [ ] **W7 · Accounts + persistence** — Supabase JWT verify as a FastAPI dependency; `PostgresJobStore` implementing
-      `worker.store.JobStore`; ownership check on `GET /api/v1/check/{id}`; per-user quota replaces the per-IP limiter. _(L)_
+- [~] **W7 · Accounts + persistence** — ✅ `PostgresJobStore` behind `worker.store.JobStore` + shared contract suite,
+      Postgres verified in CI (ADR-0029, 2026-09-06). **Remaining:** Supabase JWT verify as a FastAPI dependency;
+      `user_id` on the jobs table + ownership check on `GET /api/v1/check/{id}`; per-user quota → 402 replacing the
+      per-IP limiter; ephemeral deletion of raw text after the report. _(M left of L)_
 - [ ] **W9 · CoachStage** — replace the *static* per-type `fix` string with gpt-4o-mini prose grounded in the triage
       type + the shown source: JSON, ≤3 calls/check, cached, per-account $ ceiling; **matcher post-filter** so coaching
       can never launder copied text; source always visible; no auto-rewrite (ADR-0014). Rules stay the backbone. _(L)_
@@ -57,6 +59,9 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-06 — **`PostgresJobStore` + JobStore contract suite** (ADR-0029): durable, replica-readable job state
+      behind the ADR-0019 seam; CI runs the contract against a real `postgres:16` and fails if it was skipped. Also
+      fixed a latent circular import (`import worker` failed cold). Tests 221 → 231 (+11 Postgres-only in CI).
 - [x] 2026-09-06 — **Hard-wrapped plain text fixed** (ADR-0028): `.txt`/`.md` manuscripts wrapped at 60–80 columns
       were compared line by line — a wrapped paragraph went from **0 matches to 2 at 0.875** against a genuine
       paraphrase of itself. Found by pointing the parser at a real academic PDF instead of the synthetic fixture;

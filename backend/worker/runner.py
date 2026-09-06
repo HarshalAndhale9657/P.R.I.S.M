@@ -17,10 +17,10 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from app.logging_config import job_id_var
 from app.settings import APP_VERSION, Settings
 from pipeline import CheckContext, PipelineError, RawInput, build_check_stages, run_pipeline
 from services.plagiarism_matcher import PlagiarismMatcher
+from utils.context import job_id_var
 
 from .executor import BoundedExecutor, QueueFull
 from .store import JobRecord, JobStore, TTLCache

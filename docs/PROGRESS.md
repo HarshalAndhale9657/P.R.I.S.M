@@ -5,6 +5,36 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-06 (cont.) — W7 begins where it can: durable job state (ADR-0029)
+
+**Why this piece first.** Of everything left before launch, W7's storage half is the only part that needs no
+account, no key and no box — the `JobStore` Protocol has been sitting there since ADR-0019 as a five-method seam
+with one implementation behind it. So: a second implementation, and one contract suite that both must pass.
+
+**`PostgresJobStore`.** Epoch floats in `DOUBLE PRECISION` so the TTL check is *literally the same expression* as
+the in-memory store's; a column whitelist on `update()` because `**fields` interpolated into SQL is an injection
+waiting for a typo; one idempotent `CREATE TABLE`; the same `ttl_seconds`/`max_jobs` bounds, because durability
+buys restarts and replicas, not retention. `/health` now says which store it is.
+
+**The contract runs against both.** Locally the Postgres half is *skipped, visibly* (11 skips in the summary);
+in CI a `postgres:16` service container supplies it, and the job greps its own output and **fails if those tests
+were skipped** — the way a "verified in CI" claim stays honest.
+
+**Found on the way: the suite had a circular import hiding in it.** `import worker` failed cold —
+`worker.runner` pulled `app.settings`, `app/__init__` eagerly pulled `factory`, `factory` pulled `worker`.
+`tests/test_worker.py` fails on its own; it only ever passed because `test_check_api.py` sorts first and imports
+`app`. Fixed at the structure: context vars to `utils/context.py`, `create_app` resolved lazily. Two small ASCII
+lessons on top: an em dash in a pytest skip reason makes the final summary line vanish on a cp1252 console, and
+`-q` stacked on `addopts = -q` suppresses it entirely — twenty minutes of "where did the summary go".
+
+**Verified:** ruff clean · 231 passed / 11 skipped · worker tests pass alone · lock regenerated with psycopg,
+ASCII header kept, `pip-audit` clean · the Postgres half's verification *is* this commit's CI run.
+
+**Still open in W7:** Supabase JWT as a FastAPI dependency, per-user ownership on `GET /check/{id}`, quota → 402,
+ephemeral deletion of raw text. All of it builds on this table.
+
+---
+
 ## 2026-09-06 (cont.) — The same bug again, one door down (ADR-0028)
 
 **The question ADR-0026 left.** The splitter bug was silent, sat in the core loop, and survived a green suite

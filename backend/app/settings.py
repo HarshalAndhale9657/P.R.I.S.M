@@ -13,7 +13,7 @@ be queued, so worst-case upload memory is bounded by their product.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -49,8 +49,13 @@ class Settings(BaseSettings):
     # ── Worker / queue ──────────────────────────────────────────────────────
     worker_threads: int = Field(default=2, description="Concurrent checks. Torch already multi-threads inside each.")
     max_pending_jobs: int = Field(default=16, description="Queued (not yet running) checks before 503.")
-    job_ttl_seconds: int = Field(default=1800, description="Results are purged from memory after this.")
+    job_ttl_seconds: int = Field(default=1800, description="Results are purged from the job store after this.")
     max_jobs: int = 200
+    database_url: Optional[str] = Field(
+        default=None,
+        description="Postgres DSN for the job store (ADR-0029). Unset = in-process memory, one replica only.",
+    )
+    database_pool_size: int = Field(default=4, ge=1, description="Max pooled connections to Postgres.")
     result_cache_size: int = 64
     result_cache_ttl_seconds: int = 1800
 

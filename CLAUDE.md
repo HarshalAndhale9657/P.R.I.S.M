@@ -43,8 +43,8 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 - `backend/main.py` — two-line shim → `app.create_app()`.
 - `backend/app/` — HTTP layer: `settings.py` (all knobs), `schemas.py` (the API contract), `middleware.py`
   (request-id, body-size guard), `limits.py` (rate limiter), `routers/check.py`, `routers/health.py`, `factory.py`.
-- `backend/worker/` — `executor.py` (bounded queue → 503), `store.py` (TTL job store + result cache; `JobStore`
-  Protocol is the W7 Postgres seam), `runner.py` (job lifecycle; assembles the result incl. `engine` block).
+- `backend/worker/` — `executor.py` (bounded queue → 503), `store.py` (in-memory TTL job store; the `JobStore`
+  Protocol), `postgres_store.py` (the durable one, ADR-0029), `runner.py` (job lifecycle; assembles the result).
 - `backend/pipeline/` — `parse → retrieve → match → rerank(opt-in) → localize → triage` (+ skeleton coach/report).
   Collaborators are **injected**; tests patch `app.state.runner.matcher` / `.academic_search`.
 - `backend/services/` — `document_parser.py` (checker-specific PDF/text), `plagiarism_matcher.py` (pure matcher),
@@ -91,7 +91,14 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   header, then re-run the audit.
 - Cross-encoder rerank (W4) is **opt-in** (`PRISM_RERANK=true`, image built with `PRISM_BAKE_RERANK=1`) until
   latency is measured on the real VPS.
-- The job store is **in-process**: exactly one uvicorn worker / one replica until the Postgres store lands (W7).
+- **Job state:** in-process memory by default; set `PRISM_DATABASE_URL` for `PostgresJobStore` (ADR-0029) — then
+  state survives restarts and any replica can serve `GET /check/{id}`. Execution is still the in-process executor
+  on the accepting replica, and the result cache + per-IP limiter are still in-process. Unset = **one replica**.
+  The `JobStore` contract in `tests/test_job_store_contract.py` runs against both; CI supplies a real Postgres and
+  fails if that half was skipped. Locally: `PRISM_TEST_DATABASE_URL=postgresql://…` to run it yourself.
+- **Import layering:** `worker` → `pipeline`/`services`/`utils`; never `worker` → `app` except `app.settings`/
+  `app.schemas`. `app/__init__` resolves `create_app` lazily for exactly this reason; context vars live in
+  `utils/context.py`. `python -c "import worker"` must work cold — it is the regression check.
 - Every result's `engine` block drives the report's method footer — never hard-code thresholds in copy.
 - Triage guidance must never suggest evasion; `tests/test_triage.py::test_guidance_never_suggests_evasion` enforces it.
 - Frontend: vanilla JS, `esc()` everything before `innerHTML`, CSS variables only, don't rename IDs the JS reads.
@@ -99,9 +106,9 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 
 ## Current priorities
 
-**State as of 2026-09-06** (`main` @ `b3fd0ef` + the ADR-0028 pass, 221 tests, lint clean, E2E 2/2, audit clean):
+**State as of 2026-09-06** (`main` @ `f1a2cf6` + the ADR-0029 pass, 231 tests + 11 Postgres-only in CI, lint clean, audit clean):
 W1–W4b + W8 shipped · licensed PolyForm Noncommercial 1.0.0 · PAN purged from history.
-Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0028.
+Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0029.
 
 **Next, in order:**
 1. **W6 — first deploy.** `deploy/README.md` is a complete runbook; it needs a VPS and nothing else. On the box:
@@ -117,7 +124,8 @@ Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); d
    both were measured with the **pre-ADR-0026 splitter**, which truncated every sentence containing a decimal.
 3. **W5 fine-tune** — kit is ready and self-gating; needs one human-run Colab/Kaggle GPU session. "Do not ship"
    is a legitimate outcome.
-4. **W7** — Supabase JWT + `PostgresJobStore` implementing the existing `worker.store.JobStore` Protocol.
+4. **W7, remainder** — `PostgresJobStore` is done (ADR-0029). Left: Supabase JWT as a FastAPI dependency,
+   `user_id` on the jobs table + ownership on `GET /check/{id}`, per-user quota → 402, ephemeral text deletion.
 
 **Owner decisions still open** (TODO 🔴, none blocking): the legal copyright holder for `NOTICE`; consent from
 three past teammates for ~176 surviving boilerplate lines; confirming the old Vercel/Render demo is offline.

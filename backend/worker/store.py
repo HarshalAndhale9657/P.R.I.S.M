@@ -1,9 +1,10 @@
 """
 P.R.I.S.M. — Job store + result cache
 =====================================
-``JobStore`` is the seam between the API and wherever job state lives. Today
-that is process memory (``InMemoryJobStore``); W7 adds a Postgres
-implementation behind the same Protocol so the routers never change.
+``JobStore`` is the seam between the API and wherever job state lives: process
+memory (``InMemoryJobStore``) or Postgres (``worker.postgres_store.PostgresJobStore``,
+ADR-0029) behind the same Protocol, so the routers never change. The contract tests
+run every assertion against both.
 
 Both stores are **TTL-bounded**: a manuscript's text is held only as long as
 the user could plausibly still be polling for it (``ttl_seconds``), then purged.
@@ -39,6 +40,8 @@ class JobStore(Protocol):
 
 class InMemoryJobStore:
     """Thread-safe, insertion-ordered, bounded by count *and* age."""
+
+    kind = "memory"
 
     def __init__(self, *, max_jobs: int = 200, ttl_seconds: int = 1800) -> None:
         self.max_jobs = max_jobs

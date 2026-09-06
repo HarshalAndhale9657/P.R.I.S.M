@@ -694,3 +694,56 @@ out loud if anyone compares an old result to a new one. Tests 215 → 221. **The
 both bugs were silent, both were in the path between the user's text and the encoder, and both were invisible to
 a green suite because every fixture was clean, unwrapped prose.** Fixtures that look like real manuscripts are
 worth more than more assertions about tidy ones.
+
+## ADR-0029 — Durable job state: `PostgresJobStore` behind the existing seam, verified by a shared contract
+**Status:** Accepted (2026-09-06)
+**Context:** ADR-0019 left a five-method `JobStore` Protocol as the W7 seam and an in-process implementation
+behind it, with the consequence spelled out in `CLAUDE.md`: *one uvicorn worker, one replica*, and every
+in-flight result lost on restart. W7 proper is accounts + metering + privacy; this is its storage half, done first
+because it is the only part that needs no external account to build and can be verified end-to-end today.
+
+**Decision — the same Protocol, a second implementation, one contract suite for both.**
+* `worker/postgres_store.py` implements `create / get / update / sweep / __len__` over psycopg 3 with a small
+  pool. `created`/`updated` are **epoch floats in `DOUBLE PRECISION`**, exactly as `JobRecord` holds them, so the
+  TTL arithmetic is the *same expression* as the in-memory store's — no timezone, no app-vs-database clock
+  drift, and `sweep(now=…)` stays injectable for tests.
+* **`update()` whitelists its columns.** The runner only ever sets `status`, `result`, `error`; a `**fields` API
+  that interpolates keys into SQL is how a bug becomes an injection, so unknown keys raise. A test passes
+  `owner="x; DROP TABLE …"` to make sure.
+* **Schema is one idempotent `CREATE TABLE IF NOT EXISTS`** at start. No migration framework: the project's rule is
+  no dependency without a measured need, and a single statement is auditable in a way a migrations folder is not.
+* **Ephemeral-by-default still holds.** Rows expire on the same `ttl_seconds`, are swept on every `create` and on
+  read, and `max_jobs` still bounds by count, oldest first. Durability buys restarts and replicas — not retention.
+* **Selected by configuration:** `PRISM_DATABASE_URL` set → Postgres; unset → memory. The pool is closed in the app
+  lifespan. `/health` reports `store: memory | postgres`.
+* **The contract is one file, parametrised over both stores** (`tests/test_job_store_contract.py`): snapshots not
+  shared state, TTL expiry on read, injected-clock sweep, count bound, unicode/nested result round-trip, silent
+  no-op on unknown ids. The in-memory store runs it always; the Postgres store runs it when
+  `PRISM_TEST_DATABASE_URL` is set — **CI provides a `postgres:16` service container and fails the job if the
+  Postgres half was skipped**, so a green CI run is a real Postgres run, not a skipped one.
+
+**Found on the way — a latent circular import.** `worker.runner` imported `app.logging_config` and
+`app.settings`; `app/__init__` eagerly imported `factory`; `factory` imports `worker`. Any test module that
+imported `worker` before `app` failed with *"cannot import name 'CheckRunner' from partially initialized module"*
+— which `tests/test_worker.py` does, and it only passed in the suite because `test_check_api.py` sorts first and
+imports `app`. Fixed structurally: the two `ContextVar`s moved to the dependency-free `utils/context.py`
+(`app.logging_config` re-exports them), and `app/__init__` resolves `create_app` lazily via module `__getattr__`
+while still exporting settings eagerly (`app.settings` has no app-internal imports). `import worker` now works
+cold, and `tests/test_worker.py` passes alone.
+
+**What this does and does not change.** Job *state* is now shared and durable: a client can poll
+`GET /api/v1/check/{id}` on a different replica from the one that accepted the upload, and a restart no longer
+loses every result. *Execution* is still the in-process `BoundedExecutor` on the replica that accepted the job;
+the result cache and the per-IP rate limiter remain in-process. Multiple replicas are therefore **safe for
+reads** and still **one-writer-per-job** — a distributed queue is not this ADR.
+
+**Verified:** ruff clean · **231 passed, 11 skipped** locally (the 11 are the Postgres half, skipped *visibly*) ·
+`import worker` and `tests/test_worker.py` clean in isolation · lockfile regenerated with `psycopg[binary] 3.3.5`
++ `psycopg-pool 3.3.1`, ASCII header kept, `pip-audit` clean · the Postgres half is verified by the CI run for this
+commit, and CI is built so it cannot pass with that half skipped.
+
+**Consequences:** `CLAUDE.md`'s "one replica" gotcha is now conditional on `PRISM_DATABASE_URL`. The W6 runbook
+gains an optional Postgres (Hetzner's managed one, or a container on the same box). The rest of W7 — Supabase JWT
+as a FastAPI dependency, per-user ownership on `GET /check/{id}`, quota → 402 — builds on this table and stays
+open. Two more ASCII lessons for the record: a pytest skip reason with an em dash makes pytest's final summary
+line vanish on a cp1252 console, and `-q` on top of `addopts = -q` suppresses it entirely.

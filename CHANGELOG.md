@@ -5,6 +5,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-06 — Durable job state: `PostgresJobStore` (W7 storage half, ADR-0029)
+
+#### Added
+- **`worker/postgres_store.py`** — the second `JobStore` implementation, selected by `PRISM_DATABASE_URL`
+  (unset = in-process memory, as before). Same five methods, same TTL semantics, same `JobRecord`; epoch floats
+  in `DOUBLE PRECISION` so the expiry arithmetic is the in-memory store's expression verbatim; `update()`
+  whitelists its columns so `**fields` can never reach SQL; one idempotent `CREATE TABLE IF NOT EXISTS`, no
+  migration framework. Job state now survives restarts and is readable from any replica; execution stays on the
+  replica that accepted the job. `/health` reports `store: memory | postgres`.
+- **`tests/test_job_store_contract.py`** — one contract, parametrised over *both* stores. The Postgres half runs
+  when `PRISM_TEST_DATABASE_URL` is set; **CI provides a `postgres:16` service container and fails if that half
+  was skipped**, so green means Postgres actually ran.
+- `psycopg[binary] 3.3.5` + `psycopg-pool 3.3.1`; lockfile regenerated, `pip-audit` clean.
+
+#### Fixed
+- **A latent circular import** (`worker.runner` → `app.logging_config`/`app.settings` → `app/__init__` →
+  `factory` → `worker`). `import worker` failed cold and `tests/test_worker.py` failed in isolation; the suite only
+  passed because an `app`-importing module sorted first. Context vars moved to `utils/context.py`; `app/__init__`
+  resolves `create_app` lazily. Structural, not an import-order patch.
+
+#### Verified
+- ruff clean · **231 passed, 11 skipped** locally (the Postgres half, visibly) · `tests/test_worker.py` passes
+  alone · Postgres contract verified by this commit's CI run (which cannot pass with it skipped).
+
 ### 2026-09-06 — Hard-wrapped plain text was checked as line fragments (ADR-0028)
 
 #### Fixed

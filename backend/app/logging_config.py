@@ -15,15 +15,14 @@ created it.
 """
 from __future__ import annotations
 
-import contextvars
 import json
 import logging
 import sys
 from datetime import UTC, datetime
-from typing import Optional
 
-request_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("request_id", default=None)
-job_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("job_id", default=None)
+# Defined in the dependency-free utils layer so the worker can stamp job ids without
+# importing the HTTP layer (ADR-0029); re-exported here so existing imports still work.
+from utils.context import job_id_var, request_id_var  # noqa: E402
 
 
 class _ContextFilter(logging.Filter):

@@ -34,6 +34,7 @@ def _snapshot(request: Request) -> HealthResponse:
         rerank_enabled=st.settings.rerank,
         queue=QueueStats(**st.runner.executor.stats()),
         jobs_in_memory=len(st.runner.store),
+        store=getattr(st.runner.store, "kind", "memory"),
         embedding_cache=EmbeddingCacheStats(entries=len(cache), capacity=cache.max_entries,
                                             **cache.stats().as_dict()),
     )
