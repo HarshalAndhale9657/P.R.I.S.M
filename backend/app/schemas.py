@@ -182,6 +182,64 @@ class EngineInfo(BaseModel):
     coverage: str = Field(
         description="Plain-language statement of what was (and was not) checked against.",
     )
+    # ADR-0031 — absent from the contract at first, so Pydantic silently dropped them from responses.
+    coach_model: Optional[str] = Field(default=None, description="Model that phrased the coaching, if any.")
+    coach_estimated_cost_usd: float = Field(default=0.0, description="List-price estimate of this check's coaching calls.")
+
+
+class ChecklistItem(BaseModel):
+    kind: Literal["flag", "standing"]
+    type: Optional[str] = None
+    label: str
+    count: int = 1
+    priority: int = 3
+
+
+class Report(BaseModel):
+    """Submission-risk report (ADR-0032). A band with its reason — never a pass/fail."""
+    band: Literal["act", "look", "clear"]
+    label: str
+    reason: str
+    needs_action: int
+    review_count: int
+    confident_pct: float
+    similarity_pct: float
+    checklist: List[ChecklistItem]
+    disclosure: str
+    ai_text_detection: str
+    footer: str
+    coverage: str
+
+
+class RecheckSnapshot(BaseModel):
+    similarity_pct: float
+    confident_pct: float
+    review_count: int
+    match_count: int
+    needs_action: int
+    band: Optional[str] = None
+
+
+class RecheckExample(BaseModel):
+    match_type: Optional[str] = None
+    source_name: Optional[str] = None
+    source_excerpt: str = ""
+    type: Optional[str] = None
+
+
+class Recheck(BaseModel):
+    """Before/after against an earlier job of the same manuscript (ADR-0032)."""
+    previous_job_id: Optional[str] = None
+    same_filename: bool
+    before: RecheckSnapshot
+    after: RecheckSnapshot
+    delta: Dict[str, float]
+    resolved: int
+    new: int
+    remaining: int
+    resolved_examples: List[RecheckExample] = Field(default_factory=list)
+    new_examples: List[RecheckExample] = Field(default_factory=list)
+    method: str
 
 
 class CheckResult(BaseModel):
@@ -199,6 +257,8 @@ class CheckResult(BaseModel):
     warnings: List[str] = Field(default_factory=list)
     triage_summary: Optional[TriageSummary] = None
     coach_summary: Optional[CoachSummary] = None
+    report: Optional[Report] = None
+    recheck: Optional[Recheck] = None
     timings_ms: Dict[str, float] = Field(default_factory=dict)
     engine: EngineInfo
 

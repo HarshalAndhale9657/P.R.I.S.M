@@ -2,8 +2,10 @@
 P.R.I.S.M. — Pipeline stage implementations
 ===========================================
 Live stages: ParseStage, RetrieveStage, MatchStage, RerankStage (opt-in), LocalizeStage, TriageStage.
-Skeleton stages (W9–W10): CoachStage, ReportStage — declared so the architecture is
-visible and the wiring is stable, pass-through today.
+CoachStage (W9, ADR-0031) phrases the fix after triage. The submission-risk report and the
+before/after re-check (W10, ADR-0032) are assembled by the runner from the finished result,
+not by a stage — they need the coverage statement and the previous job, which only the
+runner has.
 
 Dependencies (matcher, academic-search fn) are INJECTED, never imported from the
 app layer, so there is no circular import and tests substitute fakes freely.
@@ -224,14 +226,6 @@ class RerankStage:
         return ctx
 
 
-# ── Skeleton stages (declared now, implemented W8–W10) ────────────────────────
-class _SkeletonStage:
-    name = "skeleton"
-
-    def run(self, ctx: CheckContext) -> CheckContext:  # pragma: no cover - trivial
-        return ctx
-
-
 class TriageStage:
     """W8 — classify each match by the honest fix it needs (ADR-0022).
 
@@ -293,7 +287,3 @@ class CoachStage:
                                               "method": "Coaching was skipped because of an internal error."}
         return ctx
 
-
-class ReportStage(_SkeletonStage):
-    """W10: assemble the submission-risk report payload."""
-    name = "report"

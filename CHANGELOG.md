@@ -5,6 +5,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-07 — Submission-risk report + before/after re-check (W10, ADR-0032)
+
+#### Added
+- **`services/report.py`** — `build_report` (band `act | look | clear` with its reason, priority-ordered fix
+  checklist + two standing items, AI-use disclosure guidance, an honest "AI-text detection: not performed" line,
+  and the "reduces risk, not a guaranteed pass" footer) and `compare` (resolved / new / remaining keyed by what was
+  matched against, before/after snapshots and deltas, examples). Every result now carries `report`; a result run
+  with `compare_to=<earlier job id>` also carries `recheck`.
+- `POST /api/v1/check` accepts `compare_to`; unknown, expired, unfinished or foreign jobs are **404** (same rule
+  as `GET`, ADR-0030). Checking the same file again in the UI sends it automatically.
+- Results view: report panel with band, checklist and re-check chips. Exported report: the same plus disclosure
+  text and the scope footer.
+
+#### Fixed
+- `engine.coach_model` / `coach_estimated_cost_usd` (ADR-0031) were missing from the `EngineInfo` schema and so
+  were silently dropped from responses. Added, with a test that reads them back.
+
+#### Removed
+- The skeleton `ReportStage`: the report is assembled by the runner, which is the only place with the coverage
+  statement and the previous job.
+
+#### Verified
+- 11 report tests incl. a live API re-check · 287 passed / 18 skipped without a database, 305 / 0 with one ·
+  browser E2E 2/2.
+
 ### 2026-09-07 — Honest coaching, phrased by a model and policed by the matcher (W9, ADR-0031)
 
 #### Added

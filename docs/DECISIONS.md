@@ -857,3 +857,51 @@ skip.
 that account (LAUNCH_PLAN §11), and a first read of real output — the prompt has been tested for what it may not
 do, not yet for how well it explains. The per-*account* dollar ceiling is W11's, with payments; the per-process
 daily cap stands in until then.
+
+## ADR-0032 — The submission-risk report and the before/after re-check
+**Status:** Accepted (2026-09-07)
+**Context:** W10 in the launch plan: extend the report with a risk band, a fix checklist and AI-use disclosure
+guidance, carry the "reduces risk, not a guaranteed pass" footer, and close the product's core loop — check,
+fix, **re-check** — using the result cache so the second run is cheap. This is the last piece of the pipeline's
+promised shape (`… → triage → coach → report`) and it is deliberately the simplest: two pure functions.
+
+**Decision — `services/report.py`: deterministic, assembled by the runner, never a pass/fail.**
+* **A band with its reason.** `act` — at least one flag needs fixing outright (a priority-1/2 triage item);
+  `look` — only cited paraphrases or inconclusive matches, read them side by side; `clear` — nothing matched
+  *the sources that were checked*. The `clear` reason says exactly that, because coverage is the only thing the
+  claim rests on (LAUNCH_PLAN §11). No band is called "pass", and the footer on every export says why.
+* **A checklist, not a verdict.** The triage's action items, priority-ordered, plus two standing items every
+  author should do regardless: confirm the reference list, and add an AI-use disclosure if the journal asks.
+* **AI-use disclosure guidance, and an honest line about AI-text detection.** The detector is deferred
+  (ADR-0016), so the report says *"not performed"* rather than printing a number nobody measured. The
+  disclosure text says plainly that this checker makes no claim about AI-written text.
+* **The re-check is a diff keyed by what was matched against.** `compare(previous, current)` keys each match by
+  (type, source id, normalised source excerpt) — not by position — so a flag counts as *resolved* only when the
+  source passage it matched no longer has a counterpart; moving a paragraph resolves nothing. Output: resolved /
+  new / remaining counts, before/after snapshots (similarity, confident %, items to fix, review count), deltas,
+  and up to five short examples each way. `same_filename` is reported rather than assumed.
+* **`compare_to` follows the ownership rule.** `POST /api/v1/check` takes an optional earlier job id; an unknown,
+  expired, unfinished or *someone else's* job is a 404, exactly as `GET` (ADR-0030). A test proves the foreign
+  and anonymous cases.
+* **Computed outside the result cache on purpose.** The report is part of the cached result (deterministic from
+  it). The re-check is not: the same manuscript compared against a *different* earlier job is a different
+  answer, so the runner attaches it after the cache lookup and the cached result stays pure.
+* **The skeleton `ReportStage` is gone.** The report needs the coverage statement and the previous job, which
+  only the runner has; a stage that could not compute what it was named for was architecture theatre.
+
+**Frontend:** the results view gains a report panel (band, checklist, before/after chips), the downloadable
+report gains the same plus the disclosure text and the scope footer, and checking the **same file again** sends
+`compare_to` automatically — that is the loop the product exists for.
+
+**Found on the way:** the `engine.coach_model` / `coach_estimated_cost_usd` fields ADR-0031 added were missing
+from the `EngineInfo` schema, so Pydantic dropped them from every response silently. Added, with a test that
+reads them back through the API.
+
+**Verified:** ruff clean · 11 report tests (bands, checklist order, footer/disclosure invariants, diff
+semantics, whitespace-insensitive keys, and a live API re-check where the edited fixture resolves a flag and
+lowers similarity) · a `compare_to` ownership test · 287 passed / 18 skipped without a database,
+**305 / 0** against the embedded Postgres · browser E2E 2/2 with 0 console errors.
+
+**Consequences:** The pipeline's promised shape is complete and every stage is real. What the report *cannot*
+say — how a specific journal's checker will score the same manuscript — it says it cannot. W11 (payments +
+legal) and W12 (polish + launch) remain, and both need the owner before code.

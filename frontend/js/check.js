@@ -329,10 +329,14 @@
             fd.append('file', state.paper);
             state.refs.forEach(r => fd.append('references', r));
             fd.append('use_academic', state.useAcademic ? 'true' : 'false');
+            // ADR-0032: checking the same file again is a re-check — ask the server for before/after.
+            if (state.lastJobId && state.paper && state.paper.name === state.lastPaperName) fd.append('compare_to', state.lastJobId);
 
             const submit = await fetch(`${API}/check`, { method: 'POST', body: fd, headers: authHeaders() });
             if (!submit.ok) throw new Error(await submitError(submit));
             const { job_id } = await submit.json();
+            state.lastJobId = job_id;
+            state.lastPaperName = state.paper && state.paper.name;
             const result = await pollJob(job_id, setLabel);
             state.result = result;
             renderResults(result);
@@ -345,6 +349,36 @@
             showProgress(false);
             updateButton();
         }
+    }
+
+
+    // ─── Submission-risk report panel (ADR-0032) ───
+    function reportPanel(data) {
+        const rep = data.report;
+        if (!rep) return '';
+        const items = (rep.checklist || []).map(c =>
+            `<li class="ck ck-p${c.priority}">${c.kind === 'flag' ? `<b>${c.count}×</b> ` : ''}${esc(c.label)}${c.kind === 'flag' ? (c.priority <= 2 ? ' — fix before submitting' : ' — review and decide') : ''}</li>`).join('');
+        const rc = data.recheck;
+        const sign = v => (v > 0 ? '+' : '') + v.toFixed(1);
+        const recheck = rc ? `
+            <div class="recheck">
+                <div class="rc-title">Since your last check${rc.same_filename ? '' : ' <span class="muted">(different file name — compare with care)</span>'}</div>
+                <div class="rc-grid">
+                    <span class="rc-chip ok"><b>${rc.resolved}</b> resolved</span>
+                    <span class="rc-chip"><b>${rc.remaining}</b> remaining</span>
+                    <span class="rc-chip ${rc.new ? 'warn' : ''}"><b>${rc.new}</b> new</span>
+                    <span class="rc-chip">similarity ${rc.before.similarity_pct.toFixed(1)}% → <b>${rc.after.similarity_pct.toFixed(1)}%</b> (${sign(rc.delta.similarity_pct)})</span>
+                    <span class="rc-chip">to fix ${rc.before.needs_action} → <b>${rc.after.needs_action}</b></span>
+                </div>
+                <p class="rc-note">${esc(rc.method)}</p>
+            </div>` : '';
+        return `
+            <div class="report-panel band-${rep.band}">
+                <div class="rp-band"><span class="rp-band-label">${esc(rep.label)}</span><span class="rp-band-reason">${esc(rep.reason)}</span></div>
+                <ul class="checklist">${items}</ul>
+                ${recheck}
+                <p class="rp-foot">${esc(rep.footer)}</p>
+            </div>`;
     }
 
     // ─── Results rendering ───
@@ -387,7 +421,7 @@
                         <span class="cs-chip"><b>${ov.matched_words || 0}</b>/${ov.total_words || 0} words</span>
                     </div>
                 </div>
-            </div>${reviewNote}`;
+            </div>${reviewNote}${reportPanel(data)}`;
 
         const warnings = (data.warnings || []).length
             ? `<div class="results-warnings">${data.warnings.map(w => `<span>⚠ ${esc(w)}</span>`).join('')}</div>`
@@ -619,6 +653,27 @@
         `;
     }
 
+
+    function reportRisk(data) {
+        const rep = data.report;
+        if (!rep) return '';
+        const items = (rep.checklist || []).map(c =>
+            `<li>${c.kind === 'flag' ? `<b>${c.count}×</b> ` : '☐ '}${esc(c.label)}</li>`).join('');
+        const rc = data.recheck;
+        const rcHtml = rc ? `<h2>Before / after re-check</h2>
+            <p>Compared with job <code>${esc(rc.previous_job_id || '')}</code>${rc.same_filename ? '' : ' (different file name)'}:
+            <b>${rc.resolved}</b> resolved, <b>${rc.remaining}</b> remaining, <b>${rc.new}</b> new.
+            Overall similarity ${rc.before.similarity_pct.toFixed(1)}% → ${rc.after.similarity_pct.toFixed(1)}%;
+            items to fix ${rc.before.needs_action} → ${rc.after.needs_action}.</p>
+            <p class="tri-note">${esc(rc.method)}</p>` : '';
+        return `<h2>Submission risk: ${esc(rep.label)}</h2>
+            <p>${esc(rep.reason)}</p>
+            <ul class="tri-list">${items}</ul>
+            <h3>AI-use disclosure</h3><p>${esc(rep.disclosure)}</p>
+            <p class="tri-note">AI-text detection: ${esc(rep.ai_text_detection)}.</p>
+            ${rcHtml}`;
+    }
+
     function reportTriage(summary) {
         if (!summary || !summary.action_items || !summary.action_items.length) return '';
         const rows = summary.action_items.map(a =>
@@ -706,6 +761,7 @@
         <div class="sub">Verbatim ${(ov.verbatim_pct || 0).toFixed(1)}% · Paraphrase ${(ov.paraphrase_pct || 0).toFixed(1)}%${(ov.translated_pct || 0) > 0 ? ` · Translated ${(ov.translated_pct || 0).toFixed(1)}%` : ''} · ${ov.match_count || 0} matches · ${ov.source_count || 0} sources · ${ov.matched_words || 0}/${ov.total_words || 0} words</div>
         ${(ov.review_count || 0) > 0 ? `<div class="sub rev">${ov.review_count} match${ov.review_count === 1 ? '' : 'es'} (${(ov.review_pct || 0).toFixed(1)}% of the document) fall below the confidence cutoff and are marked <b>Needs review</b> — not counted as confirmed copying.</div>` : ''}
     </section>
+    ${reportRisk(data)}
     ${reportTriage(data.triage_summary)}
     ${sources ? `<h2>Sources checked</h2><ul class="src">${sources}</ul>` : ''}
     <h2>Document</h2>
@@ -722,6 +778,7 @@
         Academic sources marked <i>abstract only</i> were compared against their abstract, not their full text;
         the others were compared against the full open-access PDF.${scaleNote}${guardNote} Review every flagged passage in context.</p>
         <p><b>Coverage:</b> ${coverage}</p>
+        ${data.report ? `<p><b>Scope:</b> ${esc(data.report.footer)}</p>` : ''}
     </footer>
 </div></body></html>`;
     }
@@ -770,6 +827,8 @@
         state.refs = [];
         state.useAcademic = false;
         state.result = null;
+        state.lastJobId = null;
+        state.lastPaperName = null;
         if (dom.academicToggle) dom.academicToggle.checked = false;
         renderPaperChip();
         renderRefChips();

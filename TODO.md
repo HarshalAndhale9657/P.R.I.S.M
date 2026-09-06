@@ -49,7 +49,8 @@ Check items off with a date. Newest priorities on top.
       daily cap, matcher post-filter + narrow evasion lexicon, labelled AI-written, fails soft. **Needs the owner:**
       an OpenAI key with ZDR → `PRISM_COACH_ENABLED=true` + `PRISM_OPENAI_API_KEY`; then read ~20 real cards for
       tone/quality before exposing it. Per-*account* $ ceiling waits for W11. _(S once a key exists)_
-- [ ] **W10 · ReportStage** — submission-risk report + re-check. _(M)_
+- [x] **W10 · Report + re-check** — done 2026-09-07 (ADR-0032): band + checklist + disclosure + honest footer;
+      `compare_to` re-check keyed by source; ownership-checked. Assembled by the runner, not a stage.
 - [ ] **W11 · Payments + legal** — Razorpay; Privacy/ToS/AUP; CI honesty gate on copy. _(M)_
 - [ ] **W12 · Launch.**
 
@@ -60,6 +61,9 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-07 — **W10 report + re-check** (ADR-0032): `services/report.py`; every result carries `report`,
+      `compare_to` adds `recheck`; UI panel + export; fixed ADR-0031's engine fields missing from the schema.
+      Tests 275 → 287 (+18 Postgres-only; 305 total).
 - [x] 2026-09-07 — **W9 coaching backend** (ADR-0031): model phrases, rules decide, matcher post-filters; bounded,
       cached, priced in the open, labelled. Also `scripts/pg_tests.py` (embedded Postgres; 293/0 locally) after a
       one-test red CI run. Tests 255 → 275 (+18 Postgres-only).

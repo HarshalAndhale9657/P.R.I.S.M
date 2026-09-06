@@ -6,7 +6,6 @@ from .stages import (
     LocalizeStage,
     MatchStage,
     ParseStage,
-    ReportStage,
     RerankStage,
     RetrieveStage,
     TriageStage,
@@ -16,5 +15,5 @@ __all__ = [
     "CheckContext", "Document", "PipelineError", "RawInput", "SourceDoc", "Stage",
     "build_check_stages", "default_check_stages", "run_pipeline",
     "ParseStage", "RetrieveStage", "MatchStage", "RerankStage", "LocalizeStage",
-    "TriageStage", "CoachStage", "ReportStage",
+    "TriageStage", "CoachStage",
 ]

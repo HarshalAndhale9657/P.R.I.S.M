@@ -37,6 +37,9 @@ class CheckRequest:
     references: List[Upload]
     use_academic: bool
     base_warnings: List[str]
+    # ADR-0032: the finished result of an earlier job to compare against (re-check after edits).
+    previous: Optional[Dict[str, Any]] = None
+    previous_job_id: Optional[str] = None
 
     def content_hash(self) -> str:
         h = hashlib.sha256()
@@ -100,6 +103,11 @@ class CheckRunner:
                 self.cache.put(key, result)
             else:
                 logger.info("check served from result cache")
+            if req.previous is not None:
+                # Computed outside the cache on purpose: the same manuscript compared against a
+                # different earlier job is a different answer, and the cached result must stay pure.
+                from services.report import compare
+                result = {**result, "recheck": compare(req.previous, result, previous_job_id=req.previous_job_id)}
             self.store.update(job_id, status="done", result=result)
             logger.info("check done in %.2fs (%d matches)", time.perf_counter() - started,
                         result["overall"]["match_count"])
@@ -147,9 +155,15 @@ class CheckRunner:
             n_abstract=sum(1 for x in acad if x.kind != "fulltext"),
             providers=sorted({x.origin for x in acad}),
         )
+        from services.report import build_report
+
+        report = build_report(overall=ctx.artifacts["overall"], triage_summary=ctx.artifacts.get("triage_summary"),
+                              matches=ctx.artifacts["matches"], coverage=coverage)
         return {
             "filename": ctx.document.name,
             "status": "success",
+            "report": report,
+            "recheck": None,
             "document_text": ctx.document.text,
             "paragraphs": [
                 {"index": p["index"], "page": p.get("page"), "start": p["start"], "end": p["end"]}

@@ -179,3 +179,14 @@ def test_signed_in_users_are_not_subject_to_the_per_ip_limiter():
         assert c.post("/api/v1/check", files=_files(), headers=a).status_code == 202
         assert c.post("/api/v1/check", files=_files()).status_code == 202
         assert c.post("/api/v1/check", files=_files()).status_code == 429, "anonymous still is"
+
+
+def test_recheck_against_someone_elses_job_is_404_not_403():
+    """`compare_to` follows the same ownership rule as GET (ADR-0032 on ADR-0030)."""
+    with _auth_client() as c:
+        a, b = _bearer(_token("user-a")), _bearer(_token("user-b"))
+        job = c.post("/api/v1/check", files=_files(), headers=a).json()["job_id"]
+        r = c.post("/api/v1/check", files=_files(), data={"compare_to": job}, headers=b)
+        assert r.status_code == 404
+        r = c.post("/api/v1/check", files=_files(), data={"compare_to": job})
+        assert r.status_code == 404, "anonymous cannot compare against an owned job either"

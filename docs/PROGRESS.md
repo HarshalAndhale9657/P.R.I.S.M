@@ -5,6 +5,40 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-07 (cont.) — W10: the report says what it can, and the loop closes (ADR-0032)
+
+**The last promised stage.** The pipeline has said `… → triage → coach → report` since ADR-0019. Report is now
+real, and it turned out not to be a stage at all: it needs the coverage statement and the previous job, which
+only the runner has, so the skeleton `ReportStage` — a class that could not compute what it was named for — is
+gone and the runner assembles it. Two pure functions, no model, no I/O.
+
+**A band with its reason, never a pass.** `act` (something needs fixing), `look` (cited paraphrases or
+inconclusive matches to read side by side), `clear` — and `clear`'s own text says *"no passage matched the
+sources that were checked; that is a statement about these sources"*. The checklist is the triage's items in
+priority order plus two standing ones (confirm the reference list; add an AI-use disclosure if asked). The
+AI-text line says **not performed**, because it was not (ADR-0016), instead of printing a number.
+
+**The re-check keys by what was matched against.** A flag is resolved when the *source passage* it matched no
+longer has a counterpart in the document — moving a paragraph resolves nothing. Counts, deltas, five examples
+each way, and `same_filename` reported rather than assumed. `compare_to` obeys the ownership rule: someone
+else's job is a 404, like `GET`. Checking the same file again in the UI sends it automatically — that is the
+loop the product exists for, and the live API test walks it: the edited fixture resolves a flag and similarity
+falls.
+
+**Kept outside the result cache on purpose.** The report is deterministic from the result and is cached with
+it; the re-check is not, because the same manuscript against a *different* earlier job is a different answer.
+
+**Found on the way:** ADR-0031's `engine.coach_*` fields were never in the `EngineInfo` schema, so Pydantic was
+dropping them from every response without a sound. Added, and a test now reads them back through the API.
+
+**Verified:** 11 report tests + 1 ownership test · 287 / 18 skipped without a database, **305 / 0** with the
+embedded Postgres · browser E2E 2/2 · lint clean.
+
+**What is left before launch is not code I can write alone:** W11 (Razorpay, Privacy/ToS/AUP, ZDR) and W12
+(polish, demo, channels) need the owner's accounts and decisions first.
+
+---
+
 ## 2026-09-07 (cont.) — W9: the coach, built so it cannot do the one thing it must never do (ADR-0031)
 
 **First, the red CI run.** The ADR-0030 push failed in CI on exactly one test — mine. Its teardown dropped the

@@ -689,3 +689,23 @@ a.cmp-src:hover { text-decoration: underline; }
 .coach-fix { font-size: var(--font-size-sm); color: var(--text-primary); line-height: 1.6; margin: 0; }
 .coach-note { font-size: var(--font-size-xs); color: var(--text-secondary); margin: 6px 0 0; font-style: italic; }
 .coach-sig { font-size: var(--font-size-xs); color: var(--text-tertiary); margin: 8px 0 0; }
+
+/* ── Submission-risk report panel (ADR-0032) ─────────────────────────────── */
+.report-panel{margin-top:16px;padding:14px 16px;border:1px solid var(--border, #e7e9ef);border-radius:10px;background:var(--surface, #fff)}
+.report-panel .rp-band{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}
+.report-panel .rp-band-label{font-weight:700;font-size:15px}
+.report-panel .rp-band-reason{color:var(--muted, #6b7280);font-size:13px}
+.report-panel.band-act .rp-band-label{color:var(--danger, #b91c1c)}
+.report-panel.band-look .rp-band-label{color:var(--warn, #b45309)}
+.report-panel.band-clear .rp-band-label{color:var(--ok, #15803d)}
+.report-panel .checklist{list-style:none;padding:0;margin:0 0 8px}
+.report-panel .checklist li{padding:5px 8px;border-left:3px solid var(--border, #e7e9ef);margin-bottom:4px;font-size:13px}
+.report-panel .checklist li.ck-p1,.report-panel .checklist li.ck-p2{border-left-color:var(--danger, #b91c1c)}
+.report-panel .rp-foot{font-size:11px;color:var(--muted, #6b7280);font-style:italic;margin:6px 0 0}
+.recheck{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border, #e7e9ef)}
+.recheck .rc-title{font-weight:600;font-size:13px;margin-bottom:6px}
+.recheck .rc-grid{display:flex;flex-wrap:wrap;gap:6px}
+.recheck .rc-chip{font-size:12px;padding:3px 8px;border-radius:999px;background:var(--chip, #f3f4f6)}
+.recheck .rc-chip.ok{background:#dcfce7}
+.recheck .rc-chip.warn{background:#fee2e2}
+.recheck .rc-note{font-size:11px;color:var(--muted, #6b7280);font-style:italic;margin:6px 0 0}

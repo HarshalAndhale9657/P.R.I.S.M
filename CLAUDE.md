@@ -47,14 +47,15 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   (request-id, body-size guard), `limits.py` (rate limiter), `routers/check.py`, `routers/health.py`, `factory.py`.
 - `backend/worker/` — `executor.py` (bounded queue → 503), `store.py` (in-memory TTL job store; the `JobStore`
   Protocol), `postgres_store.py` (the durable one, ADR-0029), `runner.py` (job lifecycle; assembles the result).
-- `backend/pipeline/` — `parse → retrieve → match → rerank(opt-in) → localize → triage` (+ skeleton coach/report).
+- `backend/pipeline/` — `parse → retrieve → match → rerank(opt-in) → localize → triage → coach(opt-in)`; the report
+  and re-check are assembled by the runner (ADR-0032).
   Collaborators are **injected**; tests patch `app.state.runner.matcher` / `.academic_search`.
 - `backend/services/` — `document_parser.py` (checker-specific PDF/text), `plagiarism_matcher.py` (pure matcher),
   `academic_corpus.py` (OpenAlex + arXiv + keyed Semantic Scholar; `ProviderContext`/`Candidate`), `fulltext.py`
   (safe OA-PDF fetcher, ADR-0021), `triage.py` (deterministic remediation rules, ADR-0022),
   `embedding_cache.py` (per-sentence LRU, ADR-0023 — makes re-checks 6× faster),
   `numeric_guard.py` (same shape, different figures → `review`, ADR-0026), `coach.py` (model phrases the fix,
-  matcher post-filters it, ADR-0031),
+  matcher post-filters it, ADR-0031), `report.py` (risk band + checklist + re-check diff, ADR-0032),
   `local_embeddings.py` (bi-encoder singleton). `backend/utils/` — `TTLCache`.
 - `backend/modelhub/` — model registry/cache (`get_embedder`, `get_cross_encoder`).
 - `backend/eval/` — public-dataset harness; `gates.json` holds the per-dataset regression gates (ADR-0020). **No PAN.**
@@ -107,6 +108,12 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   goes through `services.coach.post_filter` — 8-word copies of the source or the passage, and detector-beating
   language, are replaced by rule text. Keep the evasion lexicon *narrow*: rule text must be able to say "do not
   just change a few words". Never send more than the two excerpts. Cards are always labelled `ai_written`.
+- **Report + re-check (ADR-0032):** `report` is part of the cached result; `recheck` is attached by the runner
+  *after* the cache lookup and must stay out of the cache. The band is never "pass"; the `clear` reason must
+  keep saying it is about the sources checked. `compare_to` obeys the GET ownership rule (404).
+- **Every new field on the result must be added to the Pydantic schema** — Pydantic drops unknown keys silently
+  (ADR-0031's engine fields were lost this way for one commit). A test that reads the field back through the API
+  is the guard.
 - **Import layering:** `worker` → `pipeline`/`services`/`utils`; never `worker` → `app` except `app.settings`/
   `app.schemas`. `app/__init__` resolves `create_app` lazily for exactly this reason; context vars live in
   `utils/context.py`. `python -c "import worker"` must work cold — it is the regression check.
@@ -117,9 +124,9 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 
 ## Current priorities
 
-**State as of 2026-09-07** (`main` @ `84ba0ac` + the ADR-0031 pass, 275 tests + 18 Postgres-only (293 total vs an embedded Postgres), lint clean, E2E 2/2, audit clean):
+**State as of 2026-09-07** (`main` @ `5032bc6` + the ADR-0032 pass, 287 tests + 18 Postgres-only (305 vs an embedded Postgres), lint clean, E2E 2/2, audit clean):
 W1–W4b + W8 shipped · licensed PolyForm Noncommercial 1.0.0 · PAN purged from history.
-Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0031.
+Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0032.
 
 **Next, in order:**
 1. **W6 — first deploy.** `deploy/README.md` is a complete runbook; it needs a VPS and nothing else. On the box:
@@ -135,9 +142,9 @@ Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); d
    both were measured with the **pre-ADR-0026 splitter**, which truncated every sentence containing a decimal.
 3. **W5 fine-tune** — kit is ready and self-gating; needs one human-run Colab/Kaggle GPU session. "Do not ship"
    is a legitimate outcome.
-4. **W7 and W9 — backend code-complete** (ADR-0029/0030/0031), both dark until configured. Needs the owner: a
-   Supabase project (secret or JWKS URL) + free-quota number + sign-in UI; an OpenAI key with ZDR + a read of real
-   cards. **W10 (report + before/after re-check) is the next unblocked build.**
+4. **W7, W9 and W10 — code-complete** (ADR-0029…0032). W7/W9 are dark until configured: a Supabase project
+   (secret or JWKS URL) + free-quota number + sign-in UI; an OpenAI key with ZDR + a read of real cards.
+   **What remains — W11 payments + legal, W12 polish + launch — needs the owner's accounts and decisions first.**
 
 **Owner decisions still open** (TODO 🔴, none blocking): the legal copyright holder for `NOTICE`; consent from
 three past teammates for ~176 surviving boilerplate lines; confirming the old Vercel/Render demo is offline.

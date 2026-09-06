@@ -50,6 +50,8 @@ async def submit_check(
     file: UploadFile = File(..., description="The manuscript to check (PDF, TXT or MD)."),
     references: List[UploadFile] = File(default=[], description="Reference sources to compare against."),
     use_academic: bool = Form(default=False, description="Also search OpenAlex + arXiv abstracts."),
+    compare_to: Optional[str] = Form(default=None, description="Job id of an earlier check of this manuscript "
+                                                                "to compare against (before/after re-check)."),
 ):
     settings = request.app.state.settings
     runner: CheckRunner = request.app.state.runner
@@ -102,11 +104,23 @@ async def submit_check(
             )
         refs.append((label, raw))
 
+    previous = None
+    if compare_to:
+        prev = runner.status(compare_to)
+        # Same rule as GET: someone else's job, an expired one, or one still running all read as
+        # "no such job" — never a different error that would leak existence (ADR-0030).
+        if (prev is None or prev.status != "done" or prev.result is None
+                or (prev.owner is not None and (principal is None or principal.user_id != prev.owner))):
+            raise HTTPException(status_code=404, detail="Unknown, expired or unfinished job id to compare against.")
+        previous = prev.result
+
     req = CheckRequest(
         paper=(file.filename or "document", paper_bytes),
         references=refs,
         use_academic=use_academic and settings.academic_enabled,
         base_warnings=base_warnings,
+        previous=previous,
+        previous_job_id=compare_to if previous is not None else None,
     )
     try:
         rec = runner.submit(req, owner=principal.user_id if principal else None)
