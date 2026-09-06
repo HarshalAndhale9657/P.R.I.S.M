@@ -45,8 +45,20 @@ PRISM_TAG=<previous-sha> docker compose up -d api
 - **Capacity:** `GET /health` → `queue.pending` near `capacity` means checks are being refused with 503;
   raise `PRISM_MAX_PENDING_JOBS` only if RAM allows (`pending × PRISM_MAX_REQUEST_BYTES`).
 
-## 5. What is deliberately not here yet
-- No database and no backups: nothing is persisted (manuscripts live in memory for `PRISM_JOB_TTL_SECONDS`
-  and are then gone). This changes at W7 (Postgres job store + accounts).
-- One API replica: the job store is in-process. Do not add uvicorn workers or replicas before W7.
+## 5. Optional pieces, and what is deliberately not here
+- **Database (optional, ADR-0029).** With `PRISM_DATABASE_URL` unset, nothing is persisted: a manuscript lives in
+  memory for `PRISM_JOB_TTL_SECONDS` and is then gone, and you must run **one** API replica. Set it to a Postgres
+  DSN (Hetzner's managed Postgres, or a `postgres:16` container on this box) and job state survives restarts and
+  any replica can serve `GET /api/v1/check/{id}`. Execution still happens on the replica that accepted the job,
+  so replicas are safe for reads, not a queue. Rows still expire on the same TTL — durability buys restarts and
+  replicas, not retention. `GET /health` → `store` says which is in use.
+- **Accounts (optional, ADR-0030).** Unset = anonymous, as before. Set `PRISM_AUTH_JWT_SECRET` *or*
+  `PRISM_AUTH_JWKS_URL` from the Supabase project and tokens are verified; `PRISM_AUTH_REQUIRED=true` makes them
+  mandatory; `PRISM_QUOTA_CHECKS` gives signed-in users a per-user budget (402 over it) instead of the per-IP
+  limiter. `GET /health` → `auth` is `off | optional | required`.
+- **Coaching (optional, ADR-0031).** Dark until `PRISM_COACH_ENABLED=true` and `PRISM_OPENAI_API_KEY` are set.
+  Use an account with Zero Data Retention; only the flagged passage and the source excerpt are sent. Watch
+  `coach_summary.estimated_cost_usd` in results and `PRISM_COACH_MAX_CALLS_PER_DAY`.
+- Backups: none. The only durable data is the job table (TTL-expired) and the usage ledger (owner id +
+  timestamp). If you run Postgres, snapshot it the way you snapshot the box.
 - Secrets live in `prism.env` on the box. Fine for one operator; move to a secret manager when there are two.
