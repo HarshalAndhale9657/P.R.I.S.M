@@ -28,10 +28,13 @@ Check items off with a date. Newest priorities on top.
       a cross-dataset corpus a lower one (0.000), and no synthetic probe closes that gap. On the box, run the **full
       pipeline**: let the live retriever assemble a corpus for a real OA paper, then score passages known not to
       derive from it. Only then refit `k` / `pivot` and refresh `eval/gates.json`. _(M)_
-- [ ] **Boilerplate/template signal in the matcher** (ADR-0025 finding 3). What survives de-duplication is not
-      topic drift but template text with different facts in it — two S&P-500 report sentences, opposite directions,
-      different numbers, **0.877**. No threshold separates that; it needs a signal (numeric divergence within a
-      high-similarity span, or a PAWS-style hard-negative head). Until then it is a known false-positive class. _(M)_
+- [ ] **Re-run the ADR-0024/0025 corpus calibration on the fixed splitter.** Both were measured while the splitter
+      was truncating every sentence containing a decimal (ADR-0026). The pair-based numbers are unaffected — those
+      never went through the splitter — but any claim about a *document* check did. Fold this into the W6
+      re-measurement rather than repeating the synthetic probe. _(S)_
+- [ ] **Widen the numeric guard's coverage, or decide not to** (ADR-0026). It is silent on the 53–90% of pairs
+      where one side states no number. The same "same shape, different facts" idea extends to named entities and
+      dates; both need the same measure-first treatment, and "not worth it" is a valid answer. _(M)_
 - [ ] `pip-audit` step in CI once the lockfile has settled. _(S)_
 
 ## 🟢 Next — the product (W7–W12, LAUNCH_PLAN §9)
@@ -51,6 +54,12 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-06 — **Sentence splitter fixed + numeric guard** (ADR-0026): the splitter broke on every period, so
+      any sentence with a decimal (`8.79`, `p = 0.05`) was truncated and its remainder **dropped, never compared** —
+      19.9% of MRPC sentences, 5.8% of STS-B, 4.2% of QQP. Fixed with named exceptions, no NLP library. Then the
+      guard: a confident paraphrase that shares essentially no figure with its source becomes `review` (STS-B
+      72.4% of negatives caught for 2.0% of positives; gate 0.20 because the ratio peaks there). Verified through
+      the live API and the browser. Tests 188 → 215.
 - [x] 2026-09-06 — **Re-measured ADR-0024 honestly** (ADR-0025): corpus **relevance** beats corpus **size**
       (a retrieved 100-sentence corpus behaves like a random 1 000–3 000-sentence one; FPR is flat in N), and the
       original probe was contaminated by unlabelled duplicates — bounded FPR@0.78 at N=3 000 is 0.088, not 0.108,

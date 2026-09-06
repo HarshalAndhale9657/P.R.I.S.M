@@ -50,6 +50,7 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   `academic_corpus.py` (OpenAlex + arXiv + keyed Semantic Scholar; `ProviderContext`/`Candidate`), `fulltext.py`
   (safe OA-PDF fetcher, ADR-0021), `triage.py` (deterministic remediation rules, ADR-0022),
   `embedding_cache.py` (per-sentence LRU, ADR-0023 — makes re-checks 6× faster),
+  `numeric_guard.py` (same shape, different figures → `review`, ADR-0026),
   `local_embeddings.py` (bi-encoder singleton). `backend/utils/` — `TTLCache`.
 - `backend/modelhub/` — model registry/cache (`get_embedder`, `get_cross_encoder`).
 - `backend/eval/` — public-dataset harness; `gates.json` holds the per-dataset regression gates (ADR-0020). **No PAN.**
@@ -70,6 +71,14 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   counts real matches as false positives. Never quote a corpus FPR without `--pool-only`, `--drop-above` or reading
   the `--examples` dump. And note **relevance beats size**: a *retrieved* 100-sentence corpus behaves like a random
   1 000–3 000-sentence one, so the size scaling counteracts the smaller half of the effect.
+- **Sentence splitting lives in `plagiarism_matcher.split_sentences`** (ADR-0026), and its exceptions are load-
+  bearing: a period between digits, a listed abbreviation, an initial or a following lower-case letter is not a
+  boundary. The naive version truncated every sentence containing a decimal and *dropped* the remainder. If you
+  touch it, the tests in `test_matcher.py` pin `p = 0.05`, `Fig. 3`, `et al.`, `J. R. R.` and URLs.
+- **The numeric guard** (ADR-0026) moves a confident paraphrase to `review` when it and its source state numbers
+  but share ≤`PRISM_NUMERIC_GUARD_GATE` (0.20) of them. Paraphrase only, one band only, never hidden. When you
+  write copy about the `review` band, remember there are now **two** reasons for it — the cutoff and this — and
+  saying the wrong one is a false statement about the check.
 - Cross-encoder rerank (W4) is **opt-in** (`PRISM_RERANK=true`, image built with `PRISM_BAKE_RERANK=1`) until
   latency is measured on the real VPS.
 - The job store is **in-process**: exactly one uvicorn worker / one replica until the Postgres store lands (W7).
@@ -80,9 +89,9 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 
 ## Current priorities
 
-**State as of 2026-09-06** (`main` @ `aaafa0c` + the ADR-0025 measurement pass, 188 tests, lint clean):
+**State as of 2026-09-06** (`main` @ `e4a9736` + the ADR-0026 pass, 215 tests, lint clean, E2E 2/2):
 W1–W4b + W8 shipped · licensed PolyForm Noncommercial 1.0.0 · PAN purged from history.
-Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0025.
+Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0026.
 
 **Next, in order:**
 1. **W6 — first deploy.** `deploy/README.md` is a complete runbook; it needs a VPS and nothing else. On the box:
@@ -94,7 +103,8 @@ Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); d
    N=3 000 is 0.088 rather than 0.108, and *relevance* moved the number far more than *size*. `k`/`pivot` were
    deliberately left alone — the honest interval is wider than a refit would move them. What settles it is the
    **full pipeline against really-retrieved sources**: let the live retriever build a corpus for a real OA paper,
-   then score passages known not to derive from it. Only then refit and refresh `eval/gates.json`.
+   then score passages known not to derive from it. Only then refit and refresh `eval/gates.json`. Note that
+   both were measured with the **pre-ADR-0026 splitter**, which truncated every sentence containing a decimal.
 3. **W5 fine-tune** — kit is ready and self-gating; needs one human-run Colab/Kaggle GPU session. "Do not ship"
    is a legitimate outcome.
 4. **W7** — Supabase JWT + `PostgresJobStore` implementing the existing `worker.store.JobStore` Protocol.

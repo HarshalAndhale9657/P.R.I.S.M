@@ -55,6 +55,7 @@ class TriageSignals(BaseModel):
     citation_markers: List[str] = Field(default_factory=list)
     shared_by_sources: int = 1
     stopword_ratio: float = 0.0
+    numeric_conflict: bool = False
 
 
 class Triage(BaseModel):
@@ -107,6 +108,11 @@ class Match(BaseModel):
     page: Optional[int] = None
     rerank_score: Optional[float] = None
     reranked: Optional[bool] = None
+    numeric_conflict: bool = Field(
+        default=False,
+        description="This match and its source state numbers but share none — same shape, different figures "
+                    "(ADR-0026). It is why the band is `review` rather than `confident`.",
+    )
     triage: Optional[Triage] = None
 
 

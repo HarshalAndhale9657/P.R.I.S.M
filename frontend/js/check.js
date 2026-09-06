@@ -498,11 +498,18 @@
 
     function renderDetail(m) {
         const para = m.paragraph_index != null ? `Paragraph ${m.paragraph_index + 1}` : '';
+        // Two different reasons land a match in `review`, and saying the wrong one is a
+        // false statement about the check: below the cutoff, or the numeric guard (ADR-0026).
         const reviewCallout = isReview(m)
-            ? `<p class="cmp-review-note"><b>Inconclusive — needs your review.</b> This passage is similar to the
-               source but falls below our confidence cutoff. Independently written text on the same topic (shared
-               terminology, standard methods phrasing) can look like this too. Compare them yourself before
-               treating it as reuse.</p>`
+            ? (m.numeric_conflict
+                ? `<p class="cmp-review-note"><b>Inconclusive — needs your review.</b> This passage and the source
+                   are worded alike but share none of the same figures. Text that follows a standard form of words
+                   — results sentences, market or methods reporting — looks like this without either side copying.
+                   Compare them yourself before treating it as reuse.</p>`
+                : `<p class="cmp-review-note"><b>Inconclusive — needs your review.</b> This passage is similar to the
+                   source but falls below our confidence cutoff. Independently written text on the same topic (shared
+                   terminology, standard methods phrasing) can look like this too. Compare them yourself before
+                   treating it as reuse.</p>`)
             : '';
         return `
             ${coachCard(m)}
@@ -626,6 +633,14 @@
                source sentences, the bar for "confident" was raised from ${eng.confident_threshold_base.toFixed(2)}
                to ${tConf} — with more sentences to compare against, a high score happens more easily by chance.`
             : '';
+        // The numeric guard (ADR-0026) also moves matches into `review`. A footer that only
+        // explains the corpus-size raise would leave those unexplained.
+        const guarded = (data.matches || []).filter(m => m.numeric_conflict).length;
+        const guardNote = guarded
+            ? ` ${guarded} match${guarded === 1 ? ' was' : 'es were'} marked "needs review" because the passage and
+               its source are worded alike but state none of the same figures — standard forms of words look like
+               this without either side copying.`
+            : '';
         const coverage = esc(eng.coverage || 'Checked against your uploaded references' +
             (data.academic_used ? ' and open-access abstracts from OpenAlex/arXiv' : '') +
             ' — not the full web or subscription journal databases.');
@@ -655,7 +670,7 @@
                 <div class="m${isReview(m) ? ' m-review' : ''}">
                     <div class="m-h"><span class="m-badge ${m.match_type}">${label}</span>${tri}${rev}${lp}${pctInt(m.similarity)}% — ${src}${oa}${para}</div>
                     ${fix}
-                    ${isReview(m) ? `<div class="m-note">Below the confidence cutoff — similar wording that can also arise independently. Not a confirmed copy; verify in context.</div>` : ''}
+                    ${isReview(m) ? `<div class="m-note">${m.numeric_conflict ? 'Same wording, different figures — standard phrasing can look like this without copying.' : 'Below the confidence cutoff — similar wording that can also arise independently.'} Not a confirmed copy; verify in context.</div>` : ''}
                     <div class="m-b">
                         <div><div class="m-lab">Your paper</div><div class="m-x">${esc(m.doc_excerpt || '')}</div></div>
                         <div><div class="m-lab">Source</div><div class="m-x">${highlightExcerpt(m.source_context || m.source_excerpt || '', m.source_excerpt || '')}</div></div>
@@ -689,7 +704,7 @@
         text on the same topic can reach that range. This is a self-check aid and <b>not a determination of
         misconduct</b>. Legitimate quotation, common phrasing, shared terminology and citations can also match.
         Academic sources marked <i>abstract only</i> were compared against their abstract, not their full text;
-        the others were compared against the full open-access PDF.${scaleNote} Review every flagged passage in context.</p>
+        the others were compared against the full open-access PDF.${scaleNote}${guardNote} Review every flagged passage in context.</p>
         <p><b>Coverage:</b> ${coverage}</p>
     </footer>
 </div></body></html>`;

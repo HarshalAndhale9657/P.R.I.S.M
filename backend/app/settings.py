@@ -61,6 +61,16 @@ class Settings(BaseSettings):
     # ── Matching ────────────────────────────────────────────────────────────
     paraphrase_threshold: float = 0.66      # reporting floor (ADR-0013 / ADR-0017)
     confident_threshold: float = 0.78       # confidence cutoff (ADR-0017)
+    numeric_guard: bool = Field(
+        default=True,
+        description="Move a confident paraphrase match to `review` when it and its source state numbers "
+                    "but share none (ADR-0026). Never hides a match; false = off.",
+    )
+    numeric_guard_gate: float = Field(
+        default=0.20, ge=0.0, le=1.0,
+        description="Numeric agreement at or below which the guard fires. 0.20 is where the "
+                    "catch/cost ratio peaks on MRPC, STS-B and QQP independently (ADR-0026).",
+    )
     confidence_scaling: bool = Field(
         default=True,
         description="Raise the confidence cutoff as the source corpus grows (ADR-0024). The matcher takes a max "

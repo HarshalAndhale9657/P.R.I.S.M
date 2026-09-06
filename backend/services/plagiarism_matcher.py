@@ -26,6 +26,9 @@ from bisect import bisect_left
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from services.numeric_guard import DEFAULT_GATE as NUMERIC_GATE
+from services.numeric_guard import conflicts as numeric_conflicts
+
 logger = logging.getLogger(__name__)
 
 # Optional language identification (for labelling cross-lingual / translated matches).
@@ -39,8 +42,63 @@ except Exception:  # pragma: no cover
 
 # A "word" token: unicode word chars plus internal apostrophes (don't / it's).
 _WORD_RE = re.compile(r"\w+(?:['’]\w+)*", re.UNICODE)
-# Coarse sentence splitter that preserves offsets (deterministic, language-agnostic).
-_SENT_RE = re.compile(r"[^.!?\n]+(?:[.!?]+|\n+|$)", re.UNICODE)
+# Sentence segmentation, offset-preserving and language-agnostic. The naive `[^.!?]+[.!?]` breaks on every period, which in this
+# product's own corpus means breaking inside "up 8.79 points" and "p = 0.05" — the sentence
+# the matcher then embeds is a truncated fragment. Academic and financial prose is full of
+# decimals, abbreviations and initials, so each is handled explicitly (ADR-0026).
+_SENT_END_RE = re.compile(r"[.!?…]+[\"'’”)\]]*|\n+", re.UNICODE)
+_ABBREV_TAIL_RE = re.compile(r"([A-Za-z][A-Za-z.]*)\.$", re.UNICODE)
+# Trailing token before a period that does not end a sentence. Lower-cased, dots stripped.
+_ABBREVIATIONS = frozenset([
+    "eg", "ie", "etal", "al", "cf", "fig", "figs", "eq", "eqs", "no", "nos", "pp", "vs",
+    "viz", "ca", "approx", "est", "ref", "refs", "sec", "secs", "dr", "prof", "mr", "mrs",
+    "ms", "st", "jr", "sr", "inc", "ltd", "co", "corp", "dept", "univ", "vol", "vols",
+    "ed", "eds", "edn", "repr", "etc", "resp", "ibid",
+    "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
+])
+
+
+def split_sentences(text: str) -> List[Tuple[int, int]]:
+    """(start, end) offsets of each sentence in `text`, decimals and abbreviations intact.
+
+    A period ends a sentence unless it is (a) between digits — `8.79`, `p<0.05`; (b) the
+    dot of a known abbreviation — `et al.`, `Fig.`, `approx.`; (c) an initial — `J. R. R.`;
+    or (d) followed by a lower-case letter, which in practice means a URL, a file name or an
+    abbreviation this list has not met yet. A newline always ends one, because a PDF's line
+    structure is the only sentence signal some headings and list items have.
+    """
+    spans: List[Tuple[int, int]] = []
+    start = 0
+    for m in _SENT_END_RE.finditer(text):
+        if not m.group().startswith("\n") and not _is_sentence_end(text, m):
+            continue
+        end = m.end()
+        if text[start:end].strip():
+            spans.append((start, end))
+        start = end
+    if text[start:].strip():
+        spans.append((start, len(text)))
+    return spans
+
+
+def _is_sentence_end(text: str, m) -> bool:
+    """Whether this run of terminators really closes a sentence."""
+    i = m.start()
+    if m.group() != ".":
+        return True                                       # !, ?, …, or a quoted close
+    prev, nxt = text[i - 1:i], text[i + 1:i + 2]
+    if prev.isdigit() and nxt.isdigit():
+        return False                                      # 8.79, 0.05, 1.2e3
+    head = _ABBREV_TAIL_RE.search(text[max(0, i - 24):i + 1])
+    if head:
+        token = head.group(1)
+        if token.replace(".", "").lower() in _ABBREVIATIONS:
+            return False                                  # et al., Fig., approx.
+        if len(token) == 1 and token.isupper():
+            return False                                  # J. R. R. Tolkien
+    # A lower-case letter after the dot is a URL, a file name, or an abbreviation this
+    # list has not met yet — none of them a sentence boundary.
+    return not text[m.end():m.end() + 3].lstrip()[:1].islower()
 
 
 def _norm(word: str) -> str:
@@ -135,6 +193,8 @@ class PlagiarismMatcher:
         min_sentence_words: int = 6,
         max_source_sentences: int = 6000,
         embedding_model_key: str = "bi-encoder",
+        numeric_guard: bool = True,
+        numeric_guard_gate: float = NUMERIC_GATE,
         confidence_scaling: bool = True,
         confidence_scale_k: float = 0.06,
         confidence_scale_pivot: int = 500,
@@ -144,6 +204,8 @@ class PlagiarismMatcher:
             raise ValueError("ngram must be >= 1")
         # Namespaces the embedding cache: swapping the model must never reuse old vectors.
         self.embedding_model_key = embedding_model_key
+        self.numeric_guard = numeric_guard
+        self.numeric_guard_gate = numeric_guard_gate
         self.confidence_scaling = confidence_scaling
         self.confidence_scale_k = confidence_scale_k
         self.confidence_scale_pivot = max(1, confidence_scale_pivot)
@@ -385,10 +447,23 @@ class PlagiarismMatcher:
             doc_lang = self._detect_lang(dsent.text)
             src_lang = self._detect_lang(ssent.text)
             is_translated = bool(doc_lang and src_lang and doc_lang != src_lang)
+            confidence = "confident" if score >= confident_cutoff else "review"
+            # ADR-0026: same sentence shape, not one figure in common. Measured on public
+            # data to catch 20-59% of non-paraphrase pairs at this cutoff while softening
+            # 2-10% of real ones. Only ever confident -> review, never below the reporting
+            # floor and never hidden; skipped for translated text, where numerals and
+            # decimal separators legitimately differ.
+            numeric_conflict = bool(
+                self.numeric_guard and confidence == "confident" and not is_translated
+                and numeric_conflicts(dsent.text, ssent.text, self.numeric_guard_gate)
+            )
+            if numeric_conflict:
+                confidence = "review"
             matches.append({
                 "match_type": "translated" if is_translated else "paraphrase",
                 "similarity": round(score, 4),
-                "confidence": "confident" if score >= confident_cutoff else "review",
+                "confidence": confidence,
+                "numeric_conflict": numeric_conflict,
                 "words": len(_WORD_RE.findall(dsent.text)),
                 "doc_start": dsent.start,
                 "doc_end": dsent.end,
@@ -470,12 +545,10 @@ class PlagiarismMatcher:
 
     def _sentences(self, text: str) -> List[Unit]:
         units: List[Unit] = []
-        for m in _SENT_RE.finditer(text):
-            seg = m.group()
-            if not seg.strip():
-                continue
+        for raw_start, raw_end in split_sentences(text):
+            seg = text[raw_start:raw_end]
             lstrip = len(seg) - len(seg.lstrip())
-            start = m.start() + lstrip
+            start = raw_start + lstrip
             end = start + len(seg.strip())
             chunk = text[start:end]
             if len(_WORD_RE.findall(chunk)) >= self.min_sentence_words:

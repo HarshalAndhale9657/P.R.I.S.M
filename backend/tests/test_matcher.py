@@ -251,3 +251,67 @@ def test_check_reports_the_cutoff_it_actually_applied():
                 [SourceDoc("s0", "Src", "An unrelated reference sentence with sufficient length here.")])
     assert r["confident_threshold_used"] == m.confident_threshold      # tiny corpus -> base
     assert r["corpus_sentences"] >= 1
+
+
+# ── Sentence segmentation (ADR-0026) ──────────────────────────────────────────
+# The old splitter broke on every period, so "up 8.79 points" became the sentence
+# "up 8." — in a product whose users write "p = 0.05" and "Fig. 3" constantly.
+
+from services.plagiarism_matcher import split_sentences  # noqa: E402
+
+
+def _split(text):
+    return [text[a:b].strip() for a, b in split_sentences(text)]
+
+
+def test_a_decimal_does_not_end_a_sentence():
+    text = "The index was up 8.79 points, or 0.96 percent, at 929.06."
+    assert _split(text) == [text]
+
+
+def test_statistics_survive_intact():
+    assert _split("Values below p = 0.05 were significant. We used SPSS 24.0 throughout.") == [
+        "Values below p = 0.05 were significant.",
+        "We used SPSS 24.0 throughout.",
+    ]
+
+
+def test_known_abbreviations_do_not_end_a_sentence():
+    assert _split("See Fig. 3 and Smith et al. 2019. The effect was small.") == [
+        "See Fig. 3 and Smith et al. 2019.",
+        "The effect was small.",
+    ]
+
+
+def test_initials_do_not_end_a_sentence():
+    assert _split("J. R. R. Tolkien wrote it. It sold well.") == ["J. R. R. Tolkien wrote it.", "It sold well."]
+
+
+def test_a_url_does_not_end_a_sentence():
+    assert _split("Visit www.example.com for data. Then continue.") == [
+        "Visit www.example.com for data.", "Then continue."]
+
+
+def test_newlines_still_split():
+    assert _split("A heading line\nAnd the body text") == ["A heading line", "And the body text"]
+
+
+def test_question_and_exclamation_marks_still_split():
+    assert _split("Is it right? Yes! Absolutely.") == ["Is it right?", "Yes!", "Absolutely."]
+
+
+def test_offsets_point_at_the_real_text():
+    text = "First sentence here. Second one at 3.5 metres. Third."
+    for a, b in split_sentences(text):
+        assert text[a:b] == text[a:b]          # trivially true, but pins the contract:
+        assert 0 <= a < b <= len(text)         # spans are in-bounds and ordered
+    spans = split_sentences(text)
+    assert spans[0][0] == 0 and spans[-1][1] == len(text)
+    assert all(spans[i][1] == spans[i + 1][0] for i in range(len(spans) - 1)), "spans must tile the text"
+
+
+def test_a_numeric_sentence_is_matched_whole_not_truncated(matcher):
+    """The regression this fixes: the embedded sentence used to be a fragment."""
+    doc = "The broad Standard & Poor's 500 Index was up 8.79 points, or 0.96 percent, at 929.06."
+    sents = matcher._sentences(doc)
+    assert len(sents) == 1 and sents[0].text == doc

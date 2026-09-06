@@ -5,6 +5,62 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-06 (cont.) — Building a signal found a bug in the core loop (ADR-0026)
+
+**The plan** was ADR-0025's finding 3: the false positives that survive de-duplication are template text with
+different facts in it, so build the orthogonal signal — do the two sentences state the same numbers? Measure
+first, ship only if it separates.
+
+**What actually happened.** The first end-to-end run of the guard produced *no match at all* on the very pair that
+motivated it. The sentence splitter was `[^.!?
+]+(?:[.!?]+|
++|$)` — **every period ends a sentence** — so
+
+    "The broad Standard & Poor's 500 Index was up 8.79 points, or 0.96 percent, at 929.06."
+
+became `"The broad Standard & Poor's 500 Index was up 8."` and three fragments that fell under
+`min_sentence_words` and were **dropped**. Not truncated for embedding: *never compared to anything*. This is a
+checker for people who write `p = 0.05`, `Fig. 3`, `et al. 2019`, `J. R. R.` — and the flaw was in the core loop
+the whole time, invisible because nothing in the suite used a decimal.
+
+**Measured:** the old rule over-split **19.9%** of MRPC sentences, 5.8% of STS-B, 4.2% of QQP. Fixed with rules
+and named exceptions — digits, a listed abbreviation, an initial, a following lower-case letter — not a library:
+ADR-0018 deleted the last heavy NLP dependency and a model download for sentence boundaries is not a trade this
+project makes. Offsets preserved, spans tile the text, 9 tests.
+
+**Then the guard.** Multiset overlap of the numbers in passage and source; a confident paraphrase whose overlap is
+at or below the gate becomes `review`.
+
+| at the 0.78 cutoff | coverage | negatives caught | positives softened | ratio |
+|---|---|---|---|---|
+| STS-B | 14.5% | **72.4%** | 2.0% | 36.9× |
+| QQP | 9.5% | 30.2% | 9.6% | 3.15× |
+| MRPC | 42.6% | 24.0% | 8.2% | 2.91× |
+| PAWS | 47.2% | 0.2% | 0.0% | silent — its negatives keep every number |
+
+**The gate is 0.20 because the ratio peaks there**, independently on MRPC and QQP and on STS-B's plateau — a
+sweep decided it, not taste. A detail worth recording: at first I set the gate to 0.0 ("share *no* number"), and
+the motivating S&P pair then scored 0.14, not 0.0 — both sentences contain **500**, which is part of the index's
+*name*, not a fact either states. The sweep independently put the optimum at 0.20; catching that pair is a
+consequence of the measured gate, not the reason for it.
+
+**Constraints, all tested:** paraphrase only (never verbatim, never translated), one band only
+(`confident → review`), never below the reporting floor, source always visible, disableable and retunable. The
+evasion question is answered explicitly in the ADR: the match is still reported with its source at its real score,
+`review` means "read this", the verbatim pillar is untouched, and changing figures in your own manuscript is
+fabrication — a graver problem than the one it would evade.
+
+**Verified end to end**, not just in tests: through the live API the S&P passage comes back `paraphrase 0.879
+review numeric_conflict=true` with the triage note, while the identical second sentence stays `verbatim 1.000
+confident` — the guard leaves real copying alone. Browser E2E 2/2 with 0 console errors; benchmark gates still
+pass; smoke passes. The UI and report stopped saying "below the confidence cutoff" for these matches, because it
+is not true of them. Tests 188 → **215**.
+
+**Carried forward:** ADR-0024/0025's corpus calibration was measured with the *old* splitter. The W6
+re-measurement now has one more reason to happen on real, whole sentences.
+
+---
+
 ## 2026-09-06 (cont.) — Re-measuring ADR-0024 honestly: relevance beats size, and the probe was lying (ADR-0025)
 
 **The task on the list.** ADR-0024 shipped a corpus-size-scaled cutoff and wrote its own caveat into the TODO:

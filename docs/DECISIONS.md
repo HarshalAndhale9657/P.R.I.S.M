@@ -535,3 +535,72 @@ The decisive measurement is no longer available from public pair data — it nee
 really-retrieved sources**, which is a W6 task on the deployed box (take an OA paper, let the live retriever
 assemble its corpus, and score passages known not to derive from it). Finding 3 is a product lead, not just an
 eval one: numeric/boilerplate templates are worth a matcher-side signal, because no threshold separates them.
+
+## ADR-0026 — Same shape, different figures: a numeric guard, and the sentence splitter that hid the problem
+**Status:** Accepted (2026-09-06)
+**Context:** ADR-0025 finding 3 said the false positives that survive de-duplication are not topical drift but
+**template text with different facts in it** — two S&P-500 report sentences, opposite directions, different
+numbers, cosine **0.877**. No cosine threshold separates those, because the sentences really are near-identical
+in form. That calls for a second, orthogonal signal. Building one exposed something worse first.
+
+### The bug the guard walked into
+The matcher's sentence splitter was `[^.!?\n]+(?:[.!?]+|\n+|$)` — **every period ends a sentence**. So
+
+    "The broad Standard & Poor's 500 Index was up 8.79 points, or 0.96 percent, at 929.06."
+
+was split into `"The broad Standard & Poor's 500 Index was up 8."` plus three fragments, and the fragments fell
+under `min_sentence_words` and were **dropped entirely**. The passage was not merely embedded as a truncated
+stub — most of it was never compared against anything. This is a checker whose users write `p = 0.05`,
+`Fig. 3`, `et al. 2019` and `J. R. R.`; the flaw sat in the middle of its core loop.
+
+**Measured on the eval corpora:** the old rule over-split **19.9%** of MRPC sentences (news prose, full of
+figures), 5.8% of STS-B and 4.2% of QQP. Academic prose with statistics in it is worse, not better.
+
+**Decision — rules with named exceptions, not a library.** `split_sentences()` treats a period as a boundary
+unless it is between digits (`8.79`), the dot of a listed abbreviation (`et al.`, `Fig.`, `approx.`), an initial
+(`J. R. R.`), or followed by a lower-case letter (`www.example.com`). Newlines always break, because in a PDF the
+line structure is the only sentence signal a heading or list item has. Offsets are preserved and the spans tile
+the text exactly, so character-level localisation is unaffected. **No spaCy/nltk/pysbd**: ADR-0018 deleted the
+last heavy NLP dependency, and a model download for sentence boundaries is not a trade this project makes — the
+exceptions above are auditable, testable one by one, and cost nothing.
+
+### The guard
+`services/numeric_guard.py` compares the **multiset of numbers** in the passage and its source (digits plus small
+number words, so "five" matches "5") and reports their Jaccard overlap. A confident paraphrase match whose
+overlap is at or below a gate is moved to **`review`**.
+
+**Measured** at the 0.78 cutoff, per dataset, over pairs where both sides state a number
+(`eval/results/numeric_*.json`, `python -m eval.run_numeric mrpc stsb qqp paws`):
+
+| dataset | coverage | negatives caught | positives softened | ratio |
+|---|---|---|---|---|
+| STS-B | 14.5% | **72.4%** | 2.0% | 36.9× |
+| QQP | 9.5% | 30.2% | 9.6% | 3.15× |
+| MRPC | 42.6% | 24.0% | 8.2% | 2.91× |
+| PAWS | 47.2% | 0.2% | 0.0% | silent |
+
+**The gate is 0.20 because that is where the ratio peaks** — independently on MRPC (2.91×) and QQP (3.15×), and on
+STS-B's plateau. Above it the ratio falls on two of the three; below it, pairs whose only shared number belongs to
+a **name** ("the S&P 500 Index", "a Boeing 747") read as agreeing when no fact is shared at all. PAWS is untouched
+by design: its negatives are word-order swaps that keep every number, and a signal that pretends to solve PAWS
+would be lying.
+
+**Constraints, all enforced by tests:** paraphrase only — never verbatim (identical text has identical numbers)
+and never translated (numerals and decimal separators legitimately differ); it moves exactly one band,
+`confident → review`, and never touches the reporting floor; the match, its score and its source stay fully
+visible; `PRISM_NUMERIC_GUARD=false` disables it and `PRISM_NUMERIC_GUARD_GATE` retunes it.
+
+### Does this hand someone an evasion technique?
+It has to be asked, because ADR-0014's boundary is absolute. Changing the figures in a copied sentence would move
+it from `confident` to `review` — but the match is still **reported, with its source, at its real similarity**;
+`review` means "read this yourself", not "cleared". The verbatim pillar is untouched, so copied wording still
+lands as `confident` on its own. And the thing being described — altering the numbers in one's own manuscript — is
+data fabrication, a graver problem than the one it would evade. The triage text says none of this to the user: it
+explains why the band is what it is and asks them to compare the two passages. The existing CI test that forbids
+evasion wording in guidance covers the new note.
+
+**Consequences:** More `review`, less `confident`, on exactly the class of match that measurement says is least
+trustworthy — the intended direction, and the same safe direction as ADR-0024. The splitter fix is the larger
+change of the two: every check now compares whole sentences, so scores on numeric prose move (up or down) and the
+ADR-0024/0025 corpus calibration was measured with the *old* splitter — a point for the W6 re-measurement to
+carry. Coverage is honest and stated: the guard is silent on the 53–90% of pairs where one side states no number.

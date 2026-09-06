@@ -64,6 +64,7 @@ class Signals:
     shared_by_sources: int = 1        # how many distinct sources contain this exact text
     stopword_ratio: float = 0.0
     words: int = 0
+    numeric_conflict: bool = False    # states numbers, shares none with the source (ADR-0026)
 
 
 @dataclass(frozen=True)
@@ -171,6 +172,7 @@ def collect_signals(doc_text: str, paragraphs: Sequence[Dict[str, Any]], m: Dict
     excerpt = m.get("doc_excerpt") or doc_text[m["doc_start"]:m["doc_end"]]
     s.words = len(_WORD_RE.findall(excerpt))
     s.stopword_ratio = round(stopword_ratio(excerpt), 3)
+    s.numeric_conflict = bool(m.get("numeric_conflict"))
     s.quoted = is_quoted(doc_text, m["doc_start"], m["doc_end"])
     context = _paragraph_text(doc_text, paragraphs, m)
     s.citation_markers = find_citations(context)
@@ -215,6 +217,11 @@ def triage_matches(doc_text: str, paragraphs: Sequence[Dict[str, Any]], matches:
         note = None
         if m.get("match_type") == "translated" and rule.type in ("paraphrase_uncited", "paraphrase_cited"):
             note = "The source is in another language; translated reuse needs a citation exactly like a paraphrase."
+        elif s.numeric_conflict:
+            # The band is `review` *because* of this, so say so — an unexplained downgrade
+            # is just a number the author cannot argue with (ADR-0026).
+            note = ("This passage and the source share the same shape but not one figure. That often means both "
+                    "follow a standard form of words rather than one copying the other — read them side by side.")
         m["triage"] = {
             "type": rule.type,
             "priority": rule.priority,
@@ -228,6 +235,7 @@ def triage_matches(doc_text: str, paragraphs: Sequence[Dict[str, Any]], matches:
                 "citation_markers": s.citation_markers[:6],
                 "shared_by_sources": s.shared_by_sources,
                 "stopword_ratio": s.stopword_ratio,
+                "numeric_conflict": s.numeric_conflict,
             },
         }
         counts[rule.type] = counts.get(rule.type, 0) + 1

@@ -5,6 +5,39 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-06 — The sentence splitter was breaking on decimals; and a numeric guard (ADR-0026)
+
+#### Fixed
+- **The sentence splitter broke on every period**, so `"…was up 8.79 points, or 0.96 percent, at 929.06."` became
+  the sentence `"…was up 8."` and the remaining fragments fell under `min_sentence_words` and were **dropped
+  entirely** — most of the passage was never compared against anything. In a checker whose users write `p = 0.05`,
+  `Fig. 3`, `et al. 2019` and `J. R. R.` this sat in the middle of the core loop. `split_sentences()` now treats a
+  period as a boundary unless it is between digits, the dot of a listed abbreviation, an initial, or followed by a
+  lower-case letter; newlines always break; offsets are preserved and the spans tile the text exactly.
+  **Measured: the old rule over-split 19.9% of MRPC sentences, 5.8% of STS-B and 4.2% of QQP.**
+  Rules with named exceptions, not a library — ADR-0018 deleted the last heavy NLP dependency and this does not
+  bring one back.
+
+#### Added
+- **`services/numeric_guard.py`** — a confident paraphrase match whose passage and source **state numbers but
+  share essentially none of them** is moved to `review`. Paraphrase only (never verbatim, never translated), one
+  band only, never below the reporting floor, source always visible. `PRISM_NUMERIC_GUARD=false` disables it;
+  `PRISM_NUMERIC_GUARD_GATE` (default 0.20) retunes it. The match carries `numeric_conflict`, triage explains the
+  band in plain language, and the report footer says how many matches it moved.
+- **`eval/run_numeric.py`** — the measurement that decided it, and the gate.
+
+#### Measured
+- At the 0.78 cutoff, over pairs where both sides state a number: catches **72.4%** of STS-B's non-paraphrase
+  pairs for 2.0% of its true ones (36.9×), 30.2%/9.6% on QQP (3.15×), 24.0%/8.2% on MRPC (2.91×), and is silent on
+  PAWS (0.2%/0.0%), whose negatives keep every number. **The gate is 0.20 because the ratio peaks there** on MRPC
+  and QQP independently and sits on STS-B's plateau — not because it is a round number.
+- Coverage is stated rather than hidden: the signal is silent on the 53–90% of pairs where one side has no number.
+
+#### Changed
+- The UI and report no longer say "below the confidence cutoff" for a match the numeric guard moved — two
+  different reasons put a match in `review`, and naming the wrong one is a false statement about the check.
+- Tests 188 → **215**. Benchmark gates (STS-B / MRPC / QQP) still pass; browser E2E 2/2, 0 console errors.
+
 ### 2026-09-06 — Corpus *relevance* beats corpus size, and the ADR-0024 probe was contaminated (ADR-0025)
 
 #### Added
