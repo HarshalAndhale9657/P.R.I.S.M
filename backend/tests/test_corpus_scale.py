@@ -111,3 +111,87 @@ def test_report_round_trips_to_a_json_safe_dict():
 def test_measure_rejects_data_too_small_to_probe():
     with pytest.raises(ValueError):
         measure([], embed=_stub_embed, corpus_sizes=(10,), thresholds=(0.7,), n_queries=5)
+
+
+# ── Retrieval-conditioned distractors (ADR-0025) ──────────────────────────────
+
+def _pool_pairs(n=40):
+    """Distractor-only pairs; `topic 0`-flavoured text so some of them rank high."""
+    return [PairCase(a=f"pool sentence number {i} about topic {i % 5}",
+                     b=f"pool remark number {i} regarding matter {i % 5}",
+                     label=0, id=f"pool{i}") for i in range(n)]
+
+
+def test_pool_pairs_contribute_distractors_but_never_queries():
+    pool = _pool_pairs()
+    neg_q, pos_q, _truth, distractors = build_probe_with_truth(
+        _pairs(60), n_queries=10, max_corpus=500, seed=1, pool_pairs=pool)
+    pool_texts = {p.a for p in pool} | {p.b for p in pool}
+    assert pool_texts & set(distractors), "pool sentences never reached the corpus"
+    assert not (pool_texts & (set(neg_q) | set(pos_q))), "a pool sentence was used as a query"
+
+
+def test_retrieved_mode_never_lowers_the_top_score_for_a_no_match_query():
+    """The claim ADR-0025 tests: a corpus chosen *because it is relevant* is harder."""
+    pairs, pool = _pairs(160), _pool_pairs(200)
+    common = dict(embed=_stub_embed, corpus_sizes=(20, 60), thresholds=(0.7,),
+                  n_queries=15, dataset="stub", pool_pairs=pool)
+    rnd = measure(pairs, distractor_mode="random", **common)
+    ret = measure(pairs, distractor_mode="retrieved", **common)
+    for n in (20, 60):
+        assert ret.at(n, 0.7).mean_max_negative >= rnd.at(n, 0.7).mean_max_negative - 1e-9
+
+
+def test_retrieved_mode_selects_from_the_whole_pool_not_just_the_first_n():
+    r = measure(_pairs(160), embed=_stub_embed, corpus_sizes=(20,), thresholds=(0.7,),
+                n_queries=15, dataset="stub", distractor_mode="retrieved", pool_pairs=_pool_pairs(200))
+    assert r.pool_size > 20, "retrieved mode must gather a pool larger than the corpus"
+    assert r.distractor_mode == "retrieved"
+
+
+def test_random_mode_is_unchanged_by_the_new_parameters():
+    """Back-compat: the ADR-0024 numbers must not move."""
+    before = measure(_pairs(160), embed=_stub_embed, corpus_sizes=(20, 60), thresholds=(0.7, 0.9),
+                     n_queries=15, dataset="stub")
+    after = measure(_pairs(160), embed=_stub_embed, corpus_sizes=(20, 60), thresholds=(0.7, 0.9),
+                    n_queries=15, dataset="stub", distractor_mode="random", n_near_misses=5)
+    assert [r.as_dict() for r in before.results] == [r.as_dict() for r in after.results]
+
+
+def test_near_misses_are_real_pairs_ordered_worst_first():
+    r = measure(_pairs(160), embed=_stub_embed, corpus_sizes=(40,), thresholds=(0.7,),
+                n_queries=12, dataset="stub", distractor_mode="retrieved",
+                pool_pairs=_pool_pairs(120), n_near_misses=4)
+    assert 0 < len(r.near_misses) <= 4
+    assert [m.score for m in r.near_misses] == sorted((m.score for m in r.near_misses), reverse=True)
+    assert len({m.query for m in r.near_misses}) == len(r.near_misses), "one query filled the list"
+    assert r.as_dict()["near_misses"][0]["corpus_sentence"]
+
+
+def test_unknown_distractor_mode_is_rejected():
+    with pytest.raises(ValueError):
+        measure(_pairs(40), embed=_stub_embed, corpus_sizes=(10,), thresholds=(0.7,),
+                n_queries=5, distractor_mode="magic")
+
+
+def test_drop_above_removes_near_duplicates_and_says_how_many():
+    """`--drop-above` bounds contamination: it must remove sentences and record the count."""
+    pairs = _pairs(120)
+    # A pool sentence that is a near-copy of a negative query — exactly the QQP failure mode.
+    neg_q, _pos, _truth, _dis = build_probe_with_truth(pairs, n_queries=10, max_corpus=50, seed=0)
+    leak = PairCase(a=neg_q[0], b=neg_q[0] + " indeed", label=0, id="leak")
+    common = dict(embed=_stub_embed, corpus_sizes=(30,), thresholds=(0.7,), n_queries=10,
+                  seed=0, dataset="stub", pool_pairs=[leak])
+    kept = measure(pairs, **common)
+    cut = measure(pairs, drop_above=0.999, **common)
+    assert cut.dropped_near_duplicates >= 1
+    # The corpus shrinks by whatever was dropped, so compare the rows that actually exist.
+    assert cut.results[0].corpus_size < kept.results[0].corpus_size
+    assert cut.results[0].fpr <= kept.results[0].fpr
+    assert cut.as_dict()["drop_above"] == 0.999
+
+
+def test_drop_above_that_empties_the_corpus_is_an_error_not_a_silent_zero():
+    with pytest.raises(ValueError):
+        measure(_pairs(80), embed=_stub_embed, corpus_sizes=(20,), thresholds=(0.7,),
+                n_queries=8, drop_above=0.0001)

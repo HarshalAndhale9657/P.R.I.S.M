@@ -5,6 +5,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-06 — Corpus *relevance* beats corpus size, and the ADR-0024 probe was contaminated (ADR-0025)
+
+#### Added
+- **Three honesty knobs on the corpus probe** (`eval/corpus_scale.py`, `eval/run_corpus.py`):
+  `--distractors retrieved` orders the corpus by relevance to the manuscript, the way retrieval actually
+  assembles one; `--pool <datasets>` / `--pool-only` draw distractors from *other* datasets so no true
+  paraphrase can be in the corpus; `--drop-above X` removes corpus sentences within X of any query and reports
+  how many. `--examples N` dumps the top-scoring flags — every one a false positive by construction — so a human
+  can see whether the construction is lying. Tests 180 → 188.
+- `eval/data/README.md` documents the contamination found in QQP (unlabelled duplicate questions across pairs)
+  and between STS-B and MRPC (shared source sentences).
+
+#### Measured
+- **Relevance is worth 10–30× the corpus size.** With the corpus ordered by relevance, the false-positive rate is
+  flat in N: 87% of QQP's eventual FPR is present at **100** sentences (100% on STS-B). A retrieved 100-sentence
+  corpus behaves like a random 1 000–3 000-sentence one.
+- **ADR-0024's numbers were overstated.** On a corpus that cannot contain a true match, QQP's FPR is **0.000 at
+  every threshold and size** (top score never exceeds 0.634). On the same-dataset pool, dropping 58 near-certain
+  duplicates moves FPR@0.78 at N=3 000 from 0.108 to **0.088** and the p95 from 0.882 to **0.837** — and that is
+  still an upper bound. The drift itself survives: **≈0.17 per decade**, reproducing ADR-0024's 0.16.
+- **What survives de-duplication is boilerplate, not topic drift**: two S&P-500 report sentences with opposite
+  directions and different numbers score **0.877**.
+
+#### Changed
+- `PlagiarismMatcher.confident_threshold_for` — the docstring now quotes the bounded numbers and states plainly
+  that the formula counteracts the smaller half of the effect. **No behaviour change:** `k`, `pivot` and
+  `ceiling` are unchanged, because the honest interval is wider than any refit would move them.
+
 ### 2026-09-06 — Corpus-scale calibration (ADR-0024)
 
 #### Added
@@ -19,6 +47,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 - Top score for text with **no** true match drifts ≈**0.16 per decade** of corpus size (QQP and STS-B agree).
   At 3 000 source sentences the p95 is **0.88** — above the old fixed 0.78 cutoff, i.e. 5% of unrelated text
   would have been labelled "confident".
+  > **Corrected by ADR-0025 (same day):** part of that came from unlabelled duplicates in QQP — real matches
+  > counted as errors. Bounded values: drift ≈0.17/decade (holds), p95 at 3 000 = **0.837**, FPR@0.78 = **0.088**,
+  > and 0.000 on a corpus that cannot contain a true match. The entry above is kept as the record of what was
+  > believed when the cutoff shipped.
 
 #### Changed
 - `RerankStage` re-decides the confidence band against the cutoff the matcher actually applied, not the base.

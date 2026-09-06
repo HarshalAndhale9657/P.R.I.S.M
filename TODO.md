@@ -23,9 +23,15 @@ Check items off with a date. Newest priorities on top.
       first check still embeds everything (6 000 sentences ≈ 77–93 s on this CPU; batch 64 fastest). On the VPS decide
       from `timings_ms` + the `/health` hit rate: lower `PRISM_MAX_SOURCE_SENTENCES`, pin a batch size measured there,
       and/or pre-warm the cache for popular OA sources. _(M)_
-- [ ] **Re-measure corpus scaling against the FULL matcher** once rerank is default-on (ADR-0024 measured the
-      paraphrase pillar in isolation, and its distractors are *unrelated* while production sources are retrieved by
-      similarity — so the real effect is likely larger). Then refit `k` / `pivot` and refresh `eval/gates.json`. _(M)_
+- [ ] **W6 follow-up · settle the confidence cutoff against really-retrieved sources.** ADR-0025 took this as far
+      as public pair data allows and hit a wall: contamination makes the same-dataset FPR an upper bound (0.088) and
+      a cross-dataset corpus a lower one (0.000), and no synthetic probe closes that gap. On the box, run the **full
+      pipeline**: let the live retriever assemble a corpus for a real OA paper, then score passages known not to
+      derive from it. Only then refit `k` / `pivot` and refresh `eval/gates.json`. _(M)_
+- [ ] **Boilerplate/template signal in the matcher** (ADR-0025 finding 3). What survives de-duplication is not
+      topic drift but template text with different facts in it — two S&P-500 report sentences, opposite directions,
+      different numbers, **0.877**. No threshold separates that; it needs a signal (numeric divergence within a
+      high-similarity span, or a PAWS-style hard-negative head). Until then it is a known false-positive class. _(M)_
 - [ ] `pip-audit` step in CI once the lockfile has settled. _(S)_
 
 ## 🟢 Next — the product (W7–W12, LAUNCH_PLAN §9)
@@ -45,6 +51,11 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-06 — **Re-measured ADR-0024 honestly** (ADR-0025): corpus **relevance** beats corpus **size**
+      (a retrieved 100-sentence corpus behaves like a random 1 000–3 000-sentence one; FPR is flat in N), and the
+      original probe was contaminated by unlabelled duplicates — bounded FPR@0.78 at N=3 000 is 0.088, not 0.108,
+      and 0.000 where no true match can exist. Drift (≈0.17/decade) holds. **No behaviour change, deliberately.**
+      Probe gained `--distractors retrieved`, `--pool`/`--pool-only`, `--drop-above`, `--examples`. Tests 180 → 188.
 - [x] 2026-09-06 — **Corpus-scale calibration** (ADR-0024): measured the max-over-N effect (top score for
       unrelated text drifts ≈0.16/decade; p95 = 0.88 at 3 000 sentences, above the old 0.78 cutoff) and made the
       confidence cutoff scale with corpus size. Only ever moves matches to `review`, never to clean.

@@ -455,3 +455,83 @@ measurement also makes the retrieval-quality argument concrete: the honest way t
 reranker (W5) or tighter retrieval, not a lower bar. **Caveat carried forward:** the probe's distractors are
 *unrelated* sentences, whereas production sources were *retrieved by similarity* and are topically close — so the
 real-world effect is likely **larger**, not smaller. Re-measure against the full matcher once rerank is default-on.
+
+## ADR-0025 — Relevance, not size, is what inflates a match score; and ADR-0024's probe was contaminated
+**Status:** Accepted (2026-09-06)
+**Context:** ADR-0024 shipped a confidence cutoff that scales with the number of source sentences, and carried
+one caveat forward on purpose: its distractors were *unrelated* sentences, while production sources are
+**retrieved by similarity** and therefore topically close, so "the real effect is likely larger". This ADR
+re-measures with that fixed — and, in doing so, found a second problem nobody had flagged: the probe's central
+guarantee, *no true match is in the corpus*, was only ever enforced **pairwise**. A query's labelled partner was
+excluded; an unlabelled duplicate of it sitting in some other pair was not.
+
+**Method** (`eval/corpus_scale.py`, four new knobs on `eval/run_corpus.py`):
+* `--distractors retrieved` — order the pool by **descending similarity to the manuscript** and take the top N,
+  which is how the product assembles a corpus: a 3-reference check is the head of the relevance ranking, a
+  6 000-sentence academic corpus is that same head plus a long tail.
+* `--pool <datasets>` / `--pool-only` — draw distractors from *other* datasets, so a true paraphrase of a query
+  cannot be in the corpus at all.
+* `--drop-above X` — remove every corpus sentence within X of any query and **report how many**, bounding what
+  contamination is worth on a same-dataset pool.
+* `--examples N` — dump the highest-scoring flags. Every one is a false positive *by construction*, so a human
+  reading them can see whether the construction is lying.
+
+**Measured** (bi-encoder, 250 negative / 250 positive queries, `eval/results/corpus_*.json`):
+
+*Mean top score for a query with **no** true match — QQP:*
+
+| N | same-dataset (ADR-0024) | same-dataset, dedup ≥0.90 | **retrieved**, dedup ≥0.90 | cross-dataset | cross-dataset **retrieved** |
+|---|---|---|---|---|---|
+| 100 | 0.343 | 0.343 | 0.372 | 0.223 | 0.335 |
+| 500 | 0.463 | 0.459 | 0.518 | 0.308 | 0.414 |
+| 1 000 | 0.508 | 0.504 | 0.567 | 0.349 | 0.430 |
+| 3 000 | 0.575 | 0.569 | 0.595 | 0.399 | 0.435 |
+| ~5–6 000 | 0.606 | 0.596 | 0.596 | 0.432 | 0.435 |
+
+*FPR at the 0.78 cutoff, dedup ≥0.90:*
+
+| N | QQP random | QQP **retrieved** | STS-B random | STS-B **retrieved** |
+|---|---|---|---|---|
+| 100 | 0.000 | **0.100** | 0.012 | **0.080** |
+| 500 | 0.024 | 0.116 | 0.048 | 0.080 |
+| 1 000 | 0.040 | 0.116 | 0.068 | 0.080 |
+| 3 000 | 0.088 | 0.116 | — | — |
+
+**Three findings, in order of how much they change what we believe.**
+
+1. **Relevance dominates size, and it is worth 10–30× the corpus.** Order the corpus by relevance and the FPR is
+   essentially *flat in N*: 87% of QQP's eventual false-positive rate is already present at **N=100**, and on
+   STS-B it is 100%. A retrieved corpus of 100 sentences behaves like a random corpus of 1 000–3 000. This is a
+   within-construction comparison — both arms carry the same contamination — so it is the most robust result here.
+   **ADR-0024 therefore scales the cutoff against the smaller half of the effect.**
+2. **ADR-0024's headline numbers were overstated.** On a corpus that *cannot* contain a true match (cross-dataset
+   pool), QQP's FPR is **0.000 at every threshold and every size** — the top score never exceeds 0.634. On the
+   same-dataset pool, dropping the 58 sentences within 0.90 of a query moves FPR@0.78 at N=3 000 from 0.108 to
+   **0.088** and the p95 from 0.882 to **0.837**. The `--examples` dump shows why: the top "false positives" were
+   real paraphrases QQP simply never labelled ("What is the funniest joke you ever heard?" / "What is funniest
+   joke you've ever heard?", 0.99), and STS-B and MRPC turn out to **share source sentences** (0.998 on a
+   "Lord Falconer …" pair). The 0.90 cut is itself conservative — the dump still shows genuine duplicates at
+   0.876–0.890 — so **0.088 remains an upper bound**, and the true value is somewhere in 0.000–0.088 that no
+   public pair-labelled dataset can pin down.
+3. **The residual false positives are boilerplate, not topic drift.** What survives de-duplication is
+   template text with different facts in it: *"The broad Standard & Poor's 500 Index was up 8.79 points, or 0.96
+   percent, at 929.06"* vs *"The broader Standard & Poor's 500 Index gave up 11.91 points, or 1.19 percent, at
+   986.60"* — **0.877**, opposite direction, different numbers. That is the ESL/boilerplate trap PAWS exists to
+   test, arriving through the corpus door.
+
+**Decision — change the evidence, not the behaviour.**
+* **`k=0.06`, `pivot=500`, `ceiling=0.92` stay exactly as they are.** Finding 1 argues for a *lower* pivot and
+  finding 2 for a *higher* one, and the honest width of the interval (FPR@0.78 for a small retrieved corpus is
+  somewhere between 0.000 and 0.100) is wider than any refit would move the knob. Refitting on that would be
+  fitting to noise, and the project's rule is that a number is only real if it was measured.
+* **Every claim ADR-0024 makes is restated at its bounded value** here, in `CHANGELOG.md`, and in the
+  `confident_threshold_for` docstring the product actually ships. The surviving justification for scaling is the
+  *drift* — ≈0.17 per decade on a contamination-free corpus, which reproduces ADR-0024's 0.16 — not the FPR table.
+* **The probe's honesty knobs are permanent, not one-off:** `--examples` is how this was caught, and
+  `eval/data/README.md` now documents the contamination so the next person does not re-derive it.
+
+**Consequences:** No user-visible change; the shipped cutoff is unchanged. What changed is what we may claim.
+The decisive measurement is no longer available from public pair data — it needs the **full pipeline against
+really-retrieved sources**, which is a W6 task on the deployed box (take an OA paper, let the live retriever
+assemble its corpus, and score passages known not to derive from it). Finding 3 is a product lead, not just an
+eval one: numeric/boilerplate templates are worth a matcher-side signal, because no threshold separates them.

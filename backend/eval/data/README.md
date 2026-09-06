@@ -44,4 +44,22 @@ python -m eval.run_pairs paws mrpc --gate
 | qqp  | Quora Question Pairs (GLUE) | https://gluebenchmark.com/tasks |
 | pawsx | PAWS-X (multilingual) | https://github.com/google-research-datasets/paws/tree/master/pawsx |
 
+## Known contamination — read this before quoting a corpus-probe number (ADR-0025)
+
+These sets label **pairs**, not corpora. Two things follow, and both were measured, not guessed:
+
+- **QQP contains unlabelled duplicates across different pairs.** A probe that excludes a query's
+  *labelled* partner from the corpus still leaves near-identical questions in it
+  ("What is the funniest joke you ever heard?" / "What is funniest joke you've ever heard?" — 0.99).
+  Anything that ranks the corpus by similarity promotes those straight to the top, so they are
+  counted as false positives when they are real matches.
+- **STS-B and MRPC share source sentences.** Using one as a distractor pool for the other puts exact
+  duplicates in the corpus (a "Lord Falconer …" sentence matched at 0.998 across the two).
+
+So a corpus-scale FPR from a single dataset is an **upper bound**, not a measurement.
+`eval/run_corpus.py` has three defences — `--pool-only` (corpus entirely from other datasets),
+`--drop-above` (remove corpus sentences within X of any query, and report how many), and
+`--examples` (dump the top-scoring flags so a human can *see* whether they are real paraphrases).
+Use at least one of them before quoting a number.
+
 Fetched files are git-ignored by default — treat them as a local cache.

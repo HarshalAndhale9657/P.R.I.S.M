@@ -164,11 +164,23 @@ class PlagiarismMatcher:
         The matcher takes the **maximum** similarity over every source sentence, so a
         larger corpus is more chances to score high and the top score for text with *no*
         true match drifts upward. Measured on public data (`eval/results/corpus_*.json`):
-        the mean top score for a no-match query rises ~0.16 per decade of corpus size on
+        the mean top score for a no-match query rises ~0.17 per decade of corpus size on
         both QQP and STS-B independently, and at 3 000 sentences the 95th percentile of
-        that score is ~0.88 — above the pairwise-calibrated 0.78 cutoff. A single fixed
+        that score is ~0.84 — above the pairwise-calibrated 0.78 cutoff. A single fixed
         cutoff therefore means something different for a 3-reference check than for a
         6 000-sentence academic corpus.
+
+        Those figures are ADR-0025's **bounded** re-measurement, not ADR-0024's originals
+        (0.16 and 0.88): the first probe's corpus could contain unlabelled duplicates of a
+        query, so some of what it counted as false positives were real matches. Read them
+        as upper bounds — on a corpus that *cannot* hold a true match the FPR at 0.78 is
+        0.000 at every size, and the honest interval is wider than this knob.
+
+        ADR-0025 also found that **which** sentences are compared matters more than how
+        many: order the corpus by relevance, as retrieval does, and the false-positive rate
+        is already at 87-100% of its ceiling by 100 sentences. This formula counteracts the
+        smaller half of the effect. It is kept because it is measured, bounded and safe —
+        not because it is the whole story.
 
         So the cutoff rises with corpus size: `base + k·log10(N / pivot)`, clamped to
         `[base, ceiling]`. `k = 0.06` is **deliberately well below** the measured drift —

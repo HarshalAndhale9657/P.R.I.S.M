@@ -5,7 +5,62 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-06 (cont.) — Re-measuring ADR-0024 honestly: relevance beats size, and the probe was lying (ADR-0025)
+
+**The task on the list.** ADR-0024 shipped a corpus-size-scaled cutoff and wrote its own caveat into the TODO:
+the probe's distractors were *unrelated*, while production sources are **retrieved by similarity**, so "the real
+effect is likely larger". W6 needs a VPS, so this was the next unblocked item.
+
+**What the fix exposed.** Ordering the corpus by relevance needed a `--examples` dump to sanity-check, and the
+dump immediately showed the top "false positives" were not false at all: *"What is the funniest joke you ever
+heard?"* against *"What is funniest joke you've ever heard?"* at **0.99**. QQP labels **pairs**, so excluding a
+query's labelled partner from the corpus does nothing about an unlabelled duplicate of it in some *other* pair —
+and a similarity ranking promotes exactly those to the top. STS-B and MRPC turned out to share source sentences
+too (0.998 on a "Lord Falconer …" pair). **The guarantee the whole probe rests on — no true match is in the
+corpus — was only ever enforced pairwise.** ADR-0024's headline was partly measuring its own dataset.
+
+**So the probe grew three defences**, all of which stay: `--pool` / `--pool-only` (corpus drawn entirely from
+*other* datasets, where a true paraphrase cannot exist), `--drop-above X` (remove corpus sentences within X of
+any query, and *report the count*), and `--examples` itself.
+
+**Measured** (250 negative / 250 positive queries, bi-encoder):
+
+| FPR @0.78, dedup ≥0.90 | N=100 | N=500 | N=1 000 | N=3 000 |
+|---|---|---|---|---|
+| QQP, random corpus | 0.000 | 0.024 | 0.040 | 0.088 |
+| QQP, **retrieved** corpus | **0.100** | 0.116 | 0.116 | 0.116 |
+| STS-B, random corpus | 0.012 | 0.048 | 0.068 | — |
+| STS-B, **retrieved** corpus | **0.080** | 0.080 | 0.080 | — |
+
+1. **Relevance is worth 10–30× the corpus size.** Order the corpus the way retrieval does and the FPR is *flat in
+   N* — 87% of it is already there at 100 sentences (100% on STS-B). ADR-0024 scales the cutoff against the
+   smaller half of the effect. This is the robust result: both arms carry identical contamination.
+2. **The old numbers were overstated.** On a corpus that cannot contain a true match, QQP's FPR is **0.000
+   everywhere** (top score never exceeds 0.634). De-duplicating the same-dataset pool moves FPR@0.78 at N=3 000
+   from 0.108 → **0.088** and p95 0.882 → **0.837**. The drift claim survives untouched: **≈0.17/decade**, versus
+   the 0.16 originally published.
+3. **What is left after de-duplication is boilerplate.** *"The broad Standard & Poor's 500 Index was up 8.79
+   points, or 0.96 percent, at 929.06"* vs *"…gave up 11.91 points, or 1.19 percent, at 986.60"* — **0.877**,
+   opposite direction, different numbers. Not topic drift: template text. That is a matcher lead, not an eval one.
+
+**Shipped: nothing, deliberately.** `k`, `pivot` and `ceiling` are unchanged. Finding 1 argues for a lower pivot,
+finding 2 for a higher one, and the honest interval (FPR@0.78 on a small retrieved corpus is somewhere between
+0.000 and 0.100) is wider than any refit would move the knob — fitting to that would be fitting to noise. What
+changed is **what we are allowed to claim**: the shipped `confident_threshold_for` docstring, the CHANGELOG and
+the ADR now quote bounded values, and the old CHANGELOG entry carries an inline correction rather than being
+rewritten. The surviving justification for the scaling is the drift, not the FPR table.
+
+The measurement that would settle it is not available from public pair data. It needs the **full pipeline against
+really-retrieved sources** — a W6 task on the box: let the live retriever assemble a corpus for a real OA paper,
+then score passages known not to derive from it. Tests 180 → **188**. Lint clean.
+
+---
+
 ## 2026-09-06 (cont.) — The number that changes a default: corpus-scale calibration (ADR-0024)
+
+> **Corrected the same day by ADR-0025** — the FPR/p95 figures below are inflated by unlabelled duplicates in the
+> probe's own corpus. Bounded: p95 at 3 000 = 0.837, FPR@0.78 = 0.088, and 0.000 where no true match can exist.
+> The drift (≈0.16–0.17/decade) holds. Kept unedited as the record of what was believed at the time.
 
 **The gap.** Every number PRISM has published is **pairwise** — one candidate against one source sentence. The
 matcher takes the **max over every source sentence**, which is N chances to score high. ADR-0017 wrote down the

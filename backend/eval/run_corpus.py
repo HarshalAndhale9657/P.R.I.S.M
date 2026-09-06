@@ -8,8 +8,14 @@ from the pairwise numbers we calibrate on?
     python -m eval.run_corpus qqp --queries 300
     python -m eval.run_corpus stsb --sizes 100,1000,6000
 
-Writes eval/results/corpus_<dataset>.json. Read the FPR column across a row: that is
-the same threshold behaving differently purely because the corpus got bigger.
+    # ADR-0025: the same sweep against a corpus assembled the way the product assembles
+    # one — sources ordered by relevance to the manuscript, pooled from other datasets
+    # so the ranking has something to select from.
+    python -m eval.run_corpus qqp --distractors both --pool paws,mrpc,stsb --examples 15
+
+Writes eval/results/corpus_<dataset>.json (`_retrieved` suffix for the retrieved mode).
+Read the FPR column across a row: that is the same threshold behaving differently purely
+because the corpus got bigger.
 """
 from __future__ import annotations
 
@@ -34,14 +40,47 @@ def _embedder(model_key: str):
     return emb.embed
 
 
-def run(name: str, *, sizes, thresholds, n_queries: int, model_key: str, seed: int) -> dict:
+def _pool_pairs(names, exclude: str):
+    """Distractor-only pairs from other registered datasets (never queries)."""
+    pool, used = [], []
+    for n in names:
+        if not n or n == exclude:
+            continue
+        if n not in DATASETS:
+            print(f"NOTE: unknown pool dataset {n!r}; skipped")
+            continue
+        try:
+            pool.extend(load_dataset(n))
+            used.append(n)
+        except DatasetNotAvailable as exc:
+            print(f"NOTE: pool dataset {n!r} not fetched; skipped ({exc.args[0].splitlines()[0]})")
+    return pool, used
+
+
+def run(name: str, *, sizes, thresholds, n_queries: int, model_key: str, seed: int,
+        mode: str = "random", pool_names=(), pool_only: bool = False, drop_above: float = 0.0,
+        n_examples: int = 0) -> dict:
     cases = load_dataset(name)
+    want_pool = mode == "retrieved" or pool_only
+    pool, pool_used = _pool_pairs(pool_names, exclude=name) if want_pool else ([], [])
+    if pool_only and not pool:
+        raise ValueError("--pool-only needs at least one fetched --pool dataset")
     report = measure(cases, embed=_embedder(model_key), corpus_sizes=sizes, thresholds=thresholds,
-                     n_queries=n_queries, seed=seed, dataset=name, model_key=model_key)
+                     n_queries=n_queries, seed=seed, dataset=name, model_key=model_key,
+                     distractor_mode=mode, pool_pairs=pool, pool_datasets=pool_used,
+                     pool_only=pool_only, drop_above=drop_above, n_near_misses=n_examples)
 
     print("=" * 82)
     print(f"[{name}]  corpus-scale sweep   model={model_key}   "
+          f"distractors={mode}{' (cross-dataset only)' if pool_only else ''}   "
           f"{report.results[0].n_negative_queries} negative / {report.results[0].n_positive_queries} positive queries")
+    if drop_above:
+        print(f"           dropped {report.dropped_near_duplicates} corpus sentences within "
+              f"{drop_above:.2f} of a query (near-certain unlabelled paraphrases)")
+    if want_pool:
+        print(f"           pool = {report.pool_size} sentences"
+              + (f" (+{', '.join(pool_used)})" if pool_used else "")
+              + f"   selection at N={max(sizes)}: top {100.0 * min(max(sizes), report.pool_size) / max(report.pool_size, 1):.0f}%")
     print("=" * 82)
 
     print("\nTop-score drift for a query with NO true match in the corpus:")
@@ -78,13 +117,56 @@ def run(name: str, *, sizes, thresholds, n_queries: int, model_key: str, seed: i
             cells.append(f"N={n}: {'none' if t is None else f'{t:.2f} (R={r.recall:.2f})'}")
         print(f"  FPR<={budget:.2f}   " + "   ".join(cells))
 
+    if report.near_misses:
+        print("\nHighest-scoring flags (all false positives BY CONSTRUCTION — read them; if any is a real\n"
+              "paraphrase the pool is contaminated and the FPR above is overstated):")
+        for m in report.near_misses:
+            print(f"  {m.score:.3f}  Q: {m.query[:96]}")
+            print(f"         C: {m.corpus_sentence[:96]}")
+
     artifact = report.as_dict()
     artifact["inflation"] = inflation_table(report)
     _RESULTS_DIR.mkdir(exist_ok=True)
-    out = _RESULTS_DIR / f"corpus_{name}.json"
+    suffix = "" if mode == "random" and not pool_only else f"_{mode}"
+    suffix += "_clean" if pool_only else ""
+    suffix += f"_drop{int(round(drop_above * 100))}" if drop_above else ""
+    out = _RESULTS_DIR / f"corpus_{name}{suffix}.json"
     out.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
     print(f"\nwrote {out}")
     return artifact
+
+
+def _fpr_at(artifact: dict, n: int, t: float):
+    for r in artifact["results"]:
+        if r["corpus_size"] == n and abs(r["threshold"] - t) < 1e-9:
+            return r
+    return None
+
+
+def _print_comparison(name: str, rnd: dict, ret: dict, thresholds) -> None:
+    """The whole point of ADR-0025: how much worse is a corpus chosen *because it is relevant*."""
+    sizes = [n for n in rnd["corpus_sizes"] if n in set(ret["corpus_sizes"])]
+    print("\n" + "=" * 82)
+    print(f"[{name}]  unrelated corpus  vs  retrieved corpus   (the product lives between them)")
+    print("=" * 82)
+    print("\nMean top score for a query with NO true match:")
+    print(f"  {'corpus':>8}  {'random':>8}  {'retrieved':>10}  {'delta':>7}")
+    by_n_rnd = {r["corpus_size"]: r for r in rnd["inflation"]}
+    by_n_ret = {r["corpus_size"]: r for r in ret["inflation"]}
+    for n in sizes:
+        a, b = by_n_rnd.get(n), by_n_ret.get(n)
+        if a and b:
+            print(f"  {n:>8}  {a['mean_max_negative']:>8.3f}  {b['mean_max_negative']:>10.3f}  "
+                  f"{b['mean_max_negative'] - a['mean_max_negative']:>+7.3f}")
+    for t in (0.78, 0.90):
+        if not any(abs(x - t) < 1e-9 for x in thresholds):
+            continue
+        print(f"\nFPR at threshold {t:.2f}:")
+        print(f"  {'corpus':>8}  {'random':>8}  {'retrieved':>10}")
+        for n in sizes:
+            a, b = _fpr_at(rnd, n, t), _fpr_at(ret, n, t)
+            if a and b:
+                print(f"  {n:>8}  {a['fpr']:>8.3f}  {b['fpr']:>10.3f}")
 
 
 def main(argv=None) -> int:
@@ -100,24 +182,46 @@ def main(argv=None) -> int:
     ap.add_argument("--queries", type=int, default=200, help="probe sentences per class")
     ap.add_argument("--model-key", default="bi-encoder")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--distractors", default="random", choices=("random", "retrieved", "both"),
+                    help="random = unrelated corpus (ADR-0024 floor); retrieved = corpus ordered by "
+                         "relevance to the manuscript, as the product builds one (ADR-0025 ceiling)")
+    ap.add_argument("--pool", default="", help="comma-separated datasets contributing DISTRACTORS ONLY, "
+                                               "so the retrieved ranking has something to select from")
+    ap.add_argument("--pool-only", action="store_true",
+                    help="take the corpus ENTIRELY from --pool datasets, so no unlabelled paraphrase of a "
+                         "query can be in it (contamination-free, but topically further away)")
+    ap.add_argument("--drop-above", type=float, default=0.0,
+                    help="drop corpus sentences within this similarity of ANY query before measuring — "
+                         "bounds how much of a same-dataset FPR is unlabelled duplicates")
+    ap.add_argument("--examples", type=int, default=0,
+                    help="dump the N highest-scoring false positives for human inspection")
     args = ap.parse_args(argv)
 
     sizes = [int(x) for x in args.sizes.split(",") if x.strip()]
     thresholds = [float(x) for x in args.thresholds.split(",") if x.strip()]
+    pool_names = [x.strip() for x in args.pool.split(",") if x.strip()]
+    modes = ("random", "retrieved") if args.distractors == "both" else (args.distractors,)
 
     ran = 0
     for name in args.datasets:
         if name not in DATASETS:
             print(f"NOTE: unknown dataset {name!r}; known: {sorted(DATASETS)}")
             continue
-        try:
-            run(name, sizes=sizes, thresholds=thresholds, n_queries=args.queries,
-                model_key=args.model_key, seed=args.seed)
-            ran += 1
-        except DatasetNotAvailable as exc:
-            print(f"SKIP [{name}]: {exc}\n")
-        except ValueError as exc:
-            print(f"SKIP [{name}]: {exc}\n")
+        done = {}
+        for mode in modes:
+            try:
+                done[mode] = run(name, sizes=sizes, thresholds=thresholds, n_queries=args.queries,
+                                 model_key=args.model_key, seed=args.seed, mode=mode,
+                                 pool_names=pool_names, pool_only=args.pool_only,
+                                 drop_above=args.drop_above,
+                                 n_examples=args.examples)
+                ran += 1
+            except DatasetNotAvailable as exc:
+                print(f"SKIP [{name}]: {exc}\n")
+            except ValueError as exc:
+                print(f"SKIP [{name}]: {exc}\n")
+        if len(done) == 2:
+            _print_comparison(name, done["random"], done["retrieved"], thresholds)
     if not ran:
         print("Nothing ran. Fetch a dataset first:  python -m eval.fetch_datasets mrpc")
     return 0

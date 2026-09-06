@@ -65,6 +65,11 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   `confident_threshold=0.78`; verbatim is always confident. `overall` carries `confident_pct/review_pct/review_count`.
 - The confidence cutoff **scales with corpus size** (ADR-0024): `base + 0.06·log10(N/500)`, capped at 0.92. Always
   quote `engine.confident_threshold` (applied), never the configured base — `eval/run_corpus.py` is the measurement.
+- **Corpus-probe numbers are upper bounds** (ADR-0025). The public sets label *pairs*, not corpora: QQP holds
+  unlabelled duplicate questions across pairs and STS-B/MRPC share source sentences, so a similarity-ranked corpus
+  counts real matches as false positives. Never quote a corpus FPR without `--pool-only`, `--drop-above` or reading
+  the `--examples` dump. And note **relevance beats size**: a *retrieved* 100-sentence corpus behaves like a random
+  1 000–3 000-sentence one, so the size scaling counteracts the smaller half of the effect.
 - Cross-encoder rerank (W4) is **opt-in** (`PRISM_RERANK=true`, image built with `PRISM_BAKE_RERANK=1`) until
   latency is measured on the real VPS.
 - The job store is **in-process**: exactly one uvicorn worker / one replica until the Postgres store lands (W7).
@@ -75,18 +80,21 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 
 ## Current priorities
 
-**State as of 2026-09-06** (`main` @ `ee5c3dc`, CI green on all five jobs, 180 tests, working tree clean):
+**State as of 2026-09-06** (`main` @ `aaafa0c` + the ADR-0025 measurement pass, 188 tests, lint clean):
 W1–W4b + W8 shipped · licensed PolyForm Noncommercial 1.0.0 · PAN purged from history.
-Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0024.
+Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0025.
 
 **Next, in order:**
 1. **W6 — first deploy.** `deploy/README.md` is a complete runbook; it needs a VPS and nothing else. On the box:
    measure `timings_ms` on a real 20-page PDF with `PRISM_RERANK=true` and academic full text on, then set the
    rerank default and `PRISM_MAX_SOURCE_SENTENCES` **from those numbers**. Also point UptimeRobot at
    `/health/ready` and set `PRISM_CONTACT_EMAIL` + `PRISM_SENTRY_DSN`.
-2. **Re-measure corpus scaling against the full matcher** (ADR-0024 measured the paraphrase pillar alone, with
-   *unrelated* distractors; production sources are retrieved by similarity, so the real effect is likely larger).
-   Then refit `k`/`pivot` and refresh `eval/gates.json`.
+2. **Settle the confidence cutoff on the box.** ADR-0025 took this as far as public pair data allows: the probe
+   was contaminated (its "no true match in the corpus" guarantee held only pairwise), the bounded FPR@0.78 at
+   N=3 000 is 0.088 rather than 0.108, and *relevance* moved the number far more than *size*. `k`/`pivot` were
+   deliberately left alone — the honest interval is wider than a refit would move them. What settles it is the
+   **full pipeline against really-retrieved sources**: let the live retriever build a corpus for a real OA paper,
+   then score passages known not to derive from it. Only then refit and refresh `eval/gates.json`.
 3. **W5 fine-tune** — kit is ready and self-gating; needs one human-run Colab/Kaggle GPU session. "Do not ship"
    is a legitimate outcome.
 4. **W7** — Supabase JWT + `PostgresJobStore` implementing the existing `worker.store.JobStore` Protocol.
