@@ -5,6 +5,42 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-06 (cont.) — The same bug again, one door down (ADR-0028)
+
+**The question ADR-0026 left.** The splitter bug was silent, sat in the core loop, and survived a green suite
+because every fixture was tidy prose. That is a *pattern*, not an incident, so the next thing to do was point the
+parser at input that looks like real work: the actual *Attention Is All You Need* PDF, 15 pages, instead of the
+synthetic fixture in the repo.
+
+**The PDF path passed** — 4 969 words, 81 reference entries correctly excluded, no ligature or soft-hyphen or
+hyphenation artefacts, 247 sentences at a median of 17 words. (Its longest "sentence" is a results table, which is
+a layout limitation rather than a bug, and stripping tables could hide real copying. Left alone, on the record.)
+
+**The text path did not.** `_plaintext_blocks` splits on blank lines and never ran `_clean_block`, so single
+newlines survived into the matcher — where a newline ends a sentence. A manuscript wrapped at 60–80 columns (a
+`.txt` export, a LaTeX source, hand-authored Markdown) was compared **line by line**, and any line under
+`min_sentence_words` was dropped without trace. PDFs were fine, because `_clean_block` collapses line breaks —
+so the same manuscript behaved differently depending on the format it arrived in.
+
+| one wrapped paragraph vs a genuine paraphrase of itself | units embedded | matches | best similarity |
+|---|---|---|---|
+| before | 5 fragments | **0** | 0.000 |
+| after | 2 sentences | 2 | **0.875** |
+
+Not a degradation. A miss.
+
+**Fixed by undoing *wrapping*, not line structure:** a break is joined only when the previous line does not finish
+a sentence and the next begins lower-case. Lists and headings keep their breaks; hyphenation across a wrapped line
+is rejoined, as the PDF path already did. Collapsing every newline would have made the two paths identical in one
+line and was rejected — in plain text a break can be real structure, in a PDF it is extraction noise. What must
+match is that the *same prose* reads the same either way, and that is now a test. Tests 215 → **221**.
+
+**The lesson, twice confirmed in one day:** both bugs were silent, both sat between the user's text and the
+encoder, and both were invisible because every fixture was clean, unwrapped prose. Fixtures that look like real
+manuscripts buy more than more assertions about tidy ones.
+
+---
+
 ## 2026-09-06 (cont.) — A one-line chore that turned out to be a security finding (ADR-0027)
 
 **The chore** was the smallest item left on the unblocked list: "`pip-audit` step in CI once the lockfile has

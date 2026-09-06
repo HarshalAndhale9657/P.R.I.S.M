@@ -653,3 +653,44 @@ record with a name against it. Deleting the step to go green is not a maintenanc
 **Consequences:** Dependency drift now surfaces on every push instead of at the first incident report, and the
 same command is in `requirements-dev.txt` so it can be run locally before pushing. The cost is that an upstream
 advisory can turn CI red on unrelated work — which is the point, and the ignore convention is the release valve.
+
+## ADR-0028 — Hard-wrapped plain text was checked as line fragments, not sentences
+**Status:** Accepted (2026-09-06)
+**Context:** ADR-0026 fixed sentence segmentation on the *punctuation* side. That raised the obvious follow-up
+question — is the rest of the input path sound? — so the parser was run against a real academic PDF
+(*Attention Is All You Need*, 15 pages) rather than the synthetic fixture. The PDF path came out clean: 4 969
+words, 81 reference entries correctly excluded, no ligature or hyphenation artefacts, 247 sentences at a median
+of 17 words. The **text** path did not.
+
+`_plaintext_blocks` splits on blank lines and never ran `_clean_block`, so single newlines survived into the
+matcher — where a newline ends a sentence. A manuscript wrapped at 60–80 columns, which is what `.txt` exports,
+LaTeX sources and hand-authored Markdown look like, therefore reached the encoder as **line fragments**, and any
+fragment under `min_sentence_words` was dropped without trace. The PDF path was unaffected because `_clean_block`
+already collapses line breaks — so the same manuscript behaved differently depending on the format it arrived in.
+
+**Measured** — one wrapped paragraph checked against a genuine paraphrase of itself:
+
+| | units embedded | paraphrase matches | best similarity |
+|---|---|---|---|
+| before | 5 fragments | **0** | 0.000 |
+| after | 2 sentences | 2 | **0.875** |
+
+A real paraphrase, missed completely. Not a degradation — a miss.
+
+**Decision — undo *wrapping*, keep deliberate line structure.** `_unwrap()` joins a line break only when the
+previous line does not finish a sentence (`.!?:;`) **and** the next line begins lower-case or with a digit. That
+is what a hard wrap looks like. Headings, list items and anything beginning with a capital keep their break, so a
+bulleted list is still a list rather than one long pseudo-sentence. Hyphenation across a wrapped line is rejoined,
+matching what the PDF path already did.
+
+The alternative — collapsing every newline, exactly as `_clean_block` does — would make the two paths identical in
+one line of code, and was rejected: in plain text a line break can be real structure, and PDF line breaks are
+layout noise from a column extractor. The paths differ because their inputs differ, and the property that matters
+is that the *same prose* reads the same either way, which is now a test.
+
+**Consequences:** `.txt` and `.md` manuscripts are checked as prose for the first time. Documents that were
+quietly under-checked will now report more matches — an increase that is a fix, not a regression, and worth saying
+out loud if anyone compares an old result to a new one. Tests 215 → 221. **The pattern is now twice-confirmed:
+both bugs were silent, both were in the path between the user's text and the encoder, and both were invisible to
+a green suite because every fixture was clean, unwrapped prose.** Fixtures that look like real manuscripts are
+worth more than more assertions about tidy ones.

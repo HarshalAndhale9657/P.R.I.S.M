@@ -32,6 +32,10 @@ Check items off with a date. Newest priorities on top.
       was truncating every sentence containing a decimal (ADR-0026). The pair-based numbers are unaffected — those
       never went through the splitter — but any claim about a *document* check did. Fold this into the W6
       re-measurement rather than repeating the synthetic probe. _(S)_
+- [ ] **Realistic fixtures, so this bug class fails loudly.** Two silent bugs in one day (ADR-0026, ADR-0028) both
+      sat between the user's text and the encoder, and both survived a green suite because every fixture was clean,
+      unwrapped prose. Add a real-manuscript fixture — hard-wrapped text, statistics, `et al.`, a table — and check
+      the parser against a downloaded OA PDF in the E2E. _(S)_
 - [ ] **Widen the numeric guard's coverage, or decide not to** (ADR-0026). It is silent on the 53–90% of pairs
       where one side states no number. The same "same shape, different facts" idea extends to named entities and
       dates; both need the same measure-first treatment, and "not worth it" is a valid answer. _(M)_
@@ -53,6 +57,10 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-06 — **Hard-wrapped plain text fixed** (ADR-0028): `.txt`/`.md` manuscripts wrapped at 60–80 columns
+      were compared line by line — a wrapped paragraph went from **0 matches to 2 at 0.875** against a genuine
+      paraphrase of itself. Found by pointing the parser at a real academic PDF instead of the synthetic fixture;
+      the PDF path itself came out clean. Tests 215 → 221.
 - [x] 2026-09-06 — **`pip-audit` in CI + 4 dependencies upgraded** (ADR-0027): the first run found **16 advisories
       in 4 packages**, including 7 in `python-multipart` (parses every upload) and 7 in `starlette`. Fixed by
       fastapi 0.115→0.141 (starlette 0.38.6→1.6.0), python-multipart→0.0.32, python-dotenv→1.2.3,

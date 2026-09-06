@@ -5,6 +5,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-06 — Hard-wrapped plain text was checked as line fragments (ADR-0028)
+
+#### Fixed
+- **`.txt` / `.md` manuscripts wrapped at 60–80 columns were compared line by line, not sentence by sentence.**
+  `_plaintext_blocks` never ran `_clean_block`, so single newlines reached the matcher — where a newline ends a
+  sentence — and fragments under `min_sentence_words` were dropped without trace. **Measured: one wrapped
+  paragraph checked against a genuine paraphrase of itself went from 5 fragments / 0 matches to 2 sentences /
+  2 matches at 0.875 similarity.** A real paraphrase, missed completely.
+  `_unwrap()` now joins a break only when the previous line does not finish a sentence *and* the next begins
+  lower-case — headings and list items keep their own lines — and rejoins hyphenation across a wrapped line, as
+  the PDF path already did.
+
+#### Verified
+- The PDF path was audited against a real academic paper (*Attention Is All You Need*, 15 pages) rather than the
+  synthetic fixture, and came out clean: 4 969 words, 81 reference entries excluded, no ligature or hyphenation
+  artefacts, 247 sentences at a median of 17 words.
+- Tests 215 → **221**, including that the same prose reads identically wrapped and unwrapped.
+
+#### Note for anyone comparing results
+Documents that were quietly under-checked will now report **more** matches. That is the fix landing, not a
+regression.
+
 ### 2026-09-06 — pip-audit in CI, and the 16 advisories it found on the first run (ADR-0027)
 
 #### Security

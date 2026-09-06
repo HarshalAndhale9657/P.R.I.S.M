@@ -112,3 +112,70 @@ def test_corrupt_pdf_yields_empty_document_with_warning():
 def test_pdf_magic_beats_extension():
     d = parse_document("mislabelled.txt", _pdf(pages=1, references=False))
     assert d.method == "pdf"
+
+
+# ── Hard-wrapped plain text (ADR-0028) ────────────────────────────────────────
+# `_plaintext_blocks` never ran `_clean_block`, so single newlines survived into the
+# matcher — which ends a sentence at every newline. A 60-column paragraph reached the
+# encoder as five fragments, and any fragment under `min_sentence_words` was dropped.
+
+WRAPPED = (
+    "The proliferation of transformer-based architectures has\n"
+    "fundamentally reshaped the landscape of natural language\n"
+    "processing, and attention permits the model to weigh each token.\n"
+    "\n"
+    "Empirical evaluations across a broad spectrum of benchmarks\n"
+    "demonstrate that these gains are consistent and reproducible.\n"
+)
+
+
+def _sentences(text: str):
+    from services.plagiarism_matcher import PlagiarismMatcher
+    return [u.text for u in PlagiarismMatcher()._sentences(text)]
+
+
+def test_hard_wrapped_prose_is_two_sentences_not_five_fragments():
+    doc = parse_document("manuscript.txt", WRAPPED.encode())
+    sents = _sentences(doc.text)
+    assert len(sents) == 2, sents
+    assert sents[0].startswith("The proliferation") and sents[0].endswith("weigh each token.")
+
+
+def test_a_wrapped_paragraph_reads_the_same_as_the_unwrapped_one():
+    """The identical manuscript must not be checked differently for having been wrapped."""
+    flat = " ".join(line for line in WRAPPED.split("\n\n")[0].split("\n") if line)
+    wrapped_doc = parse_document("wrapped.txt", WRAPPED.encode())
+    flat_doc = parse_document("flat.txt", (flat + "\n").encode())
+    assert _sentences(flat_doc.text) == _sentences(wrapped_doc.text)[:1]
+
+
+def test_list_items_keep_their_own_lines():
+    """Only *wrapping* is undone. A bulleted list is deliberate structure, not a wrap."""
+    md = ("We applied the following criteria:\n"
+          "- Participants aged over 18 years at enrolment\n"
+          "- Written informed consent obtained before screening\n"
+          "- No prior exposure to the intervention under study\n")
+    doc = parse_document("notes.md", md.encode())
+    assert doc.text.count("\n") >= 3, doc.text
+    # Each item stays its own unit. The 5-word intro line is below `min_sentence_words`
+    # and so is never embedded — long-standing behaviour, unrelated to unwrapping.
+    assert _sentences(doc.text) == [
+        "- Participants aged over 18 years at enrolment",
+        "- Written informed consent obtained before screening",
+        "- No prior exposure to the intervention under study",
+    ]
+
+
+def test_a_capitalised_new_line_is_not_treated_as_a_wrap():
+    doc = parse_document("t.txt", b"A heading line\nAnother deliberate line of text here\n")
+    assert "\n" in doc.text
+
+
+def test_plain_text_rejoins_hyphenated_line_breaks():
+    doc = parse_document("h.txt", b"The classifica-\ntion was verified by two independent coders.\n")
+    assert "classification was verified" in doc.text
+
+
+def test_blank_lines_still_separate_paragraphs():
+    doc = parse_document("p.txt", WRAPPED.encode())
+    assert len(doc.paragraphs) == 2

@@ -102,7 +102,31 @@ def _looks_like_pdf(name: str, data: bytes) -> bool:
 
 def _plaintext_blocks(data: bytes) -> List[Tuple[Optional[int], str]]:
     raw = data.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
-    return [(None, chunk.strip()) for chunk in re.split(r"\n\s*\n", raw) if chunk.strip()]
+    return [(None, _unwrap(chunk.strip())) for chunk in re.split(r"\n\s*\n", raw) if chunk.strip()]
+
+
+# A hard-wrapped line: it does not finish a sentence, and the next line continues it in
+# lower case. Markdown/plain-text manuscripts are routinely wrapped at 72-80 columns.
+_HARD_WRAP_RE = re.compile(r"(?<![.!?:;])\n(?=[a-z0-9(])", re.UNICODE)
+_WRAP_HYPHEN_RE = re.compile(r"(\w)-\n(\w)", re.UNICODE)
+
+
+def _unwrap(text: str) -> str:
+    """Undo hard line wrapping in plain text, but keep deliberate line structure.
+
+    Without this the matcher splits at every wrapped line, because a newline ends a
+    sentence (`plagiarism_matcher.split_sentences`). A 60-column paragraph then reaches
+    the encoder as five fragments instead of two sentences, and any fragment under
+    `min_sentence_words` is **dropped entirely** — the same failure ADR-0026 fixed on the
+    punctuation side, arriving through the layout door on the text-input path only (PDFs
+    go through `_clean_block`, which already collapses line breaks).
+
+    A line break is only joined when the previous line does not finish a sentence *and*
+    the next begins lower-case: that is what wrapping looks like. Headings, list items and
+    anything starting with a capital keep their break, so a bulleted list is still a list.
+    """
+    text = _WRAP_HYPHEN_RE.sub(r"\1\2", text)          # "informa-\ntion" -> "information"
+    return _HARD_WRAP_RE.sub(" ", text)
 
 
 # ── PDF ──────────────────────────────────────────────────────────────────────

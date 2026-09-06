@@ -72,6 +72,11 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   counts real matches as false positives. Never quote a corpus FPR without `--pool-only`, `--drop-above` or reading
   the `--examples` dump. And note **relevance beats size**: a *retrieved* 100-sentence corpus behaves like a random
   1 000–3 000-sentence one, so the size scaling counteracts the smaller half of the effect.
+- **Plain text is unwrapped before matching** (`document_parser._unwrap`, ADR-0028): a line break is joined only
+  when the previous line does not finish a sentence and the next begins lower-case. Without it a 60-column `.txt`
+  manuscript is compared line by line — measured, that turned a real paraphrase from **0 matches into 2 at 0.875**.
+  PDFs go through `_clean_block` instead; the paths differ because their inputs do, but the same prose must read
+  the same either way (there is a test).
 - **Sentence splitting lives in `plagiarism_matcher.split_sentences`** (ADR-0026), and its exceptions are load-
   bearing: a period between digits, a listed abbreviation, an initial or a following lower-case letter is not a
   boundary. The naive version truncated every sentence containing a decimal and *dropped* the remainder. If you
@@ -94,9 +99,9 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 
 ## Current priorities
 
-**State as of 2026-09-06** (`main` @ `fb0d86e` + the ADR-0027 pass, 215 tests, lint clean, E2E 2/2, audit clean):
+**State as of 2026-09-06** (`main` @ `b3fd0ef` + the ADR-0028 pass, 221 tests, lint clean, E2E 2/2, audit clean):
 W1–W4b + W8 shipped · licensed PolyForm Noncommercial 1.0.0 · PAN purged from history.
-Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0027.
+Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0028.
 
 **Next, in order:**
 1. **W6 — first deploy.** `deploy/README.md` is a complete runbook; it needs a VPS and nothing else. On the box:
