@@ -201,3 +201,33 @@ jobs:
       - name: Syntax-check all JS
         run: |
           for f in frontend/js/*.js e2e/*.mjs; do node --check "$f" && echo "ok  $f"; done
+
+  # ── 6. Dependency vulnerability audit (ADR-0027) ───────────────────────────
+  audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pip-audit
+        run: pip install pip-audit==2.9.0
+
+      # The LOCKFILE is audited, not a fresh resolve: it is the exact set the production
+      # image installs, so it is the set that can actually be exploited. `--no-deps
+      # --disable-pip` audits the pinned versions directly — no resolver, no downloads,
+      # seconds instead of minutes. `torch==X+cpu` is a local version identifier that
+      # only exists on the PyTorch index, so it is normalised to the PyPI version it is
+      # built from; the advisories are the same.
+      - name: Audit the pinned lockfile
+        run: |
+          sed 's/+cpu$//' requirements.lock > /tmp/audit-lock.txt
+          pip-audit --strict --no-deps --disable-pip -r /tmp/audit-lock.txt
+
+      # Blocking on purpose. If an advisory lands with no fix available, add it here as
+      #   --ignore-vuln <ID>   # <date> <who looked> — why it cannot reach us
+      # so the exemption is a decision on the record. Never delete this step to go green.

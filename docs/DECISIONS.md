@@ -604,3 +604,52 @@ trustworthy — the intended direction, and the same safe direction as ADR-0024.
 change of the two: every check now compares whole sentences, so scores on numeric prose move (up or down) and the
 ADR-0024/0025 corpus calibration was measured with the *old* splitter — a point for the W6 re-measurement to
 carry. Coverage is honest and stated: the guard is silent on the 53–90% of pairs where one side states no number.
+
+## ADR-0027 — Audit the lockfile in CI, and the 16 advisories that were already there
+**Status:** Accepted (2026-09-06)
+**Context:** The backlog carried "`pip-audit` step in CI once the lockfile has settled" as a small chore. It had
+settled. Running it once, before writing any CI, turned the chore into a finding.
+
+**Decision — audit the lockfile, not a fresh resolve.** `requirements.lock` is the exact set the production image
+installs, so it is the set that can actually be exploited; a resolve done at CI time audits a *different*
+dependency graph than the one shipped. `pip-audit --strict --no-deps --disable-pip -r requirements.lock` reads the
+pinned versions directly: no resolver, no downloads, seconds rather than minutes. Two mechanical details, both
+learned the hard way:
+* `torch==2.14.0+cpu` is a local version identifier that exists only on the PyTorch index, so the audit step
+  normalises `+cpu` away — the advisories for the CPU build are the advisories for the version it is built from.
+* The lockfile header is now **plain ASCII**. It contained an em dash, and `pip-audit` reads requirements files
+  with the platform's default codepage — on Windows that is cp1252, which cannot decode it, and the audit died
+  with a `UnicodeDecodeError` rather than a security answer. A file that tooling must read is not the place for
+  typography.
+
+**What the first run found — 16 advisories across 4 packages, every one with a fix available:**
+
+| package | pinned | advisories | fixed in |
+|---|---|---|---|
+| `python-multipart` | 0.0.9 | **7** | 0.0.31 |
+| `starlette` | 0.38.6 | **7** | 1.3.1 |
+| `requests` | 2.32.5 | 1 | 2.33.0 |
+| `python-dotenv` | 1.0.1 | 1 | 1.2.2 |
+
+The first two are not incidental: `python-multipart` parses **every file a user uploads to PRISM**, and
+`starlette` is the ASGI core under FastAPI. This is the whole argument for the step existing — nobody had looked,
+and looking took one command.
+
+**The upgrade that clears them:** `fastapi 0.115.0 → 0.141.1` (it requires only `starlette>=0.46.0`, so starlette
+moves 0.38.6 → **1.6.0**), `python-multipart 0.0.9 → 0.0.32`, `python-dotenv 1.0.1 → 1.2.3`,
+`requests 2.32.5 → 2.34.2`. That last one forced one more: `arxiv 2.1.3` pins `requests~=2.32.0`, so `arxiv` moves
+to **4.0.1** — two majors, but its API is unchanged at all three of our call sites
+(`Client(page_size, delay_seconds, num_retries)`, `Search(query, max_results, sort_by)`,
+`SortCriterion.Relevance`), which was checked by signature before the pin moved.
+
+**Verified, not assumed:** ruff clean · 215 tests green on the new stack · the app starts under a real uvicorn and
+`/health` answers · browser E2E 2/2 with 0 console errors (FastAPI's `TestClient` would not have caught an ASGI
+regression across a starlette major) · `pip-audit` reports **no known vulnerabilities**.
+
+**The step is blocking.** An advisory with no fix available is added inline as
+`--ignore-vuln <ID>   # <date> <who looked> — why it cannot reach us`, so an exemption is a decision on the
+record with a name against it. Deleting the step to go green is not a maintenance option.
+
+**Consequences:** Dependency drift now surfaces on every push instead of at the first incident report, and the
+same command is in `requirements-dev.txt` so it can be run locally before pushing. The cost is that an upstream
+advisory can turn CI red on unrelated work — which is the point, and the ignore convention is the release valve.

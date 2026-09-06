@@ -5,6 +5,45 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-06 (cont.) — A one-line chore that turned out to be a security finding (ADR-0027)
+
+**The chore** was the smallest item left on the unblocked list: "`pip-audit` step in CI once the lockfile has
+settled." Before writing any YAML I ran the command once, to see what it would say.
+
+**It said 16 advisories in 4 packages**, every one with a fix already published:
+
+| package | pinned | advisories | fixed in |
+|---|---|---|---|
+| `python-multipart` | 0.0.9 | **7** | 0.0.31 |
+| `starlette` | 0.38.6 | **7** | 1.3.1 |
+| `requests` | 2.32.5 | 1 | 2.33.0 |
+| `python-dotenv` | 1.0.1 | 1 | 1.2.2 |
+
+`python-multipart` parses **every file a user uploads to PRISM**, and `starlette` is the ASGI core under FastAPI.
+Nobody had looked, and looking cost one command.
+
+**Cleared them:** fastapi 0.115.0 → 0.141.1 (it needs only `starlette>=0.46.0`, so starlette goes 0.38.6 →
+**1.6.0**), python-multipart → 0.0.32, python-dotenv → 1.2.3, requests → 2.34.2. That last one forced
+`arxiv 2.1.3 → 4.0.1`, because arxiv 2.1.3 pinned `requests~=2.32.0` — two major versions, so I checked its API by
+signature at all three call sites before moving the pin, rather than hoping the tests would notice.
+
+**Verified rather than assumed**, because a starlette *major* is exactly the kind of upgrade a green unit suite
+can hide: `TestClient` never runs a real ASGI server. ruff clean · 215 tests · the app boots under a real uvicorn
+and `/health` answers · browser E2E 2/2 with 0 console errors · audit now reports **no known vulnerabilities**.
+
+**The CI step audits the lockfile, not a fresh resolve** — the lock is the exact set the production image
+installs, and a CI-time resolve would audit a different graph than the one shipped. `--no-deps --disable-pip`
+reads the pins directly: no resolver, no downloads, seconds not minutes. It is **blocking**; an advisory with no
+fix is added inline as `--ignore-vuln <ID>` with a date, a name and a reason, so an exemption is on the record.
+
+**Two mechanical scars worth keeping:** `torch==2.14.0+cpu` is a local version identifier that exists only on the
+PyTorch index, so the step normalises `+cpu` away. And the lockfile header had an em dash in it — `pip-audit`
+reads requirements files with the platform's default codepage, so on Windows the audit died with a
+`UnicodeDecodeError` instead of giving a security answer. The header is ASCII now: a file that tooling must read
+is not the place for typography.
+
+---
+
 ## 2026-09-06 (cont.) — Building a signal found a bug in the core loop (ADR-0026)
 
 **The plan** was ADR-0025's finding 3: the false positives that survive de-duplication are template text with

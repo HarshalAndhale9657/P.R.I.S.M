@@ -32,6 +32,7 @@ venv\Scripts\python -m ruff check .                              # blocking in C
 venv\Scripts\python -m pytest                                    # 100+ offline tests, coverage floor 80%
 venv\Scripts\python scripts\eval_matcher.py                      # synthetic SMOKE (not a quality gate)
 venv\Scripts\python -m eval.run_pairs stsb mrpc qqp --gate       # the REAL gate (fetch sets first: -m eval.fetch_datasets stsb mrpc qqp --limit 3000)
+venv\Scripts\python -m pip_audit --strict --no-deps --disable-pip -r requirements.lock   # blocking in CI (ADR-0027)
 cd ..\e2e && npm install && node run.mjs                         # browser E2E (both servers running)
 docker build -t prism-backend backend                            # the production image
 ```
@@ -79,6 +80,10 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   but share ≤`PRISM_NUMERIC_GUARD_GATE` (0.20) of them. Paraphrase only, one band only, never hidden. When you
   write copy about the `review` band, remember there are now **two** reasons for it — the cutoff and this — and
   saying the wrong one is a false statement about the check.
+- **Dependencies are audited against `requirements.lock`, not a fresh resolve** (ADR-0027) — the lock is what the
+  production image installs. Keep the lock **ASCII**: `pip-audit` decodes requirements with the platform codepage
+  and an em dash in the header broke it on Windows. Regenerate the lock with the `uv pip compile` line in its own
+  header, then re-run the audit.
 - Cross-encoder rerank (W4) is **opt-in** (`PRISM_RERANK=true`, image built with `PRISM_BAKE_RERANK=1`) until
   latency is measured on the real VPS.
 - The job store is **in-process**: exactly one uvicorn worker / one replica until the Postgres store lands (W7).
@@ -89,9 +94,9 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 
 ## Current priorities
 
-**State as of 2026-09-06** (`main` @ `e4a9736` + the ADR-0026 pass, 215 tests, lint clean, E2E 2/2):
+**State as of 2026-09-06** (`main` @ `fb0d86e` + the ADR-0027 pass, 215 tests, lint clean, E2E 2/2, audit clean):
 W1–W4b + W8 shipped · licensed PolyForm Noncommercial 1.0.0 · PAN purged from history.
-Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0026.
+Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0027.
 
 **Next, in order:**
 1. **W6 — first deploy.** `deploy/README.md` is a complete runbook; it needs a VPS and nothing else. On the box:

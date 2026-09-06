@@ -35,7 +35,6 @@ Check items off with a date. Newest priorities on top.
 - [ ] **Widen the numeric guard's coverage, or decide not to** (ADR-0026). It is silent on the 53–90% of pairs
       where one side states no number. The same "same shape, different facts" idea extends to named entities and
       dates; both need the same measure-first treatment, and "not worth it" is a valid answer. _(M)_
-- [ ] `pip-audit` step in CI once the lockfile has settled. _(S)_
 
 ## 🟢 Next — the product (W7–W12, LAUNCH_PLAN §9)
 - [ ] **W7 · Accounts + persistence** — Supabase JWT verify as a FastAPI dependency; `PostgresJobStore` implementing
@@ -54,6 +53,10 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-06 — **`pip-audit` in CI + 4 dependencies upgraded** (ADR-0027): the first run found **16 advisories
+      in 4 packages**, including 7 in `python-multipart` (parses every upload) and 7 in `starlette`. Fixed by
+      fastapi 0.115→0.141 (starlette 0.38.6→1.6.0), python-multipart→0.0.32, python-dotenv→1.2.3,
+      requests→2.34.2, arxiv→4.0.1. Audit is now blocking and clean; verified with tests, a real uvicorn and E2E.
 - [x] 2026-09-06 — **Sentence splitter fixed + numeric guard** (ADR-0026): the splitter broke on every period, so
       any sentence with a decimal (`8.79`, `p = 0.05`) was truncated and its remainder **dropped, never compared** —
       19.9% of MRPC sentences, 5.8% of STS-B, 4.2% of QQP. Fixed with named exceptions, no NLP library. Then the

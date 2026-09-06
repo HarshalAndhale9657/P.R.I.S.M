@@ -1,11 +1,14 @@
 # Fully-resolved, pinned dependency set for LINUX / Python 3.12 / CPU-only torch.
-# Generated from requirements.txt — do not edit by hand. Regenerate with:
+# Generated from requirements.txt - do not edit by hand. Regenerate with:
 #   uv pip compile requirements.txt -o requirements.lock --python-platform linux --python-version 3.12 \
 #     --index-url https://pypi.org/simple --extra-index-url https://download.pytorch.org/whl/cpu \
 #     --index-strategy unsafe-best-match --no-header
 # Install with:  pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.lock
+# Audit with:    pip-audit --strict --no-deps --disable-pip -r requirements.lock   (see ADR-0027)
 annotated-doc==0.0.5
-    # via typer
+    # via
+    #   fastapi
+    #   typer
 annotated-types==0.8.0
     # via pydantic
 anyio==4.15.1
@@ -13,7 +16,7 @@ anyio==4.15.1
     #   httpx
     #   starlette
     #   watchfiles
-arxiv==2.1.3
+arxiv==4.0.1
     # via -r requirements.txt
 certifi==2026.7.22
     # via
@@ -34,12 +37,8 @@ cloudpickle==3.1.2
     # via joblib
 cryptography==50.0.1
     # via pdfminer-six
-fastapi==0.115.0
+fastapi==0.141.1
     # via -r requirements.txt
-feedparser==6.0.14
-    # via arxiv
-feedparser-sgmllib==2.1.0
-    # via feedparser
 filelock==3.32.5
     # via
     #   huggingface-hub
@@ -76,6 +75,8 @@ joblib==1.6.0
     # via scikit-learn
 langdetect==1.0.9
     # via -r requirements.txt
+lxml==6.1.3
+    # via arxiv
 markdown-it-py==4.2.0
     # via rich
 markupsafe==3.0.3
@@ -121,12 +122,12 @@ pymupdf==1.28.2
     # via -r requirements.txt
 pypdfium2==5.13.0
     # via pdfplumber
-python-dotenv==1.0.1
+python-dotenv==1.2.3
     # via
     #   -r requirements.txt
     #   pydantic-settings
     #   uvicorn
-python-multipart==0.0.9
+python-multipart==0.0.32
     # via -r requirements.txt
 pyyaml==6.0.3
     # via
@@ -135,7 +136,7 @@ pyyaml==6.0.3
     #   uvicorn
 regex==2026.9.3
     # via transformers
-requests==2.32.5
+requests==2.34.2
     # via
     #   -r requirements.txt
     #   arxiv
@@ -159,7 +160,7 @@ shellingham==1.5.4
     # via typer
 six==1.17.0
     # via langdetect
-starlette==0.38.6
+starlette==1.6.0
     # via fastapi
 sympy==1.14.0
     # via torch
@@ -188,10 +189,12 @@ typing-extensions==4.16.0
     #   pydantic
     #   pydantic-core
     #   sentence-transformers
+    #   starlette
     #   torch
     #   typing-inspection
 typing-inspection==0.4.4
     # via
+    #   fastapi
     #   pydantic
     #   pydantic-settings
 urllib3==2.7.0

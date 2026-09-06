@@ -5,6 +5,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-06 — pip-audit in CI, and the 16 advisories it found on the first run (ADR-0027)
+
+#### Security
+- **Upgraded four vulnerable dependencies.** The first `pip-audit` run against the lockfile reported **16
+  advisories in 4 packages**, all with fixes available: `python-multipart` 0.0.9 (**7** — this is the parser
+  handling every file a user uploads), `starlette` 0.38.6 (**7** — the ASGI core), `requests` 2.32.5 and
+  `python-dotenv` 1.0.1. Now `fastapi 0.115.0 → 0.141.1` (which allows `starlette>=0.46.0`, taking starlette to
+  **1.6.0**), `python-multipart → 0.0.32`, `python-dotenv → 1.2.3`, `requests → 2.34.2`, and `arxiv 2.1.3 → 4.0.1`
+  — forced by `requests`, since arxiv 2.1.3 pinned `requests~=2.32.0`; its API is unchanged at our call sites.
+  **`pip-audit` now reports no known vulnerabilities.**
+
+#### Added
+- **`audit` job in CI (blocking)** — `pip-audit --strict --no-deps --disable-pip -r requirements.lock`. The
+  *lockfile* is audited, not a fresh resolve: it is the exact set the production image installs. No resolver and
+  no downloads, so it runs in seconds. An advisory with no fix goes in as an inline `--ignore-vuln <ID>` with a
+  date, a name and a reason; deleting the step is not a way to go green.
+- `pip-audit==2.9.0` in `requirements-dev.txt`, so the same command runs locally before pushing.
+
+#### Fixed
+- The lockfile header is plain ASCII. It contained an em dash, and `pip-audit` reads requirements files using the
+  platform's default codepage — on Windows the audit died with a `UnicodeDecodeError` instead of an answer.
+
+#### Verified
+- ruff clean · 215 tests on the new stack · the app starts under a real uvicorn and `/health` answers · browser
+  E2E 2/2 with 0 console errors (`TestClient` would not have caught an ASGI regression across a starlette major).
+
 ### 2026-09-06 — The sentence splitter was breaking on decimals; and a numeric guard (ADR-0026)
 
 #### Fixed
