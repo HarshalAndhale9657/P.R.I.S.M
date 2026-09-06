@@ -83,6 +83,33 @@ class TriageSummary(BaseModel):
     method: str
 
 
+class CoachCard(BaseModel):
+    """Per-flag coaching phrased by a model (ADR-0031). Always labelled; never a rewrite."""
+    what_it_is: str
+    why_flagged: str
+    honest_fix: str
+    do_not: str
+    filtered: List[str] = Field(default_factory=list, description="Fields the post-filter replaced with rule text.")
+    model: Optional[str] = None
+    cached: bool = False
+    ai_written: bool = True
+    source_visible: bool = True
+
+
+class CoachSummary(BaseModel):
+    coached: int = 0
+    calls: int = 0
+    cached: int = 0
+    filtered_fields: int = 0
+    model: Optional[str] = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    skipped_reason: Optional[str] = None
+    errors: List[str] = Field(default_factory=list)
+    method: str = ""
+
+
 class Match(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -114,6 +141,7 @@ class Match(BaseModel):
                     "(ADR-0026). It is why the band is `review` rather than `confident`.",
     )
     triage: Optional[Triage] = None
+    coach: Optional[CoachCard] = None
 
 
 class Overall(BaseModel):
@@ -170,6 +198,7 @@ class CheckResult(BaseModel):
     paraphrase_enabled: Optional[bool] = None
     warnings: List[str] = Field(default_factory=list)
     triage_summary: Optional[TriageSummary] = None
+    coach_summary: Optional[CoachSummary] = None
     timings_ms: Dict[str, float] = Field(default_factory=dict)
     engine: EngineInfo
 

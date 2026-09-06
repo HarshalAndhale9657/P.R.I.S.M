@@ -45,9 +45,10 @@ Check items off with a date. Newest priorities on top.
       2026-09-07). **Needs the owner:** a Supabase project → set `PRISM_AUTH_JWT_SECRET` *or* `PRISM_AUTH_JWKS_URL`
       (+ `PRISM_AUTH_ISSUER`); decide the free quota (`PRISM_QUOTA_CHECKS`); then the sign-in UI (supabase-js magic
       link) that stores the session token for `authHeaders()`. _(S once a project exists)_
-- [ ] **W9 · CoachStage** — replace the *static* per-type `fix` string with gpt-4o-mini prose grounded in the triage
-      type + the shown source: JSON, ≤3 calls/check, cached, per-account $ ceiling; **matcher post-filter** so coaching
-      can never launder copied text; source always visible; no auto-rewrite (ADR-0014). Rules stay the backbone. _(L)_
+- [~] **W9 · CoachStage** — backend **built, dark by default** (ADR-0031, 2026-09-07): ≤3 calls/check, cached,
+      daily cap, matcher post-filter + narrow evasion lexicon, labelled AI-written, fails soft. **Needs the owner:**
+      an OpenAI key with ZDR → `PRISM_COACH_ENABLED=true` + `PRISM_OPENAI_API_KEY`; then read ~20 real cards for
+      tone/quality before exposing it. Per-*account* $ ceiling waits for W11. _(S once a key exists)_
 - [ ] **W10 · ReportStage** — submission-risk report + re-check. _(M)_
 - [ ] **W11 · Payments + legal** — Razorpay; Privacy/ToS/AUP; CI honesty gate on copy. _(M)_
 - [ ] **W12 · Launch.**
@@ -59,6 +60,9 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-07 — **W9 coaching backend** (ADR-0031): model phrases, rules decide, matcher post-filters; bounded,
+      cached, priced in the open, labelled. Also `scripts/pg_tests.py` (embedded Postgres; 293/0 locally) after a
+      one-test red CI run. Tests 255 → 275 (+18 Postgres-only).
 - [x] 2026-09-07 — **Auth + ownership + per-user quota** (ADR-0030): Supabase JWT verifier (HS256 + JWKS), 404-not-403
       ownership on jobs, usage ledger with 402 over quota, limiter bypass for accounts. Anonymous unchanged until
       configured. Tests 231 → 255 (+18 Postgres-only in CI).

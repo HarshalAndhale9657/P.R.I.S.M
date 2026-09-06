@@ -58,12 +58,15 @@ class CheckRunner:
         matcher: PlagiarismMatcher,
         academic_search: SearchFn,
         result_cache: Optional[TTLCache] = None,
+        coach=None,
     ) -> None:
         self.settings = settings
         self.store = store
         self.executor = executor
         self.matcher = matcher
         self.academic_search = academic_search
+        # ADR-0031: a configured CoachStage, or None. Tests set `runner.coach` directly.
+        self.coach = coach
         self.cache: TTLCache = result_cache or TTLCache(
             max_size=settings.result_cache_size, ttl_seconds=settings.result_cache_ttl_seconds
         )
@@ -124,6 +127,7 @@ class CheckRunner:
             rerank_model=s.rerank_model,
             max_pdf_pages=s.max_pdf_pages,
             max_document_chars=s.max_document_chars,
+            coach=self.coach,
         )
         ctx = run_pipeline(ctx, stages)
         return self._assemble(ctx, req)
@@ -161,6 +165,7 @@ class CheckRunner:
             "paraphrase_enabled": ctx.artifacts.get("paraphrase_enabled"),
             "warnings": ctx.warnings,
             "triage_summary": ctx.artifacts.get("triage_summary"),
+            "coach_summary": ctx.artifacts.get("coach_summary"),
             "timings_ms": ctx.artifacts.get("timings_ms", {}),
             "engine": {
                 "version": APP_VERSION,
@@ -174,6 +179,9 @@ class CheckRunner:
                 "reranked": reranked_any,
                 "rerank_model": s.rerank_model if reranked_any else None,
                 "coverage": coverage,
+                # ADR-0031: what phrased the coaching, if anything, and what it cost.
+                "coach_model": (ctx.artifacts.get("coach_summary") or {}).get("model"),
+                "coach_estimated_cost_usd": (ctx.artifacts.get("coach_summary") or {}).get("estimated_cost_usd", 0.0),
             },
         }
 

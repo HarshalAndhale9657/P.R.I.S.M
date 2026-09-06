@@ -69,6 +69,16 @@ class Settings(BaseSettings):
     quota_checks: int = Field(default=0, ge=0, description="Checks a signed-in user may submit per window. 0 = unlimited.")
     quota_window_seconds: int = Field(default=86400, ge=60)
 
+    # ── Coaching (W9, ADR-0031): a model phrases the fix; rules decide what it is ────────
+    coach_enabled: bool = Field(default=False, description="Phrase per-flag coaching with a language model. Needs an API key.")
+    coach_provider: Literal["openai"] = "openai"
+    openai_api_key: str = Field(default="", description="Only the flagged passage + source excerpt are ever sent.")
+    coach_model: str = "gpt-4o-mini"
+    coach_max_per_check: int = Field(default=3, ge=0, le=10, description="Model calls per check (highest-priority flags first).")
+    coach_max_calls_per_day: int = Field(default=500, ge=0, description="Process-wide daily cap; 0 = unlimited.")
+    coach_timeout_seconds: float = Field(default=20.0, gt=0)
+    coach_cache_entries: int = Field(default=2000, ge=0)
+
     # ── Rate limiting (per client IP; in-process; anonymous users only once auth is on) ──
     rate_limit_submissions: int = Field(default=12, description="Submissions allowed per window per IP. 0 disables.")
     rate_limit_window_seconds: int = 600

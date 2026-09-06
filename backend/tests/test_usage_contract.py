@@ -76,10 +76,11 @@ def test_postgres_ledger_can_share_the_job_store_pool():
         led.record("a")
         assert led.count("a", since=0) == 1
         assert led._owns_pool is False
+        led.close()                       # must NOT close the shared pool ...
+        assert not store._pool.closed
+        assert len(store) == 0            # ... which the store can still use
     finally:
         with store._pool.connection() as conn:
             conn.execute(f"DROP TABLE IF EXISTS {led.table}")
             conn.execute(f"DROP TABLE IF EXISTS {store.table}")
-        led.close()          # must NOT close the shared pool
-        assert len(store) == 0
         store.close()

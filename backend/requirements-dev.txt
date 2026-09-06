@@ -7,3 +7,6 @@ ruff==0.16.6
 # Dependency vulnerability audit — the same command CI runs (ADR-0027):
 #   pip-audit --strict --no-deps --disable-pip -r requirements.lock
 pip-audit==2.9.0
+# Embedded PostgreSQL so the Postgres halves of the contract suites run at your desk, not only in CI:
+#   python scripts/pg_tests.py
+pgserver==0.1.4

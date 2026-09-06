@@ -33,6 +33,7 @@ venv\Scripts\python -m pytest                                    # 100+ offline 
 venv\Scripts\python scripts\eval_matcher.py                      # synthetic SMOKE (not a quality gate)
 venv\Scripts\python -m eval.run_pairs stsb mrpc qqp --gate       # the REAL gate (fetch sets first: -m eval.fetch_datasets stsb mrpc qqp --limit 3000)
 venv\Scripts\python -m pip_audit --strict --no-deps --disable-pip -r requirements.lock   # blocking in CI (ADR-0027)
+venv\Scripts\python scripts\pg_tests.py                             # the WHOLE suite vs an embedded Postgres — no skips (ADR-0031)
 cd ..\e2e && npm install && node run.mjs                         # browser E2E (both servers running)
 docker build -t prism-backend backend                            # the production image
 ```
@@ -52,7 +53,8 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   `academic_corpus.py` (OpenAlex + arXiv + keyed Semantic Scholar; `ProviderContext`/`Candidate`), `fulltext.py`
   (safe OA-PDF fetcher, ADR-0021), `triage.py` (deterministic remediation rules, ADR-0022),
   `embedding_cache.py` (per-sentence LRU, ADR-0023 — makes re-checks 6× faster),
-  `numeric_guard.py` (same shape, different figures → `review`, ADR-0026),
+  `numeric_guard.py` (same shape, different figures → `review`, ADR-0026), `coach.py` (model phrases the fix,
+  matcher post-filters it, ADR-0031),
   `local_embeddings.py` (bi-encoder singleton). `backend/utils/` — `TTLCache`.
 - `backend/modelhub/` — model registry/cache (`get_embedder`, `get_cross_encoder`).
 - `backend/eval/` — public-dataset harness; `gates.json` holds the per-dataset regression gates (ADR-0020). **No PAN.**
@@ -101,6 +103,10 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   turns verification on; `PRISM_AUTH_REQUIRED` gates the endpoints. Rules with tests behind them: a presented token
   is always verified (bad = 401 even when optional), ownership is **404 not 403**, quota is a ledger (`worker/usage.py`)
   and over it is **402**. Signed-in users skip the per-IP limiter. Never read token claims beyond `sub/email/role`.
+- **Coaching (ADR-0031):** dark unless `PRISM_COACH_ENABLED` + `PRISM_OPENAI_API_KEY`. Whatever the model returns
+  goes through `services.coach.post_filter` — 8-word copies of the source or the passage, and detector-beating
+  language, are replaced by rule text. Keep the evasion lexicon *narrow*: rule text must be able to say "do not
+  just change a few words". Never send more than the two excerpts. Cards are always labelled `ai_written`.
 - **Import layering:** `worker` → `pipeline`/`services`/`utils`; never `worker` → `app` except `app.settings`/
   `app.schemas`. `app/__init__` resolves `create_app` lazily for exactly this reason; context vars live in
   `utils/context.py`. `python -c "import worker"` must work cold — it is the regression check.
@@ -111,9 +117,9 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 
 ## Current priorities
 
-**State as of 2026-09-07** (`main` @ `756a487` + the ADR-0030 pass, 255 tests + 18 Postgres-only in CI, lint clean, E2E 2/2, audit clean):
+**State as of 2026-09-07** (`main` @ `84ba0ac` + the ADR-0031 pass, 275 tests + 18 Postgres-only (293 total vs an embedded Postgres), lint clean, E2E 2/2, audit clean):
 W1–W4b + W8 shipped · licensed PolyForm Noncommercial 1.0.0 · PAN purged from history.
-Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0030.
+Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0031.
 
 **Next, in order:**
 1. **W6 — first deploy.** `deploy/README.md` is a complete runbook; it needs a VPS and nothing else. On the box:
@@ -129,8 +135,9 @@ Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); d
    both were measured with the **pre-ADR-0026 splitter**, which truncated every sentence containing a decimal.
 3. **W5 fine-tune** — kit is ready and self-gating; needs one human-run Colab/Kaggle GPU session. "Do not ship"
    is a legitimate outcome.
-4. **W7 — backend code-complete** (ADR-0029/0030). Needs the owner: a Supabase project (one secret or one JWKS
-   URL), the free-quota number, then the sign-in UI. **W9 (CoachStage) is the next big unblocked build.**
+4. **W7 and W9 — backend code-complete** (ADR-0029/0030/0031), both dark until configured. Needs the owner: a
+   Supabase project (secret or JWKS URL) + free-quota number + sign-in UI; an OpenAI key with ZDR + a read of real
+   cards. **W10 (report + before/after re-check) is the next unblocked build.**
 
 **Owner decisions still open** (TODO 🔴, none blocking): the legal copyright holder for `NOTICE`; consent from
 three past teammates for ~176 surviving boilerplate lines; confirming the old Vercel/Render demo is offline.

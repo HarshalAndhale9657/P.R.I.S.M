@@ -47,6 +47,7 @@ def build_check_stages(
     rerank_model: str = "cross-encoder-stsb",
     max_pdf_pages: int = 300,
     max_document_chars: int = 2_000_000,
+    coach: Optional[Stage] = None,
 ) -> List[Stage]:
     """The live originality-check pipeline: parse -> retrieve -> match -> rerank -> localize -> triage.
 
@@ -56,7 +57,7 @@ def build_check_stages(
     """
     from .stages import LocalizeStage, MatchStage, ParseStage, RerankStage, RetrieveStage, TriageStage
 
-    return [
+    stages: List[Stage] = [
         ParseStage(max_pdf_pages=max_pdf_pages, max_chars=max_document_chars),
         RetrieveStage(search_fn, use_academic=use_academic),
         MatchStage(matcher),
@@ -68,6 +69,9 @@ def build_check_stages(
         LocalizeStage(),
         TriageStage(),
     ]
+    if coach is not None:
+        stages.append(coach)          # ADR-0031: phrased after triage has decided what each flag is
+    return stages
 
 
 def default_check_stages(matcher, search_fn, *, use_academic: bool, rerank: Optional[bool] = None) -> List[Stage]:

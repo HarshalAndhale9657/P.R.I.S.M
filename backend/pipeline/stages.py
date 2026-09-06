@@ -256,9 +256,42 @@ class TriageStage:
         return ctx
 
 
-class CoachStage(_SkeletonStage):
-    """W9: per-flag honest-fix coaching (source-visible, never rewrite-to-evade — ADR-0014)."""
+class CoachStage:
+    """W9 — per-flag honest coaching, phrased by a model, decided by the rules (ADR-0031).
+
+    Runs after TriageStage. At most `max_per_check` model calls, highest-priority flags
+    first; every field the model returns is post-filtered through the matcher so it can
+    never hand the author copied text, and through an evasion lexicon so it can never
+    coach disguise (ADR-0014). Never raises: without a client, or on any failure, the
+    author sees the rule text and `coach_summary.skipped_reason` says why.
+    """
     name = "coach"
+
+    def __init__(self, *, client=None, cache=None, budget=None, max_per_check: int = 3,
+                 timeout: float = 20.0) -> None:
+        from services.coach import CoachBudget
+        from utils.ttl_cache import TTLCache
+
+        self.client = client
+        self.cache = cache if cache is not None else TTLCache(max_size=2000, ttl_seconds=86400)
+        self.budget = budget if budget is not None else CoachBudget()
+        self.max_per_check = max_per_check
+        self.timeout = timeout
+
+    def run(self, ctx: CheckContext) -> CheckContext:
+        from services.coach import coach_matches
+
+        matches = ctx.artifacts.get("matches") or []
+        try:
+            ctx.artifacts["coach_summary"] = coach_matches(
+                matches, client=self.client, cache=self.cache, budget=self.budget,
+                max_per_check=self.max_per_check, timeout=self.timeout)
+        except Exception:
+            logger.exception("[pipeline.coach] failed; matches left with rule text only")
+            ctx.artifacts["coach_summary"] = {"coached": 0, "calls": 0, "cached": 0, "filtered_fields": 0,
+                                              "model": None, "skipped_reason": "internal error", "errors": [],
+                                              "method": "Coaching was skipped because of an internal error."}
+        return ctx
 
 
 class ReportStage(_SkeletonStage):

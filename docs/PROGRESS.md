@@ -5,6 +5,41 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-07 (cont.) — W9: the coach, built so it cannot do the one thing it must never do (ADR-0031)
+
+**First, the red CI run.** The ADR-0030 push failed in CI on exactly one test — mine. Its teardown dropped the
+store's table and then asked `len(store)`. 272 others passed, every Postgres half included. It could not be
+reproduced here because nothing on this machine had a Postgres, and the logs API needs a token — so the fix came
+with a tool: `scripts/pg_tests.py` starts an embedded PostgreSQL from the `pgserver` wheel and runs pytest with
+the DSN set. **293 passed, 0 skipped** against it. "Verified in CI" is only a claim I can stand behind if I can
+reproduce it at my desk.
+
+**Then W9.** LAUNCH_PLAN §13 says the per-flag honest fix *is* the product. The rules (W8) decide what a flag is;
+a model now phrases *what it is, why it was flagged, the honest fix, and what not to do* — and the way it is
+built matters more than the prompt:
+
+- **The matcher polices the model.** Every returned field is scanned for any eight-word run copied from the
+  source *or* the author's own passage; a hit is replaced by the rule text and marked `filtered`. The coach
+  cannot hand the author copied text and cannot rewrite their sentence. That is ADR-0014's "no auto-rewrite
+  anywhere", as code.
+- **The evasion lexicon is narrow on purpose.** The first draft banned "change a few words" — and the suite
+  caught it flagging the project's own rule text: *"Do not just change a few words — that is still copying."*
+  Honest guidance must be able to name the bad practice to forbid it. Only detector-beating language is banned.
+- **Bounded and priced in the open:** ≤3 calls per check, highest priority first; a daily cap; a timeout; a
+  cache so the same flag never costs twice; token usage turned into an *estimated* cost from list price — `0.0`
+  for an unknown model rather than a guess. Only the two excerpts leave the server; a test pins the prompt
+  under 2 500 characters and free of the manuscript.
+- **Always labelled, fails soft.** `ai_written: true`, the model named, the number of parts the filter replaced
+  shown. No key, timeout, bad JSON → rule text, and the summary says why.
+
+**Verified:** 20 coaching tests · 275 / 18 skipped without a database, 293 / 0 with one · browser E2E 2/2 on the
+rule-text path the product ships with · lint clean.
+
+**Needs the owner:** an OpenAI key with Zero-Data-Retention, and a first read of real output — the prompt has
+been tested for what it may not do, not yet for how well it explains. Dark by default until then.
+
+---
+
 ## 2026-09-07 — The rest of W7 that needs no account: auth, ownership, quota (ADR-0030)
 
 **Scope.** Everything in W7 that can be built and *proven* without a Supabase project: verify the token Supabase

@@ -106,11 +106,26 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             user_agent=f"PRISM-OriginalityChecker/{APP_VERSION}"
                        + (f" mailto:{settings.contact_email}" if settings.contact_email else ""),
         )
+    coach_stage = None
+    if settings.coach_enabled and settings.openai_api_key:
+        from pipeline.stages import CoachStage
+        from services.coach import CoachBudget, OpenAIChatClient
+        from utils.ttl_cache import TTLCache
+        coach_stage = CoachStage(
+            client=OpenAIChatClient(settings.openai_api_key, model=settings.coach_model),
+            cache=TTLCache(max_size=max(1, settings.coach_cache_entries), ttl_seconds=86400),
+            budget=CoachBudget(settings.coach_max_calls_per_day),
+            max_per_check=settings.coach_max_per_check,
+            timeout=settings.coach_timeout_seconds,
+        )
+    elif settings.coach_enabled:
+        logger.warning("PRISM_COACH_ENABLED is set but no PRISM_OPENAI_API_KEY; coaching stays rule-text only")
     runner = CheckRunner(
         settings=settings,
         store=store,
         executor=executor,
         matcher=matcher,
+        coach=coach_stage,
         academic_search=partial(
             academic_search,
             providers=settings.academic_providers,

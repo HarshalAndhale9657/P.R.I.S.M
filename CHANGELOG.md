@@ -5,6 +5,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-07 — Honest coaching, phrased by a model and policed by the matcher (W9, ADR-0031)
+
+#### Added
+- **`services/coach.py` + a real `CoachStage`** — up to 3 model calls per check (highest-priority flags first)
+  return `what_it_is / why_flagged / honest_fix / do_not`. **Every field is post-filtered through the matcher:**
+  any 8-word run copied from the source or the author's passage is replaced with the rule text and marked
+  `filtered`; so is instrumental evasion language ("lower the score", "beat the checker", "humanize"…). Cached per
+  (model, rule, passage, source); process-wide daily cap; per-call timeout; token usage priced into
+  `estimated_cost_usd` from list price. Only the two excerpts ever leave the server. Fails soft with a stated
+  reason. Off until `PRISM_COACH_ENABLED=true` + `PRISM_OPENAI_API_KEY`.
+- `Match.coach` / `CheckResult.coach_summary` in the API contract; UI and report show the card labelled
+  *AI-written guidance, grounded in the source shown*, with the number of parts the post-filter replaced.
+- **`scripts/pg_tests.py`** + `pgserver` dev dependency — run the whole suite against an embedded PostgreSQL at
+  your desk, no Docker: **293 passed, 0 skipped**.
+
+#### Fixed
+- The ADR-0030 CI run was red on one test of its own: `test_postgres_ledger_can_share_the_job_store_pool` dropped
+  the store's table in teardown and then called `len(store)` on it. Teardown reordered; all 272 other tests had
+  passed.
+- The evasion lexicon's first draft banned "change a few words" — and caught the project's own rule text
+  forbidding it. Narrowed to detector-beating language only; copied text is caught by the matcher, not the lexicon.
+
+#### Verified
+- ruff clean · 20 coaching tests · 275 passed / 18 skipped without a database, 293 / 0 with one · browser E2E 2/2.
+
 ### 2026-09-07 — Accounts without a gate: JWT verification, ownership, per-user quota (ADR-0030)
 
 #### Added

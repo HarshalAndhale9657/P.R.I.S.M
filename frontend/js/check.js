@@ -214,8 +214,15 @@
                     <span class="coach-label">${esc(t.label)}</span>
                     <span class="coach-prio">${t.priority <= 2 ? 'Fix before submitting' : (t.priority === 3 ? 'Your call' : 'Usually fine')}</span>
                 </div>
+                ${m.coach ? `
+                <p class="coach-what">${esc(m.coach.what_it_is)}</p>
+                <p class="coach-why"><strong>Why it was flagged:</strong> ${esc(m.coach.why_flagged)}</p>
+                <p class="coach-fix"><strong>Honest fix:</strong> ${esc(m.coach.honest_fix)}</p>
+                <p class="coach-donot"><strong>Do not:</strong> ${esc(m.coach.do_not)}</p>
+                <p class="coach-ai">AI-written guidance (${esc(m.coach.model || 'model')}), grounded in the source shown
+                   below${(m.coach.filtered || []).length ? ` — ${m.coach.filtered.length} part${m.coach.filtered.length === 1 ? '' : 's'} replaced by the rule text after checking` : ''}.</p>` : `
                 <p class="coach-what">${esc(t.what)}</p>
-                <p class="coach-fix"><strong>Honest fix:</strong> ${esc(t.fix)}</p>
+                <p class="coach-fix"><strong>Honest fix:</strong> ${esc(t.fix)}</p>`}
                 ${t.note ? `<p class="coach-note">${esc(t.note)}</p>` : ''}
                 <p class="coach-sig">Detected from: ${bits.map(esc).join(' · ')}.</p>
             </div>`;
@@ -674,7 +681,7 @@
             const rev = isReview(m) ? `<span class="m-badge review">Needs review</span>` : '';
             const t = m.triage;
             const tri = t ? `<span class="m-badge tri ${t.priority <= 2 ? 'tri-act' : (t.priority === 3 ? 'tri-check' : 'tri-ok')}">${esc(t.label)}</span>` : '';
-            const fix = t ? `<div class="m-fix"><b>Honest fix:</b> ${esc(t.fix)}${t.note ? ' ' + esc(t.note) : ''}</div>` : '';
+            const fix = t ? `<div class="m-fix"><b>Honest fix:</b> ${esc(m.coach ? m.coach.honest_fix : t.fix)}${t.note ? ' ' + esc(t.note) : ''}${m.coach ? ' <i>(AI-written, checked against the source)</i>' : ''}</div>` : '';
             return `
                 <div class="m${isReview(m) ? ' m-review' : ''}">
                     <div class="m-h"><span class="m-badge ${m.match_type}">${label}</span>${tri}${rev}${lp}${pctInt(m.similarity)}% — ${src}${oa}${para}</div>

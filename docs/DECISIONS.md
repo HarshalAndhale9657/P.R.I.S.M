@@ -798,3 +798,62 @@ ASCII header kept, `pip-audit` clean · the Postgres halves run in this commit's
 secret or one URL), the sign-in UI against it, and the decision of what the free quota is. The per-IP limiter's
 docstring promise — "when accounts land the key becomes the user id" — is kept in spirit by the quota rather than
 by rekeying the limiter, because a fixed window per IP and a daily budget per account are different tools.
+
+## ADR-0031 — Honest coaching: a model phrases it, the rules decide it, the matcher polices it
+**Status:** Accepted (2026-09-07)
+**Context:** LAUNCH_PLAN §13 calls the per-flag honest-remediation experience *the product and the moat*. W8
+shipped its deterministic half — eight rule-typed flags with static what/fix text (ADR-0022). W9 is the phrasing:
+short, specific, per-flag guidance an anxious author can act on alone. It has to be built so that the one thing
+ADR-0014 forbids — helping someone *hide* reuse rather than fix it — is impossible by construction, not merely
+discouraged by a prompt.
+
+**Decision — `services/coach.py` + a real `CoachStage`, off until a key is configured.**
+* **The rules still decide what a flag is.** The model receives the triage type, the signals, the flagged
+  passage and the matched source excerpt — and nothing else. It returns four short strings:
+  `what_it_is`, `why_flagged`, `honest_fix`, `do_not`. It cannot change the type, the priority or the band.
+* **The matcher is the post-filter.** Every field the model returns is scanned for any run of **eight or more
+  words** copied from the source excerpt *or* from the author's own passage. A hit replaces that field with the
+  rule's static text and marks it `filtered`. Coaching can therefore never hand the author copied text, and never
+  "helpfully" rewrite their sentence — the plan's *no auto-rewrite anywhere*, enforced in code.
+* **An evasion lexicon, deliberately narrow.** Language whose purpose is beating a detector — "lower the score",
+  "beat the checker", "avoid detection", "humanize", "paraphrasing tool", "synonyms to pass" — is replaced the same
+  way. The first draft also banned "change a few words", and the suite immediately caught it flagging the
+  project's own rule text: *"Do not just change a few words — that is still copying."* Honest guidance has to be
+  able to name the bad practice in order to forbid it; only instrumental evasion is banned.
+* **Bounded, cached, priced in the open.** At most `coach_max_per_check` calls per check (default 3, highest
+  priority first, ties to higher similarity; priority-4/5 flags never get a call), a process-wide daily cap, a
+  per-call timeout, and a cache keyed by (model, rule, passage, source) so the same flag never costs twice.
+  Reported token usage becomes `estimated_cost_usd` in the result from the model's list price — an estimate an
+  operator can check against the bill, never a claim of the exact charge, and `0.0` for a model with no price on
+  file rather than a guess.
+* **Sends the minimum.** Only the two excerpts and the rule label leave the server. A test asserts the prompt
+  contains the passage and the source and is under 2 500 characters — never the manuscript (ZDR-friendly,
+  LAUNCH_PLAN §11).
+* **Fails soft, says why.** No key, a timeout, a 5xx, malformed JSON — the author sees the rule text, the check
+  succeeds, and `coach_summary.skipped_reason` / `errors` say what happened. A partial JSON object is accepted
+  and its missing fields are the rule text, marked `filtered`.
+* **Always labelled.** Every card carries `ai_written: true` and `source_visible: true`; the UI prints
+  *"AI-written guidance, grounded in the source shown below"* and, when the post-filter acted, how many parts it
+  replaced. The report's per-match fix line says the same.
+* **Provider is a settings knob** (`coach_provider`, currently `openai`, model `gpt-4o-mini` per LAUNCH_PLAN §4).
+  The client is a four-line Protocol over `requests` — no SDK — so a second provider is an adapter, not a rewrite.
+
+**Found and fixed on the way — a red CI run of my own making.** The ADR-0030 push failed in CI on exactly one
+test, `test_postgres_ledger_can_share_the_job_store_pool`: its teardown dropped the store's table and *then*
+called `len(store)` on it. The other 272 tests, every Postgres half included, passed. It could not be reproduced
+locally because nothing here had a Postgres — so now something does: `scripts/pg_tests.py` starts a
+self-contained server from the `pgserver` wheel (a dev dependency; no Docker, no system install), runs pytest
+with the DSN set, and tears it down. **293 passed, 0 skipped** against it. A "verified in CI" claim is only
+honest if a developer can reproduce it at their desk.
+
+**Verified:** ruff clean · 20 coaching tests (selection, budget, cache, soft failure, the copy post-filter both
+directions, the evasion filter, static-text audit, prompt minimality, cost arithmetic, stage integration) ·
+275 passed / 18 skipped without a database, **293 / 0 with one** · browser E2E 2/2 with coaching unconfigured
+(the rule-text path the product ships with today) · Postgres halves run in this commit's CI, which fails if they
+skip.
+
+**Consequences:** W9 is code-complete on the backend and dark by default: `PRISM_COACH_ENABLED=true` plus
+`PRISM_OPENAI_API_KEY` turns it on. What it needs from the owner is the key, a Zero-Data-Retention agreement on
+that account (LAUNCH_PLAN §11), and a first read of real output — the prompt has been tested for what it may not
+do, not yet for how well it explains. The per-*account* dollar ceiling is W11's, with payments; the per-process
+daily cap stands in until then.
