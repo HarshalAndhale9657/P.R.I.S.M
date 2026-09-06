@@ -28,10 +28,11 @@ class JobRecord:
     updated: float = field(default_factory=time.time)
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    owner: Optional[str] = None                  # user id (JWT `sub`); None = anonymous (ADR-0030)
 
 
 class JobStore(Protocol):
-    def create(self) -> JobRecord: ...
+    def create(self, owner: Optional[str] = None) -> JobRecord: ...
     def get(self, job_id: str) -> Optional[JobRecord]: ...
     def update(self, job_id: str, **fields: Any) -> None: ...
     def sweep(self, now: Optional[float] = None) -> int: ...
@@ -49,8 +50,8 @@ class InMemoryJobStore:
         self._jobs: OrderedDict[str, JobRecord] = OrderedDict()
         self._lock = threading.Lock()
 
-    def create(self) -> JobRecord:
-        rec = JobRecord(id=uuid.uuid4().hex)
+    def create(self, owner: Optional[str] = None) -> JobRecord:
+        rec = JobRecord(id=uuid.uuid4().hex, owner=owner)
         with self._lock:
             self._sweep_locked(time.time())
             self._jobs[rec.id] = rec
@@ -68,7 +69,7 @@ class InMemoryJobStore:
                 return None
             # Return a snapshot so callers can't mutate shared state outside the lock.
             return JobRecord(id=rec.id, status=rec.status, created=rec.created,
-                             updated=rec.updated, result=rec.result, error=rec.error)
+                             updated=rec.updated, result=rec.result, error=rec.error, owner=rec.owner)
 
     def update(self, job_id: str, **fields: Any) -> None:
         with self._lock:

@@ -8,11 +8,12 @@ here synchronously; everything expensive runs in the worker.
 from __future__ import annotations
 
 import logging
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 
+from app.auth import Principal, current_principal
 from app.limits import enforce_rate_limit
 from app.schemas import ErrorResponse, JobStatusResponse, SubmitCheckResponse
 from worker import CheckRequest, CheckRunner, QueueFull
@@ -38,20 +39,26 @@ def _mb(n: int) -> int:
     status_code=202,
     response_model=SubmitCheckResponse,
     responses={
-        400: {"model": ErrorResponse}, 413: {"model": ErrorResponse},
-        429: {"model": ErrorResponse}, 503: {"model": ErrorResponse},
+        400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 402: {"model": ErrorResponse},
+        413: {"model": ErrorResponse}, 429: {"model": ErrorResponse}, 503: {"model": ErrorResponse},
     },
-    dependencies=[Depends(enforce_rate_limit)],
     summary="Submit an originality check",
 )
 async def submit_check(
     request: Request,
+    principal: Optional[Principal] = Depends(current_principal),
     file: UploadFile = File(..., description="The manuscript to check (PDF, TXT or MD)."),
     references: List[UploadFile] = File(default=[], description="Reference sources to compare against."),
     use_academic: bool = Form(default=False, description="Also search OpenAlex + arXiv abstracts."),
 ):
     settings = request.app.state.settings
     runner: CheckRunner = request.app.state.runner
+
+    # Signed-in users are governed by their quota; anonymous ones by the per-IP limiter (ADR-0030).
+    if principal is None:
+        enforce_rate_limit(request)
+    else:
+        _enforce_quota(request, principal)
 
     if not _is_supported(file):
         raise HTTPException(status_code=400, detail="Only PDF, TXT or Markdown files are supported.")
@@ -102,25 +109,47 @@ async def submit_check(
         base_warnings=base_warnings,
     )
     try:
-        rec = runner.submit(req)
+        rec = runner.submit(req, owner=principal.user_id if principal else None)
     except QueueFull:
         return JSONResponse(
             status_code=503,
             headers={"Retry-After": "30"},
             content={"detail": "The checker is busy right now. Please retry in about 30 seconds."},
         )
+    if principal is not None:
+        # Acceptance is what counts against the quota, not completion (see worker.usage).
+        request.app.state.usage.record(principal.user_id)
     return SubmitCheckResponse(job_id=rec.id, status="queued", status_url=f"/api/v1/check/{rec.id}")
+
+
+def _enforce_quota(request: Request, principal: Principal) -> None:
+    settings = request.app.state.settings
+    if settings.quota_checks <= 0:
+        return
+    import time as _time
+    since = _time.time() - settings.quota_window_seconds
+    used = request.app.state.usage.count(principal.user_id, since)
+    if used >= settings.quota_checks:
+        hours = max(1, settings.quota_window_seconds // 3600)
+        raise HTTPException(
+            status_code=402,
+            detail=f"You have used all {settings.quota_checks} checks for the last {hours} hours. "
+                   f"Upgrade your plan to run more.",
+            headers={"X-Quota-Limit": str(settings.quota_checks), "X-Quota-Used": str(used)},
+        )
 
 
 @router.get(
     "/check/{job_id}",
     response_model=JobStatusResponse,
-    responses={404: {"model": ErrorResponse}},
+    responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
     summary="Poll a submitted check",
 )
-async def check_status(job_id: str, request: Request):
+async def check_status(job_id: str, request: Request,
+                       principal: Optional[Principal] = Depends(current_principal)):
     runner: CheckRunner = request.app.state.runner
     rec = runner.status(job_id)
-    if rec is None:
+    # A job that belongs to someone else reads as non-existent — 404, never 403 (ADR-0030).
+    if rec is None or (rec.owner is not None and (principal is None or principal.user_id != rec.owner)):
         raise HTTPException(status_code=404, detail="Unknown or expired job id.")
     return JobStatusResponse(job_id=rec.id, status=rec.status, result=rec.result, error=rec.error)

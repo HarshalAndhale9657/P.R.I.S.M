@@ -59,7 +59,17 @@ class Settings(BaseSettings):
     result_cache_size: int = 64
     result_cache_ttl_seconds: int = 1800
 
-    # ── Rate limiting (per client IP; in-process) ───────────────────────────
+    # ── Authentication + per-user quota (ADR-0030) ──────────────────────────
+    auth_required: bool = Field(default=False, description="Require a signed-in user to submit/poll. False = anonymous allowed.")
+    auth_jwt_secret: str = Field(default="", description="Supabase project JWT secret (HS256 tokens).")
+    auth_jwks_url: str = Field(default="", description="JWKS URL for asymmetric tokens, e.g. https://<ref>.supabase.co/auth/v1/.well-known/jwks.json")
+    auth_issuer: str = Field(default="", description="Expected `iss` (e.g. https://<ref>.supabase.co/auth/v1). Empty = not checked.")
+    auth_audience: str = Field(default="authenticated", description="Expected `aud`. Empty = not checked.")
+    auth_leeway_seconds: int = Field(default=30, ge=0)
+    quota_checks: int = Field(default=0, ge=0, description="Checks a signed-in user may submit per window. 0 = unlimited.")
+    quota_window_seconds: int = Field(default=86400, ge=60)
+
+    # ── Rate limiting (per client IP; in-process; anonymous users only once auth is on) ──
     rate_limit_submissions: int = Field(default=12, description="Submissions allowed per window per IP. 0 disables.")
     rate_limit_window_seconds: int = 600
 

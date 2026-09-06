@@ -41,7 +41,8 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 
 ## Repo map
 - `backend/main.py` — two-line shim → `app.create_app()`.
-- `backend/app/` — HTTP layer: `settings.py` (all knobs), `schemas.py` (the API contract), `middleware.py`
+- `backend/app/` — HTTP layer: `settings.py` (all knobs), `schemas.py` (the API contract), `auth.py` (JWT →
+  `Principal`, ADR-0030), `middleware.py`
   (request-id, body-size guard), `limits.py` (rate limiter), `routers/check.py`, `routers/health.py`, `factory.py`.
 - `backend/worker/` — `executor.py` (bounded queue → 503), `store.py` (in-memory TTL job store; the `JobStore`
   Protocol), `postgres_store.py` (the durable one, ADR-0029), `runner.py` (job lifecycle; assembles the result).
@@ -96,6 +97,10 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
   on the accepting replica, and the result cache + per-IP limiter are still in-process. Unset = **one replica**.
   The `JobStore` contract in `tests/test_job_store_contract.py` runs against both; CI supplies a real Postgres and
   fails if that half was skipped. Locally: `PRISM_TEST_DATABASE_URL=postgresql://…` to run it yourself.
+- **Auth (ADR-0030):** unconfigured = anonymous, unchanged. `PRISM_AUTH_JWT_SECRET` (HS256) or `PRISM_AUTH_JWKS_URL`
+  turns verification on; `PRISM_AUTH_REQUIRED` gates the endpoints. Rules with tests behind them: a presented token
+  is always verified (bad = 401 even when optional), ownership is **404 not 403**, quota is a ledger (`worker/usage.py`)
+  and over it is **402**. Signed-in users skip the per-IP limiter. Never read token claims beyond `sub/email/role`.
 - **Import layering:** `worker` → `pipeline`/`services`/`utils`; never `worker` → `app` except `app.settings`/
   `app.schemas`. `app/__init__` resolves `create_app` lazily for exactly this reason; context vars live in
   `utils/context.py`. `python -c "import worker"` must work cold — it is the regression check.
@@ -106,9 +111,9 @@ CI (`.github/workflows/ci.yml`) runs all of these. Check a push without `gh`:
 
 ## Current priorities
 
-**State as of 2026-09-06** (`main` @ `f1a2cf6` + the ADR-0029 pass, 231 tests + 11 Postgres-only in CI, lint clean, audit clean):
+**State as of 2026-09-07** (`main` @ `756a487` + the ADR-0030 pass, 255 tests + 18 Postgres-only in CI, lint clean, E2E 2/2, audit clean):
 W1–W4b + W8 shipped · licensed PolyForm Noncommercial 1.0.0 · PAN purged from history.
-Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0029.
+Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); decisions in ADR-0018…0030.
 
 **Next, in order:**
 1. **W6 — first deploy.** `deploy/README.md` is a complete runbook; it needs a VPS and nothing else. On the box:
@@ -124,8 +129,8 @@ Full narrative in [`docs/PROGRESS.md`](docs/PROGRESS.md) (newest entry first); d
    both were measured with the **pre-ADR-0026 splitter**, which truncated every sentence containing a decimal.
 3. **W5 fine-tune** — kit is ready and self-gating; needs one human-run Colab/Kaggle GPU session. "Do not ship"
    is a legitimate outcome.
-4. **W7, remainder** — `PostgresJobStore` is done (ADR-0029). Left: Supabase JWT as a FastAPI dependency,
-   `user_id` on the jobs table + ownership on `GET /check/{id}`, per-user quota → 402, ephemeral text deletion.
+4. **W7 — backend code-complete** (ADR-0029/0030). Needs the owner: a Supabase project (one secret or one JWKS
+   URL), the free-quota number, then the sign-in UI. **W9 (CoachStage) is the next big unblocked build.**
 
 **Owner decisions still open** (TODO 🔴, none blocking): the legal copyright holder for `NOTICE`; consent from
 three past teammates for ~176 surviving boilerplate lines; confirming the old Vercel/Render demo is offline.

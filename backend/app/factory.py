@@ -23,6 +23,7 @@ from services.fulltext import FullTextFetcher
 from services.plagiarism_matcher import PlagiarismMatcher
 from worker import BoundedExecutor, CheckRunner, InMemoryJobStore
 
+from .auth import JWTVerifier
 from .limits import RateLimiter
 from .logging_config import configure_logging
 from .middleware import BodySizeGuardMiddleware, RequestIdMiddleware
@@ -86,10 +87,14 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     # stays on the replica that accepted the job either way.
     if settings.database_url:
         from worker.postgres_store import PostgresJobStore
+        from worker.usage import PostgresUsageLedger
         store = PostgresJobStore(settings.database_url, max_jobs=settings.max_jobs,
                                  ttl_seconds=settings.job_ttl_seconds, max_size=settings.database_pool_size)
+        usage = PostgresUsageLedger(pool=store._pool)
     else:
+        from worker.usage import InMemoryUsageLedger
         store = InMemoryJobStore(max_jobs=settings.max_jobs, ttl_seconds=settings.job_ttl_seconds)
+        usage = InMemoryUsageLedger()
     executor = BoundedExecutor(max_workers=settings.worker_threads, max_pending=settings.max_pending_jobs)
     fetcher = None
     if settings.academic_fulltext:
@@ -141,6 +146,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.state.settings = settings
     app.state.runner = runner
     app.state.rate_limiter = RateLimiter(settings.rate_limit_submissions, settings.rate_limit_window_seconds)
+    app.state.auth = JWTVerifier(secret=settings.auth_jwt_secret, jwks_url=settings.auth_jwks_url,
+                                 issuer=settings.auth_issuer, audience=settings.auth_audience,
+                                 leeway_seconds=settings.auth_leeway_seconds)
+    app.state.usage = usage
     app.state.model_loaded = False
 
     # Order matters: outermost first. Request-id wraps everything so even a 413 carries one.

@@ -38,6 +38,14 @@
     const dom = {};
 
     // ─── Utilities ───
+    // ADR-0030: a Supabase session token, when the sign-in flow has stored one. Absent = anonymous.
+    function authHeaders() {
+        try {
+            const t = window.PRISM_TOKEN || localStorage.getItem('prism_token');
+            return t ? { 'Authorization': 'Bearer ' + t } : {};
+        } catch (e) { return {}; }
+    }
+
     function esc(s) {
         const d = document.createElement('div');
         d.textContent = s == null ? '' : String(s);
@@ -275,7 +283,8 @@
         while (Date.now() - started < TIMEOUT_MS) {
             await sleep(delay);
             delay = Math.min(3000, Math.round(delay * 1.5));
-            const r = await fetch(`${API}/check/${jobId}`);
+            const r = await fetch(`${API}/check/${jobId}`, { headers: authHeaders() });
+            if (r.status === 401) throw new Error('Your sign-in has expired. Sign in again and re-run the check.');
             if (r.status === 404) throw new Error('This check has expired or the server restarted. Please run it again.');
             if (!r.ok) throw new Error(`Could not retrieve the check (${r.status}).`);
             const d = await r.json();
@@ -314,7 +323,7 @@
             state.refs.forEach(r => fd.append('references', r));
             fd.append('use_academic', state.useAcademic ? 'true' : 'false');
 
-            const submit = await fetch(`${API}/check`, { method: 'POST', body: fd });
+            const submit = await fetch(`${API}/check`, { method: 'POST', body: fd, headers: authHeaders() });
             if (!submit.ok) throw new Error(await submitError(submit));
             const { job_id } = await submit.json();
             const result = await pollJob(job_id, setLabel);

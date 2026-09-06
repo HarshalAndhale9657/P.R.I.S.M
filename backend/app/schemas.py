@@ -212,6 +212,8 @@ class HealthResponse(BaseModel):
     queue: QueueStats
     jobs_in_memory: int = Field(description="Jobs currently held by the store (name kept for compatibility).")
     store: Literal["memory", "postgres"] = Field(default="memory", description="Where job state lives (ADR-0029).")
+    auth: Literal["off", "optional", "required"] = Field(
+        default="off", description="off = no verifier configured; optional = tokens verified when sent; required (ADR-0030).")
     embedding_cache: Optional[EmbeddingCacheStats] = None
 
 

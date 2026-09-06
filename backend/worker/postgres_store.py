@@ -46,9 +46,12 @@ CREATE TABLE IF NOT EXISTS {table} (
     created DOUBLE PRECISION NOT NULL,
     updated DOUBLE PRECISION NOT NULL,
     result  JSONB,
-    error   TEXT
+    error   TEXT,
+    owner   TEXT
 );
 CREATE INDEX IF NOT EXISTS {table}_updated_idx ON {table} (updated);
+-- Tables created before ADR-0030 have no owner column; adding it is idempotent.
+ALTER TABLE {table} ADD COLUMN IF NOT EXISTS owner TEXT;
 """
 
 
@@ -94,13 +97,13 @@ class PostgresJobStore:
 
     # ── JobStore protocol ─────────────────────────────────────────────────────
 
-    def create(self) -> JobRecord:
-        rec = JobRecord(id=uuid.uuid4().hex)
+    def create(self, owner: Optional[str] = None) -> JobRecord:
+        rec = JobRecord(id=uuid.uuid4().hex, owner=owner)
         with self._pool.connection() as conn:
             self._sweep_conn(conn, time.time())
             conn.execute(
-                f"INSERT INTO {self.table} (id, status, created, updated) VALUES (%s, %s, %s, %s)",
-                (rec.id, rec.status, rec.created, rec.updated),
+                f"INSERT INTO {self.table} (id, status, created, updated, owner) VALUES (%s, %s, %s, %s, %s)",
+                (rec.id, rec.status, rec.created, rec.updated, rec.owner),
             )
             # Bound by count, oldest first — the same eviction the in-memory store does.
             conn.execute(
@@ -113,13 +116,13 @@ class PostgresJobStore:
     def get(self, job_id: str) -> Optional[JobRecord]:
         with self._pool.connection() as conn:
             row = conn.execute(
-                f"SELECT id, status, created, updated, result, error FROM {self.table} WHERE id = %s",
+                f"SELECT id, status, created, updated, result, error, owner FROM {self.table} WHERE id = %s",
                 (job_id,),
             ).fetchone()
             if row is None:
                 return None
             rec = JobRecord(id=row[0], status=row[1], created=row[2], updated=row[3],
-                            result=row[4], error=row[5])
+                            result=row[4], error=row[5], owner=row[6])
             if time.time() - rec.updated > self.ttl:
                 conn.execute(f"DELETE FROM {self.table} WHERE id = %s", (job_id,))
                 return None

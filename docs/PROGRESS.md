@@ -5,6 +5,37 @@ Running worklog — the **memory of *what happened when***. Newest first. One en
 
 ---
 
+## 2026-09-07 — The rest of W7 that needs no account: auth, ownership, quota (ADR-0030)
+
+**Scope.** Everything in W7 that can be built and *proven* without a Supabase project: verify the token Supabase
+would issue, tie jobs to the user who submitted them, and swap the per-IP limiter for a per-user quota. Built
+against self-signed tokens; wiring to a real project is one environment variable.
+
+**The three rules were written before the code**, and each has a test that would fail if it bent: a presented
+token is always verified (a stale token is a 401 even when auth is optional — never a silent downgrade);
+`auth_required` gates endpoints, not verification; ownership answers **404, never 403**, so a job id you do not
+own is indistinguishable from one that never existed.
+
+**Both Supabase token generations** — HS256 with the project secret, and RS256/ES256 via JWKS — through one
+verifier. The JWKS path is tested with generated RSA keys and a stubbed fetch: keys cached, exactly one refresh on
+an unknown `kid`, then failure; the header algorithm must match the key it names.
+
+**Quota is a ledger, not a job count**, because jobs expire on a 30-minute TTL and a daily budget has to outlive
+that. Same shape as the job store: memory always, Postgres in CI sharing the job store's pool, one contract suite.
+It records *acceptance*, so a queued check that later fails still counted, and a 400 never does. Over the limit
+is 402 with the numbers in headers and a plain sentence in the body.
+
+**A small measurement of my own assumptions:** two tests failed on first run because they used tokens expired by
+5–10 seconds and the verifier has a 30-second clock-skew leeway. The code was right; the tests learned.
+
+**Verified:** 255 passed / 18 skipped locally · browser E2E 2/2 with `/health` reporting `auth: off` · lock
+regenerated with PyJWT, ASCII header, `pip-audit` clean · Postgres halves run in this commit's CI.
+
+**What W7 still needs from the owner:** a Supabase project (secret or JWKS URL), the sign-in UI against it, and a
+number for the free quota. The backend side is code-complete.
+
+---
+
 ## 2026-09-06 (cont.) — W7 begins where it can: durable job state (ADR-0029)
 
 **Why this piece first.** Of everything left before launch, W7's storage half is the only part that needs no

@@ -174,3 +174,15 @@ def test_unsafe_table_names_are_refused():
         with pytest.raises(ValueError):
             _validate_table(bad)
     assert _validate_table("prism_jobs") == "prism_jobs"
+
+
+# ── Ownership (ADR-0030) ──────────────────────────────────────────────────────
+
+def test_owner_round_trips_and_defaults_to_anonymous(make_store):
+    store = make_store()
+    anon = store.create()
+    mine = store.create(owner="user-a")
+    assert store.get(anon.id).owner is None
+    assert store.get(mine.id).owner == "user-a"
+    store.update(mine.id, status="done", result={"ok": True})
+    assert store.get(mine.id).owner == "user-a", "updates must not disturb ownership"

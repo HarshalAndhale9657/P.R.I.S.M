@@ -36,7 +36,9 @@ click==8.5.0
 cloudpickle==3.1.2
     # via joblib
 cryptography==50.0.1
-    # via pdfminer-six
+    # via
+    #   pdfminer-six
+    #   pyjwt
 fastapi==0.141.1
     # via -r requirements.txt
 filelock==3.32.5
@@ -124,6 +126,8 @@ pydantic-settings==2.15.0
     # via -r requirements.txt
 pygments==2.21.0
     # via rich
+pyjwt==2.13.0
+    # via -r requirements.txt
 pymupdf==1.28.2
     # via -r requirements.txt
 pypdfium2==5.13.0

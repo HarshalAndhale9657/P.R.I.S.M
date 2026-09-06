@@ -41,10 +41,10 @@ Check items off with a date. Newest priorities on top.
       dates; both need the same measure-first treatment, and "not worth it" is a valid answer. _(M)_
 
 ## 🟢 Next — the product (W7–W12, LAUNCH_PLAN §9)
-- [~] **W7 · Accounts + persistence** — ✅ `PostgresJobStore` behind `worker.store.JobStore` + shared contract suite,
-      Postgres verified in CI (ADR-0029, 2026-09-06). **Remaining:** Supabase JWT verify as a FastAPI dependency;
-      `user_id` on the jobs table + ownership check on `GET /api/v1/check/{id}`; per-user quota → 402 replacing the
-      per-IP limiter; ephemeral deletion of raw text after the report. _(M left of L)_
+- [~] **W7 · Accounts + persistence** — backend **code-complete** (ADR-0029 store, ADR-0030 auth/ownership/quota,
+      2026-09-07). **Needs the owner:** a Supabase project → set `PRISM_AUTH_JWT_SECRET` *or* `PRISM_AUTH_JWKS_URL`
+      (+ `PRISM_AUTH_ISSUER`); decide the free quota (`PRISM_QUOTA_CHECKS`); then the sign-in UI (supabase-js magic
+      link) that stores the session token for `authHeaders()`. _(S once a project exists)_
 - [ ] **W9 · CoachStage** — replace the *static* per-type `fix` string with gpt-4o-mini prose grounded in the triage
       type + the shown source: JSON, ≤3 calls/check, cached, per-account $ ceiling; **matcher post-filter** so coaching
       can never launder copied text; source always visible; no auto-rewrite (ADR-0014). Rules stay the backbone. _(L)_
@@ -59,6 +59,9 @@ Check items off with a date. Newest priorities on top.
 - [ ] (If institutional) SOC 2, LTI 1.3, SSO.
 
 ## ✅ Done
+- [x] 2026-09-07 — **Auth + ownership + per-user quota** (ADR-0030): Supabase JWT verifier (HS256 + JWKS), 404-not-403
+      ownership on jobs, usage ledger with 402 over quota, limiter bypass for accounts. Anonymous unchanged until
+      configured. Tests 231 → 255 (+18 Postgres-only in CI).
 - [x] 2026-09-06 — **`PostgresJobStore` + JobStore contract suite** (ADR-0029): durable, replica-readable job state
       behind the ADR-0019 seam; CI runs the contract against a real `postgres:16` and fails if it was skipped. Also
       fixed a latent circular import (`import worker` failed cold). Tests 221 → 231 (+11 Postgres-only in CI).

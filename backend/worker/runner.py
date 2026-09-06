@@ -70,9 +70,9 @@ class CheckRunner:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def submit(self, req: CheckRequest) -> JobRecord:
+    def submit(self, req: CheckRequest, *, owner: Optional[str] = None) -> JobRecord:
         """Queue a check. Raises QueueFull when the worker backlog is at capacity."""
-        rec = self.store.create()
+        rec = self.store.create(owner=owner)
         try:
             self.executor.submit(self._run, rec.id, req)
         except QueueFull:

@@ -8,6 +8,9 @@ uvicorn[standard]==0.30.0
 python-multipart==0.0.32
 python-dotenv==1.2.3
 
+# Auth — verifies Supabase JWTs (HS256 secret or JWKS), ADR-0030
+PyJWT[crypto]==2.13.0
+
 # Job store — Postgres is optional at runtime (PRISM_DATABASE_URL unset = in-process memory), ADR-0029
 psycopg[binary]==3.3.5
 psycopg-pool==3.3.1

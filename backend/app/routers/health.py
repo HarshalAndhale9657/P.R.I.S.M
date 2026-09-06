@@ -35,6 +35,7 @@ def _snapshot(request: Request) -> HealthResponse:
         queue=QueueStats(**st.runner.executor.stats()),
         jobs_in_memory=len(st.runner.store),
         store=getattr(st.runner.store, "kind", "memory"),
+        auth=("required" if st.settings.auth_required else ("optional" if st.auth.configured else "off")),
         embedding_cache=EmbeddingCacheStats(entries=len(cache), capacity=cache.max_entries,
                                             **cache.stats().as_dict()),
     )

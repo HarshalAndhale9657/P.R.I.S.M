@@ -747,3 +747,54 @@ gains an optional Postgres (Hetzner's managed one, or a container on the same bo
 as a FastAPI dependency, per-user ownership on `GET /check/{id}`, quota → 402 — builds on this table and stays
 open. Two more ASCII lessons for the record: a pytest skip reason with an em dash makes pytest's final summary
 line vanish on a cp1252 console, and `-q` on top of `addopts = -q` suppresses it entirely.
+
+## ADR-0030 — Accounts without a gate: JWT verification, ownership, and a per-user quota
+**Status:** Accepted (2026-09-07)
+**Context:** ADR-0029 made job state durable. This is the rest of W7 that can be built without an account to hand:
+verifying the token Supabase Auth issues, tying a job to the user who submitted it, and replacing the per-IP
+limiter with a per-user quota for signed-in users. It is built and tested against **self-signed tokens**; pointing
+it at a real project is one environment variable (`PRISM_AUTH_JWT_SECRET` or `PRISM_AUTH_JWKS_URL`).
+
+**Decision — anonymous stays the default; three rules that do not bend.**
+* **Nothing changes until it is configured.** No secret and no JWKS URL means the product runs exactly as before
+  W7: the self-check use case (ADR-0014) does not require an account, and the E2E suite proves the anonymous path
+  still works end to end. `/health` says `auth: off | optional | required` so an operator can see the mode.
+* **Rule 1 — a presented token is always verified.** Even with `auth_required=false`, a bad, expired or
+  wrong-audience token is a **401**, never a silent downgrade to anonymous. A client that believes it is signed in
+  must never quietly get anonymous limits. A token sent to a server with no verifier configured is also a 401.
+* **Rule 2 — `auth_required` gates the endpoints, not the verification.** On: no token is a 401 on both submit and
+  poll. Off: no token is an anonymous principal.
+* **Rule 3 — ownership answers 404, not 403.** A job another user owns is indistinguishable from one that never
+  existed. Anonymous jobs keep `owner = NULL` and stay readable by id, as before (ids are 128-bit random).
+* **Two token generations, one verifier.** HS256 with the project JWT secret (classic Supabase) and RS256/ES256
+  via a JWKS document (asymmetric projects). JWKS keys are cached for an hour; an unknown `kid` triggers exactly one
+  refresh, then fails. The algorithm in the token header must match the key it names — no confusion attacks. Only
+  `sub`, `email` and `role` are read; nothing else in the token is trusted or stored. A 30-second leeway absorbs
+  clock skew (the tests originally used tokens expired by 5 s and were surprised — that is the leeway working).
+* **Quota is a ledger, not a job count.** Jobs expire on a 30-minute TTL, so a daily limit cannot be derived from
+  the jobs table. `worker/usage.py` is an append-only ledger with the same two backends and the same contract
+  discipline as the job store (memory always; Postgres in CI, sharing the job store's pool). It records
+  **acceptance**, not completion — a check that fails after queueing still consumed capacity, and a rejected
+  upload (400/413) records nothing. Over the limit is **402 Payment Required** with `X-Quota-Limit` /
+  `X-Quota-Used` headers and a plain sentence, per the launch plan's "402 + upgrade CTA". `PRISM_QUOTA_CHECKS=0`
+  (the default) is unlimited. Signed-in users are governed by the quota **instead of** the per-IP limiter;
+  anonymous users keep the limiter.
+* **Ephemeral-by-default is unchanged and now nameable.** The manuscript text and every excerpt live only in the
+  job record, which the TTL purges from either store; the ledger holds an owner id and a timestamp, nothing else.
+  There is no new retention anywhere in this ADR.
+
+**The frontend does the minimum.** `authHeaders()` attaches `Authorization: Bearer` when a session token exists
+(`window.PRISM_TOKEN` or `localStorage.prism_token`); 401 and 402 fall through to the server's own sentence. The
+sign-in UI itself (supabase-js, magic link) is deferred until a real project exists — there is nothing to sign
+into yet, and a fake flow would be theatre.
+
+**Verified:** 255 passed, 18 skipped locally (the Postgres halves of both contracts, visibly) · the JWKS path is
+tested with generated RSA keys and a stubbed fetch, including cache hits and the single refresh · ownership,
+quota-per-user, quota-not-consumed-by-rejections and limiter-bypass-for-accounts each have a test · browser E2E
+2/2 on the anonymous path with `/health` reporting `auth: off` · `PyJWT[crypto] 2.13.0` added, lock regenerated,
+ASCII header kept, `pip-audit` clean · the Postgres halves run in this commit's CI, which fails if they skip.
+
+**Consequences:** W7 is now code-complete on the backend; what remains needs the owner: a Supabase project (one
+secret or one URL), the sign-in UI against it, and the decision of what the free quota is. The per-IP limiter's
+docstring promise — "when accounts land the key becomes the user id" — is kept in spirit by the quota rather than
+by rekeying the limiter, because a fixed window per IP and a daily budget per account are different tools.

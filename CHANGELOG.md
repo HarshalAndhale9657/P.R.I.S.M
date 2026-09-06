@@ -5,6 +5,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-09-07 — Accounts without a gate: JWT verification, ownership, per-user quota (ADR-0030)
+
+#### Added
+- **`app/auth.py`** — verifies Supabase JWTs, HS256 (`PRISM_AUTH_JWT_SECRET`) or asymmetric via JWKS
+  (`PRISM_AUTH_JWKS_URL`, cached, one refresh on an unknown `kid`). `current_principal` dependency; `Principal`
+  carries only `sub`/`email`/`role`. Unconfigured = anonymous, exactly as before. `/health` reports
+  `auth: off | optional | required`.
+- **Ownership on jobs** — `JobRecord.owner`, both stores (`owner TEXT`, added idempotently to existing tables).
+  `GET /api/v1/check/{id}` is **404** for anyone but the owner; anonymous jobs stay readable by id.
+- **`worker/usage.py`** — a per-user usage ledger (memory + Postgres, sharing the job store's pool) behind a
+  contract suite. `PRISM_QUOTA_CHECKS` per `PRISM_QUOTA_WINDOW_SECONDS`; over the limit is **402** with
+  `X-Quota-Limit`/`X-Quota-Used`. Records acceptance, not completion; rejected uploads record nothing. Signed-in
+  users are governed by the quota instead of the per-IP limiter.
+- Frontend sends `Authorization: Bearer` when a session token exists; 401/402 surface the server's sentence.
+- `PyJWT[crypto] 2.13.0`; lockfile regenerated, `pip-audit` clean. Tests 231 → **255** (+18 Postgres-only in CI).
+
+#### Rules (tested)
+- A presented token is **always** verified — bad/expired is 401 even when auth is optional; never a silent
+  downgrade to anonymous. `auth_required` gates endpoints, not verification. Ownership answers 404, never 403.
+
+#### Verified
+- 255 passed / 18 skipped locally; JWKS path tested with generated RSA keys and a stubbed fetch; browser E2E 2/2
+  on the anonymous path; Postgres halves run in CI (which fails if they skip).
+
 ### 2026-09-06 — Durable job state: `PostgresJobStore` (W7 storage half, ADR-0029)
 
 #### Added
